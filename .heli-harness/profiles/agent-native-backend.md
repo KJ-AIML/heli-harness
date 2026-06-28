@@ -1,0 +1,39 @@
+# Repo Profile
+
+Repo name: agent-native-backend
+
+Purpose: Documentation-only field guide for structuring AI-agent backends. Not a framework, SDK, or boilerplate — a practical reference for boundaries that keep AI reasoning inside a production backend.
+
+Primary languages/frameworks: Markdown. No code. Diagrams in `assets/`.
+
+Branch policy: Trunk-based. Single `main` branch. No `develop` branch. Short-lived feature branches for large edits, squash-merged.
+
+PR policy: One reviewer required. Scope per PR: one concept or one section. No drive-by style changes.
+
+Build commands: None. Pure documentation.
+
+Test commands: None. Verify by reading — check links, diagrams render, prose is clear.
+
+Generated-file policy: No generated files. All content is hand-written markdown.
+
+Deployment policy: GitHub Pages or static site generator (if added). No runtime deployment.
+
+Release policy: Tagged releases for major revisions. No automated release pipeline.
+
+Ownership/review expectations: Single maintainer (KJ-AIML). External contributions welcome via PR. Review focuses on clarity, accuracy, and language-agnostic framing.
+
+Known fragile areas:
+
+- Diagram references in `assets/` — if images are renamed or moved, markdown links break silently.
+- Cross-references between docs — `docs/principles.md` links to `docs/anti-patterns.md`, etc. Renaming a file requires updating all references.
+
+S2/S3 surfaces:
+
+- None. This is a docs repo. No code, no secrets, no deployment, no data.
+- S1 at most: large structural changes (renaming sections, reorganizing docs/) affect multiple files.
+
+Notes:
+
+- Keep examples language-agnostic unless a file is explicitly about a reference implementation.
+- Do not add framework boilerplate, provider-specific tutorials, or marketing copy.
+- Connect concepts to real examples (ALMS, etc.) when useful, but do not make the guide dependent on any specific implementation.

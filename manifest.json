@@ -1,0 +1,21 @@
+{
+  "_note": "This is the root pointer manifest. The authoritative harness manifest with skills, adapters, hooks, and state is at .heli-harness/manifest.json. Tools reading the repo root find this file; the harness runtime reads the inner manifest.",
+  "name": "Heli-Harness",
+  "version": "0.1.0",
+  "description": "Parent-workspace AI development harness for multi-repo, multi-agent engineering work. Gives local coding agents (Claude Code, Codex, generic) a shared source of truth: protocols, repo profiles, state tracking, optional hooks, and adapter instructions.",
+  "topics": [
+    "ai-agents",
+    "claude-code",
+    "codex",
+    "harness-engineering",
+    "multi-repo",
+    "agent-workflow",
+    "coding-agents",
+    "developer-tools"
+  ],
+  "purpose": "Parent-level, tool-neutral AI development harness.",
+  "install_mode": "parent-workspace",
+  "source_of_truth": ".heli-harness/HARNESS.md",
+  "harness": ".heli-harness/",
+  "manifest": ".heli-harness/manifest.json"
+}

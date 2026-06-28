@@ -1,0 +1,28 @@
+{
+  "name": "heli-harness",
+  "version": "0.1.0",
+  "description": "Parent-workspace AI development harness for multi-repo, multi-agent engineering work.",
+  "keywords": ["pi-package", "pi", "heli-harness", "coding-agent", "multi-agent"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KJ-AIML/heli-harness.git"
+  },
+  "files": [
+    ".heli-harness/",
+    "extensions/",
+    "install.sh",
+    "install.ps1",
+    "update.sh",
+    "update.ps1",
+    "uninstall.sh",
+    "uninstall.ps1",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": ["./extensions/pi-extension.js"],
+    "skills": ["./.heli-harness/skills"]
+  }
+}

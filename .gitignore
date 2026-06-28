@@ -1,0 +1,26 @@
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor and local tooling
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs and temp
+*.log
+tmp/
+temp/
+.tmp/
+
+# Harness-generated run artifacts
+.helicopter-harness/state/runs/*
+!.helicopter-harness/state/runs/.gitkeep
+.helicopter-harness/state/reports/*
+!.helicopter-harness/state/reports/.gitkeep
+
+# Do not ignore the harness runtime or templates.
+
