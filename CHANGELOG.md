@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.2 - 2026-06-28
+
+### Docs-only polish
+
+- Updated all install examples from v0.1.0 to v0.1.1
+- Removed outdated "experimental" label from Pi adapter section
+- Updated status notes to reflect verified Pi remote install for v0.1.1+
+- No behavior changes
+- No migration support added
+
 ## 0.1.1 - 2026-06-28
 
 ### Clean reference hotfix

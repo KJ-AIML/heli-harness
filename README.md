@@ -37,7 +37,7 @@ Install this repo into the current folder as a parent-workspace harness:
 
 https://github.com/KJ-AIML/heli-harness
 
-Use the latest stable tag (v0.1.0). Do not install globally. Treat the current
+Use the latest stable tag (v0.1.1). Do not install globally. Treat the current
 directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
@@ -49,7 +49,7 @@ and CLAUDE.md exist after install.
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.1.0
+git checkout v0.1.1
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install
@@ -61,19 +61,19 @@ Remove-Item -Recurse -Force hh-source
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.1.0
+git checkout v0.1.1
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
 rm -rf hh-source
 ```
 
-### Pi agent harness (experimental)
+### Pi agent harness
 
 Pi can load Heli-Harness as a package to get skills and an extension:
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.1.0
+pi install git:github.com/KJ-AIML/heli-harness@v0.1.1
 ```
 
 This installs the Pi package, which does two things:
@@ -97,7 +97,7 @@ On session start, the extension reports:
 - `pi install ...` does **not** automatically create `.heli-harness/` in every folder. Use `/heli-install` to set up the workspace harness in a specific folder.
 - Workspace install remains the source of truth for parent-workspace behavior.
 - Pi packages run with full system access. Inspect source code before installing.
-- **Status: supported** — verified with Pi v0.80.2 (local path install; remote `git:` install pending v0.1.0 tag).
+- **Status: supported** — verified with Pi v0.80.2 (local path install; remote `git:` install verified for v0.1.1).
 
 ### Codex
 
@@ -144,7 +144,7 @@ If you want to inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.1.0
+git checkout v0.1.1
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```
