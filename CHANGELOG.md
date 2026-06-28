@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.1 - 2026-06-28
+
+### Clean reference hotfix
+
+- Fixed Claude hook example path from `.helicopter-harness` to `.heli-harness` in `settings.local.json.example`
+- Fixed `.gitignore` patterns from `.helicopter-harness` to `.heli-harness`
+- Confirmed zero legacy references in codebase
+- No behavior changes
+- No migration support added
+
 ## 0.1.0 - 2026-06-28
 
 ### Initial Heli-Harness release

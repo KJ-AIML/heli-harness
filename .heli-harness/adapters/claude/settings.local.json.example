@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .helicopter-harness/hooks/scripts/claude-session-baseline.sh",
+            "command": "bash .heli-harness/hooks/scripts/claude-session-baseline.sh",
             "shell": "bash",
             "timeout": 10
           }
