@@ -1,6 +1,6 @@
 # Heli-Harness
 
-Heli-Harness gives local coding agents a shared operating system: protocols, repo profiles, state tracking, optional hooks, and adapter instructions. It is designed for a parent workspace that contains many repos and may be touched by many agents.
+Heli-Harness gives local coding agents a shared governance layer: protocols, repo profiles, policy overlays, state tracking, optional hooks, and adapter instructions. It is designed for a parent workspace that contains many repos and may be touched by many agents.
 
 The source of truth in this repository is `.heli-harness/HARNESS.md`. Tool-specific behavior lives only under `.heli-harness/adapters/`.
 
@@ -44,7 +44,7 @@ Install this repo into the current folder as a parent-workspace harness:
 
 https://github.com/KJ-AIML/heli-harness
 
-Use the latest stable tag (v0.3.0). Do not install globally. Treat the current
+Use the latest stable tag (v0.3.2). Do not install globally. Treat the current
 directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
@@ -56,7 +56,7 @@ and CLAUDE.md exist after install.
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.3.0
+git checkout v0.3.2
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install
@@ -68,33 +68,34 @@ Remove-Item -Recurse -Force hh-source
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.3.0
+git checkout v0.3.2
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
 rm -rf hh-source
 ```
 
-### Pi agent harness
+### Pi / AXGA agent harness
 
-Pi can load Heli-Harness as a package to get skills and an extension:
+Pi and AXGA can load Heli-Harness as a package to get skills and a lightweight extension:
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.3.0
+pi install git:github.com/KJ-AIML/heli-harness@v0.3.2
+axga install git:github.com/KJ-AIML/heli-harness@v0.3.2
 ```
 
-This installs the Pi package, which does two things:
+This installs the agent package, which does two things:
 
-1. **Loads Heli-Harness skills** into Pi's skill system (audit, branch, debug, deps, design, engineering, feature, fix-loop, flow, gh-write, impact, incident, release, test-coverage, test-validation, verify-premise, workflow).
-2. **Loads a lightweight Pi extension** (`extensions/pi-extension.js`) that announces status on session start and provides the `/heli-install` command.
+1. **Loads 23 Heli-Harness skills** into the host skill system.
+2. **Loads a lightweight Pi/AXGA extension** (`extensions/pi-extension.js`) that announces status, exposes workflow commands, and enables hooks/guards where the host adapter supports them.
 
 On session start, the extension reports:
 
 - `Heli-Harness loaded`
-- `Workspace harness detected` — if `.heli-harness/HARNESS.md` exists in the current folder
-- `Pi package loaded; workspace harness not installed in this folder` — if not detected
+- `Workspace harness detected` if `.heli-harness/HARNESS.md` exists in the current folder
+- `Heli-Harness package loaded; run /heli-install to set up workspace harness` if not detected
 
-**Pi extension commands:**
+**Pi / AXGA extension commands:**
 
 | Command | Purpose | Mutates files? |
 |---------|---------|----------------|
@@ -108,15 +109,23 @@ On session start, the extension reports:
 | `/heli-validate` | Run safe validation flow | Maybe, only with approval |
 | `/heli-impact` | Impact/risk analysis | No by default |
 | `/heli-hooks` | Show auto hooks status | No |
+| `/heli-hooks probe` | Arm one-shot `before_agent_start` canary | No |
+| `/heli-hooks test-guard` | Arm one-shot `tool_call` guard canary | No |
 
 All workflow commands (`/heli-init`, `/heli-review`, `/heli-audit`, `/heli-validate`, `/heli-impact`) are workspace-aware: they check for `.heli-harness/HARNESS.md` before proceeding and suggest `/heli-install` if missing.
+
+Hook observability in v0.3.2 is opt-in and one-shot:
+
+- `/heli-hooks probe` injects `HELI_HOOK_OK` into the next `before_agent_start` prompt context, then clears.
+- `/heli-hooks test-guard` returns `HELI_GUARD_OK` on the next matching dangerous `tool_call`, before the command executes, then clears.
+- Normal prompts and normal guarded tool calls do not include these canaries.
 
 **Important:**
 
 - `pi install ...` does **not** automatically create `.heli-harness/` in every folder. Use `/heli-install` to set up the workspace harness in a specific folder.
 - Workspace install remains the source of truth for parent-workspace behavior.
-- Pi packages run with full system access. Inspect source code before installing.
-- **Status: supported** — verified with Pi v0.80.2 (local path install; remote `git:` install verified for v0.3.0).
+- Agent packages may run with broad local access. Inspect source code before installing.
+- **Status: supported** - verified with AXGA and Pi loading v0.3.2.
 
 ### Codex
 
@@ -163,7 +172,7 @@ If you want to inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.3.0
+git checkout v0.3.2
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```
