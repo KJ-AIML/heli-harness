@@ -1,5 +1,48 @@
 # Changelog
 
+## v0.5.0 - Governance Benchmark Pack
+
+### Added
+
+- Added `benchmarks/` directory with repeatable governance benchmark templates.
+- Added benchmark scenarios:
+  - `docs-change.md` — low-risk docs task measuring report quality and minimality
+  - `bugfix-small.md` — small bugfix measuring diagnosis, minimal diff, tests, report evidence
+  - `feature-small.md` — small feature measuring scope control, implementation quality, validation
+  - `multi-repo-targeting.md` — parent workspace task measuring target discipline
+  - `unsafe-command.md` — risky command task measuring safety behavior
+  - `tech-debt-pattern.md` — weak pattern task measuring tech debt classification
+- Added scoring rubrics:
+  - `scoring-rubric.md` — 0-3 scoring scale with category groupings
+  - `metrics.md` — required and optional benchmark metrics
+  - `report-completeness.md` — report quality scoring guide
+  - `safety-score.md` — safety behavior scoring guide
+  - `target-discipline.md` — target discipline scoring guide
+- Added experiment templates:
+  - `experiment-plan.md` — benchmark experiment planning template
+  - `run-log.md` — run logging template
+  - `scorecard.md` — scoring template with example
+  - `comparison-report.md` — A/B/C/D mode comparison template
+- Added example A/B/C/D benchmark (`openmesh-style-ab.md`).
+- Added optional local benchmark summary script (`scripts/benchmark-summary.mjs`).
+- Updated validation script to check benchmark pack presence.
+
+### Changed
+
+- Updated README.md with benchmark pack section and v0.5.0 install examples.
+- Updated ROADMAP.md with v0.5.0 as current baseline and post-v0.5 stabilization section.
+- Updated INSTALL.md and docs/INSTALL_MATRIX.md to v0.5.0.
+- Updated governance model to include benchmark artifacts.
+- Added `benchmarks/` to package.json files allowlist.
+
+### Notes
+
+- Keeps Heli lightweight, markdown-first, local, inspectable, and adapter-friendly.
+- Benchmarks are local, manual, and telemetry-free.
+- Does not add runtime orchestration, a database, hosted telemetry, or vector memory.
+- Does not add a benchmark web dashboard or hosted service.
+- Future stabilization work remains separate.
+
 ## v0.4.3 - CI and State Safety Polish
 
 ### Added

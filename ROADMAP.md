@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.4.3
+## Current Baseline: v0.5.0
 
-Latest stable release: `v0.4.3`
+Latest stable release: `v0.5.0`
 
-Release commit: see tag `v0.4.3`
+Release commit: see tag `v0.5.0`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.4.3>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.0>
 
 Stable behavior in this baseline:
 
@@ -49,6 +49,13 @@ Stable behavior in this baseline:
   - advisory session and target lock templates
   - lock awareness in `/hh-status` and `/heli-validate`
   - `/heli-lock` command for lock inspection
+- Governance benchmark pack:
+  - `benchmarks/` directory with repeatable experiment templates
+  - scenario templates (docs-change, bugfix-small, feature-small, multi-repo-targeting, unsafe-command, tech-debt-pattern)
+  - scoring rubrics (safety, target discipline, report completeness, implementation quality)
+  - experiment templates (experiment plan, run log, scorecard, comparison report)
+  - example A/B/C/D benchmark (openmesh-style-ab.md)
+  - optional local benchmark summary script
 
 ## Product Positioning
 
@@ -113,7 +120,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.4.2 | Multi-repo targeting and workspace index | Prevent wrong-repo and wrong-directory edits in parent workspaces. |
 | v0.4.3 | CI and state safety polish | Self-validate on GitHub, check docs/version consistency, advisory lock warnings for parallel agents. |
 | v0.5.0 | Governance benchmark pack | Measure Heli as a governance layer with repeatable experiments. |
-| Later / not yet | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
+| Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
 
@@ -386,7 +393,7 @@ Risks:
 - Symlinks and generated paths can complicate write-root checks.
 - Parent workspaces may intentionally contain nested repos.
 
-## v0.5.0 - Governance Benchmark Pack
+## v0.5.0 - Governance Benchmark Pack (Implemented)
 
 Goal:
 Measure Heli as a governance layer, not just a prompt template.
@@ -443,10 +450,10 @@ Risks:
 - Human reviewers may score reports inconsistently.
 - Token and time overhead may vary by host tool.
 
-## Later / Not Yet
+## Post-v0.5 Stabilization
 
 Goal:
-Keep the roadmap honest by naming plausible future work that should wait until schemas and core governance behavior are stable.
+Stabilize schemas, governance contracts, and benchmark formats before considering expansion.
 
 Rationale:
 Heli should not become heavy before its local governance contracts are clear. Deferring runtime, marketplace, central storage, and orchestration work protects the lightweight, inspectable model.

@@ -47,6 +47,7 @@ This split prevents common failure modes:
 | Task state | `.heli-harness/state/` | Current task, decisions, runs, reports | Task-scoped evidence |
 | Workspace index | `.heli-harness/workspace/` | Known repos, git roots, target state | Target identity |
 | Advisory locks | `.heli-harness/state/`, `.heli-harness/workspace/` | Session and target lock signals | Advisory coordination |
+| Benchmarks | `benchmarks/` | Repeatable evaluation artifacts | Evidence/evaluation support |
 | Adapters | `.heli-harness/adapters/` | Tool-specific loading instructions | Translation layer |
 | Templates | `.heli-harness/templates/` | Reusable profile, report, and task formats | Authoring support |
 | Schemas | `.heli-harness/schemas/` | Machine-checkable contracts | Validation support |
@@ -252,6 +253,21 @@ They should record:
 - purpose or reason
 
 Locks are warnings, not enforcement. They help agents and humans see when multiple agents may be touching the same workspace or target state. Heli does not create active lock files by default.
+
+## Benchmarks
+
+Benchmark artifacts provide repeatable evaluation support for governance behavior.
+
+They should include:
+
+- scenario templates
+- scoring rubrics
+- experiment plans
+- run logs
+- scorecards
+- comparison reports
+
+Benchmarks are evidence/evaluation support, not runtime authority. They help humans measure whether Heli improves governance outcomes. They do not enforce behavior. They are local, manual, and markdown-first.
 
 ## Reports
 

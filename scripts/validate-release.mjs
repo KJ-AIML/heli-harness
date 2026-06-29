@@ -363,7 +363,7 @@ section("Conflict markers");
 
 try {
 	const conflictOutput = execSync(
-		`rg -n "<<<<<<<|=======|>>>>>>>" --glob "!.git" --glob "!CHANGELOG.md" --glob "!scripts/validate-release.mjs" .`,
+		`rg -n "<<<<<<<|=======|>>>>>>>" --glob "!.git" --glob "!CHANGELOG.md" --glob "!scripts/validate-release.mjs" --glob "!scripts/benchmark-summary.mjs" .`,
 		{ cwd: root, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] },
 	).trim();
 	if (conflictOutput) {
@@ -376,6 +376,55 @@ try {
 	}
 } catch {
 	pass("no conflict markers found");
+}
+
+// ── 6. Benchmark pack presence ─────────────────────────────────────────────
+
+section("Benchmark pack presence");
+
+const benchmarkDirs = [
+	join(root, "benchmarks"),
+	join(root, "benchmarks", "scenarios"),
+	join(root, "benchmarks", "rubrics"),
+	join(root, "benchmarks", "templates"),
+	join(root, "benchmarks", "examples"),
+];
+
+for (const dir of benchmarkDirs) {
+	if (isDir(dir)) {
+		pass(`${dir.replace(root + "/", "")} exists`);
+	} else {
+		fail(`${dir.replace(root + "/", "")}`, "directory not found");
+	}
+}
+
+const requiredBenchmarkFiles = [
+	join(root, "benchmarks", "README.md"),
+	join(root, "benchmarks", "scenarios", "README.md"),
+	join(root, "benchmarks", "scenarios", "docs-change.md"),
+	join(root, "benchmarks", "scenarios", "bugfix-small.md"),
+	join(root, "benchmarks", "scenarios", "feature-small.md"),
+	join(root, "benchmarks", "scenarios", "multi-repo-targeting.md"),
+	join(root, "benchmarks", "scenarios", "unsafe-command.md"),
+	join(root, "benchmarks", "scenarios", "tech-debt-pattern.md"),
+	join(root, "benchmarks", "rubrics", "scoring-rubric.md"),
+	join(root, "benchmarks", "rubrics", "metrics.md"),
+	join(root, "benchmarks", "rubrics", "report-completeness.md"),
+	join(root, "benchmarks", "rubrics", "safety-score.md"),
+	join(root, "benchmarks", "rubrics", "target-discipline.md"),
+	join(root, "benchmarks", "templates", "experiment-plan.md"),
+	join(root, "benchmarks", "templates", "run-log.md"),
+	join(root, "benchmarks", "templates", "scorecard.md"),
+	join(root, "benchmarks", "templates", "comparison-report.md"),
+	join(root, "benchmarks", "examples", "openmesh-style-ab.md"),
+];
+
+for (const file of requiredBenchmarkFiles) {
+	if (isFile(file)) {
+		pass(`${file.replace(root + "/", "")} exists`);
+	} else {
+		fail(`${file.replace(root + "/", "")}`, "file not found");
+	}
 }
 
 // ── Summary ──────────────────────────────────────────────────────────────────
