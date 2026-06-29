@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.3.0 - Safe Auto Hooks
+
+### Added
+- **session_start hook**: Detects workspace harness and shows status (active/package-only)
+- **before_agent_start hook**: Injects compact safety rules when workspace exists
+  - Instructs agent to read HARNESS.md, profiles, preserve dirty work
+  - Prevents accidental mutating/release/push operations without approval
+- **tool_call safety guard**: Blocks or confirms dangerous operations
+  - Bash: `npm publish`, `git push`, `rm -rf`, release commands, API-credit-consuming commands
+  - Files: `.env`, `.pem`, `.key`, credential files, legacy runtime folders
+- **input shortcuts**: `/review`, `/audit`, `/validate`, `/impact` → `/heli-*` commands
+- **/heli-hooks command**: Show auto hooks status
+- Status bar integration: `heli: active` or `heli: package-only`
+
+### Safety Guarantees
+- No auto install
+- No auto tests
+- No auto commits
+- No auto pushes
+- No destructive automation
+- All hooks respect workspace detection (only activate when `.heli-harness/HARNESS.md` exists)
+- tool_call guard uses `ctx.ui.confirm()` when available, otherwise blocks by default
+
+### Implementation Details
+- Hooks only activate when workspace harness is detected
+- before_agent_start appends compact rules to system prompt (does not override)
+- tool_call guard checks both bash commands and file write/edit operations
+- input shortcuts only transform exact matches, not natural language
+- Status bar shows current workspace state
 ## v0.2.0 - Pi workflow commands
 
 ### Added
