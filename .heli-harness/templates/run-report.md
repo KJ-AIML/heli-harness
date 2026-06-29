@@ -104,6 +104,22 @@ Justification:
 
 -
 
+## Lock context
+
+Session lock observed:
+
+Target lock observed:
+
+Lock owner:
+
+Lock target:
+
+Lock mismatch warnings:
+
+Parallel agent risk:
+
+Lock ignored (and why):
+
 ## Risks
 
 Known limitations:

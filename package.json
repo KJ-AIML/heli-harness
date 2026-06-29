@@ -1,6 +1,6 @@
 {
   "name": "heli-harness",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Parent-workspace AI development harness for multi-repo, multi-agent engineering work.",
   "keywords": [
     "pi-package",
@@ -28,6 +28,11 @@
     "LICENSE",
     "README.md"
   ],
+  "scripts": {
+    "check": "node --check extensions/pi-extension.js && node scripts/smoke-extension-load.mjs && node scripts/validate-release.mjs",
+    "smoke": "node scripts/smoke-extension-load.mjs",
+    "validate:release": "node scripts/validate-release.mjs"
+  },
   "pi": {
     "extensions": [
       "./extensions/pi-extension.js"

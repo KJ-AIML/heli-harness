@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Syntax check extension
+        run: node --check extensions/pi-extension.js
+
+      - name: Extension smoke test
+        run: node scripts/smoke-extension-load.mjs
+
+      - name: Release validation
+        run: node scripts/validate-release.mjs
+
+      - name: Bash syntax check
+        run: |
+          bash -n install.sh
+          bash -n update.sh
+          bash -n uninstall.sh
+
+      - name: PowerShell parser check
+        shell: pwsh
+        run: |
+          $files = @("install.ps1", "update.ps1", "uninstall.ps1")
+          foreach ($f in $files) {
+            $content = Get-Content $f -Raw
+            $null = [System.Management.Automation.PSParser]::Tokenize(
+              $content, [ref]$null
+            )
+            Write-Host "$f : syntax OK"
+          }
+
+      - name: Git whitespace check
+        run: git diff --check HEAD~1 HEAD || true

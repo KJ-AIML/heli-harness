@@ -46,6 +46,7 @@ This split prevents common failure modes:
 | Safety overlays | `.heli-harness/safety/` | Command tiers, risky paths, secrets handling | Enforced where hooks allow |
 | Task state | `.heli-harness/state/` | Current task, decisions, runs, reports | Task-scoped evidence |
 | Workspace index | `.heli-harness/workspace/` | Known repos, git roots, target state | Target identity |
+| Advisory locks | `.heli-harness/state/`, `.heli-harness/workspace/` | Session and target lock signals | Advisory coordination |
 | Adapters | `.heli-harness/adapters/` | Tool-specific loading instructions | Translation layer |
 | Templates | `.heli-harness/templates/` | Reusable profile, report, and task formats | Authoring support |
 | Schemas | `.heli-harness/schemas/` | Machine-checkable contracts | Validation support |
@@ -68,11 +69,13 @@ This split prevents common failure modes:
   state/
     current-task.md
     decisions.md
+    session.lock.example.json
     reports/
     runs/
   workspace/
     index.json
     target.json
+    target.lock.example.json
   adapters/
   templates/
   schemas/
@@ -235,6 +238,20 @@ Target state should record:
 - selection metadata
 
 This is coordination state, not orchestration.
+
+## Advisory Locks
+
+Advisory lock templates make parallel-agent intent visible without introducing distributed locking.
+
+They should record:
+
+- lock owner
+- agent identity
+- target repo
+- start and expiration timestamps
+- purpose or reason
+
+Locks are warnings, not enforcement. They help agents and humans see when multiple agents may be touching the same workspace or target state. Heli does not create active lock files by default.
 
 ## Reports
 

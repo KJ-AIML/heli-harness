@@ -9,3 +9,5 @@ This directory is lightweight by design:
 - `index.json` is reviewable workspace metadata.
 - `target.json` is current target state, not long-term memory.
 - Missing or incomplete files should produce warnings, not hard failures.
+- `target.lock.example.json` is an advisory lock template for multi-agent coordination.
+- Lock files are warnings, not distributed locks. Copy the `.example.json` template to create an active lock.

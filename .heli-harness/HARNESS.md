@@ -18,6 +18,8 @@ Heli-Harness is the source of truth for this parent workspace. It is tool-neutra
 - Repo profiles remain descriptive. Team rules belong in policy overlays, and command-risk guidance belongs in safety overlays.
 - Repo profiles should classify weak existing patterns as tech debt when appropriate, include evidence paths for meaningful claims, and record safer alternatives for future work.
 - Write workflows in multi-repo workspaces should not proceed silently when target identity is ambiguous.
+- The agent should check for advisory lock files (session.lock.json, target.lock.json) before write workflows when multiple agents may be active.
+- Locks are advisory warnings, not distributed locks. An expired or missing lock should warn, not block.
 - The agent must not run expensive loops repeatedly. Use the smallest useful check first, then widen only when evidence requires it.
 - After two failed fix attempts, stop coding and write a diagnosis with evidence, likely causes, and the next smallest action.
 

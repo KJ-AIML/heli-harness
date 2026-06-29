@@ -8,7 +8,7 @@ const tempDir = mkdtempSync(join(tmpdir(), "heli-extension-"));
 mkdirSync(join(tempDir, "extensions"), { recursive: true });
 mkdirSync(join(tempDir, ".heli-harness"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "HARNESS.md"), "# Harness\n");
-writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.4.2" }));
+writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.4.3" }));
 mkdirSync(join(tempDir, ".heli-harness", "profiles"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "profiles", "demo.md"), `# Demo
 
@@ -377,6 +377,7 @@ assert.deepEqual(commands.map((command) => command.name), [
 	"heli-impact",
 	"heli-hooks",
 	"heli-target",
+	"heli-lock",
 ]);
 
 const toolCall = events.find((event) => event.name === "tool_call").handler;
@@ -397,7 +398,7 @@ const baselinePrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
 assert(!baselinePrompt.systemPrompt.includes("HELI_HOOK_OK"));
 
 await commands.find((command) => command.name === "hh-status").options.handler({}, ctx);
-assert(notifications.some((item) => item.message === "Version: 0.4.2"));
+assert(notifications.some((item) => item.message === "Version: 0.4.3"));
 assert(notifications.some((item) => item.message === "Mode: package + workspace"));
 assert(notifications.some((item) => item.message === "Target repo: demo"));
 assert(notifications.some((item) => item.message === "Policy directory: detected"));
@@ -415,7 +416,12 @@ assert.deepEqual(await toolCall({ toolName: "write", input: { path: "notes.txt" 
 	reason: "Blocked: target repo not selected in multi-repo workspace",
 });
 await commands.find((command) => command.name === "heli-target").options.handler("set demo", ctx);
-const targetState = JSON.parse(readFileSync(join(tempDir, ".heli-harness", "workspace", "target.json"), "utf8"));
+let targetState;
+try {
+	targetState = JSON.parse(readFileSync(join(tempDir, ".heli-harness", "workspace", "target.json"), "utf8"));
+} catch (e) {
+	throw new Error(`Failed to parse target.json: ${e.message}`);
+}
 assert.equal(targetState.targetRepo, "demo");
 assert.equal(await toolCall({ toolName: "write", input: { path: "notes.txt" } }, {}), undefined);
 assert.deepEqual(await toolCall({ toolName: "write", input: { path: "..\\outside.txt" } }, {}), {
@@ -450,9 +456,13 @@ await commands.find((command) => command.name === "heli-validate").options.handl
 await commands.find((command) => command.name === "heli-validate").options.handler("safety", ctx);
 await commands.find((command) => command.name === "heli-validate").options.handler("workspace", ctx);
 await commands.find((command) => command.name === "heli-validate").options.handler("target", ctx);
+await commands.find((command) => command.name === "heli-validate").options.handler("lock", ctx);
+await commands.find((command) => command.name === "heli-lock").options.handler({}, ctx);
+await commands.find((command) => command.name === "heli-lock").options.handler("help", ctx);
 await commands.find((command) => command.name === "heli-help").options.handler({}, ctx);
 
 assert(notifications.some((item) => item.message === "Heli-Harness Status"));
+assert(notifications.some((item) => item.message === "Heli Lock Status"));
 assert(notifications.some((item) => item.message === "Heli-Harness Auto Hooks Status"));
 assert(notifications.some((item) => item.message === "Heli hook probe armed"));
 assert(notifications.some((item) => item.message === "Heli tool_call guard probe armed"));
@@ -462,6 +472,7 @@ assert(notifications.some((item) => item.message === "Heli policy lint"));
 assert(notifications.some((item) => item.message === "Heli safety lint"));
 assert(notifications.some((item) => item.message === "Heli workspace lint"));
 assert(notifications.some((item) => item.message === "Heli target lint"));
+assert(notifications.some((item) => item.message === "Heli lock lint"));
 assert(notifications.some((item) => item.message === "Heli report lint"));
 assert(notifications.some((item) => item.message.includes('bad.md: missing section "Known tech debt"')));
 assert(notifications.some((item) => item.message.includes("bad.md: existing patterns section has no evidence paths")));

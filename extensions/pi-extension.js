@@ -191,6 +191,35 @@ function readTargetState(cwd) {
 	return safeReadJson(getWorkspacePaths(cwd).targetPath);
 }
 
+function getLockPaths(cwd) {
+	return {
+		sessionLockPath: join(
+			cwd, ".heli-harness", "state", "session.lock.json"
+		),
+		targetLockPath: join(
+			cwd, ".heli-harness", "workspace", "target.lock.json"
+		),
+	};
+}
+
+function readSessionLock(cwd) {
+	return safeReadJson(getLockPaths(cwd).sessionLockPath);
+}
+
+function readTargetLock(cwd) {
+	return safeReadJson(getLockPaths(cwd).targetLockPath);
+}
+
+function isLockExpired(lock) {
+	if (!lock || !lock.expiresAt) return false;
+	try {
+		const exp = new Date(lock.expiresAt);
+		return exp < new Date();
+	} catch (_e) {
+		return false;
+	}
+}
+
 function pathExists(path) {
 	return !!path && (isFile(path) || isDirectory(path));
 }
@@ -500,6 +529,49 @@ function lintWorkspace(cwd) {
 	return { checked: repos.length, warnings };
 }
 
+function lintLocks(cwd) {
+	const warnings = [];
+	let checked = 0;
+	const sessionLock = readSessionLock(cwd);
+	const targetLock = readTargetLock(cwd);
+	if (sessionLock) {
+		checked++;
+		if (!sessionLock.owner) {
+			warnings.push("session.lock.json: missing owner");
+		}
+		if (!sessionLock.expiresAt) {
+			warnings.push("session.lock.json: missing expiresAt");
+		} else if (isLockExpired(sessionLock)) {
+			warnings.push("session.lock.json: lock appears expired");
+		}
+	}
+	if (targetLock) {
+		checked++;
+		if (!targetLock.owner) {
+			warnings.push("target.lock.json: missing owner");
+		}
+		if (!targetLock.targetRepo) {
+			warnings.push("target.lock.json: missing targetRepo");
+		}
+		if (!targetLock.expiresAt) {
+			warnings.push("target.lock.json: missing expiresAt");
+		} else if (isLockExpired(targetLock)) {
+			warnings.push("target.lock.json: lock appears expired");
+		}
+		const target = readTargetState(cwd);
+		if (
+			target && target.targetRepo && targetLock.targetRepo
+			&& target.targetRepo !== targetLock.targetRepo
+		) {
+			warnings.push(
+				"target.lock.json: lock target does not match"
+				+ " selected target repo"
+			);
+		}
+	}
+	return { checked, warnings };
+}
+
 function lintTarget(cwd) {
 	const { workspaceDir, targetPath } = getWorkspacePaths(cwd);
 	if (!isDirectory(workspaceDir)) return { checked: 0, warnings: ["No workspace directory found."] };
@@ -615,6 +687,15 @@ function lintReports(cwd) {
 		}
 		if (/skip|skipped/i.test(text) && /validation|test|check/i.test(text) && !/because|reason|not available|not applicable/i.test(text)) {
 			warnings.push(`${label}: mentions skipped validation without a reason`);
+		}
+		if (/(parallel|multi-agent|concurrent)/i.test(text) && !sectionHasContent(text, "Lock context")) {
+			warnings.push(`${label}: mentions parallel/multi-agent work but no lock state recorded`);
+		}
+		if (/lock conflict/i.test(text) && !/resolution|resolved|because|reason/i.test(text)) {
+			warnings.push(`${label}: mentions lock conflict without resolution`);
+		}
+		if (/(implemented|edited|changed|write workflow|mutating)/i.test(text) && /(multi-repo|multiple repos)/i.test(text) && !sectionHasContent(text, "Lock context")) {
+			warnings.push(`${label}: mutating work in multi-repo workspace without lock context`);
 		}
 	}
 	return { checked: reports.length, warnings };
@@ -748,6 +829,18 @@ export default function heliHarnessExtension(pi) {
 		notify(ctx, `Target active profile: ${targetState && targetState.activeProfile ? targetState.activeProfile : "not selected"}`, "info");
 		notify(ctx, `Target profile exists: ${targetProfile ? (pathExists(targetProfile) ? "yes" : "no") : "not selected"}`, targetProfile ? (pathExists(targetProfile) ? "success" : "warning") : "warning");
 		notify(ctx, `CWD inside target root: ${targetGitRoot ? (pathIsInside(targetGitRoot, cwd) ? "yes" : "no") : "not selected"}`, targetGitRoot ? (pathIsInside(targetGitRoot, cwd) ? "success" : "warning") : "warning");
+		const sessionLock = readSessionLock(cwd);
+		const targetLock = readTargetLock(cwd);
+		notify(ctx, `Session lock: ${sessionLock ? (isLockExpired(sessionLock) ? "expired" : "active") : "not present"}`, sessionLock ? (isLockExpired(sessionLock) ? "warning" : "success") : "info");
+		if (sessionLock) {
+			notify(ctx, `Session lock owner: ${sessionLock.owner || "unknown"}`, "info");
+			notify(ctx, `Session lock expires: ${sessionLock.expiresAt || "never"}`, "info");
+		}
+		notify(ctx, `Target lock: ${targetLock ? (isLockExpired(targetLock) ? "expired" : "active") : "not present"}`, targetLock ? (isLockExpired(targetLock) ? "warning" : "success") : "info");
+		if (targetLock) {
+			notify(ctx, `Target lock owner: ${targetLock.owner || "unknown"}`, "info");
+			notify(ctx, `Target lock target: ${targetLock.targetRepo || "none"}`, "info");
+		}
 		notify(ctx, `Skill count: ${getSkillCount(cwd)}`, "info");
 		notify(ctx, "Active hooks: session_start, before_agent_start, tool_call, input", "info");
 		notify(ctx, `Recent hooks: session_start=${lastSessionStartAt}; before_agent_start=${lastBeforeAgentStartAt}; tool_call_guard=${lastToolGuardAt}; input_shortcut=${lastInputShortcutAt}`, "info");
@@ -808,11 +901,52 @@ export default function heliHarnessExtension(pi) {
 			notifyLintResult(ctx, "Heli target lint", lintTarget(cwd));
 			if (action !== "lint") return;
 		}
+		if (action === "lint" || action === "lock" || action === "locks") {
+			notifyLintResult(ctx, "Heli lock lint", lintLocks(cwd));
+			if (action !== "lint") return;
+		}
 		if (action === "lint" || action === "report" || action === "reports") {
 			notifyLintResult(ctx, "Heli report lint", lintReports(cwd));
 			return;
 		}
 		return workflowHandler("heli-validate", "test validation")(_args, ctx);
+	};
+
+	const lockHandler = async (_args, ctx) => {
+		const cwd = process.cwd();
+		const actionText = normalizeCommandText(_args);
+		const parts = actionText ? actionText.split(/\s+/) : [];
+		const command = parts[0] ? parts[0].toLowerCase() : "status";
+		if (command === "status" || command === "show") {
+			const sessionLock = readSessionLock(cwd);
+			const targetLock = readTargetLock(cwd);
+			notify(ctx, "Heli Lock Status", "info");
+			notify(ctx, `Session lock: ${sessionLock ? (isLockExpired(sessionLock) ? "expired" : "active") : "not present"}`, sessionLock ? (isLockExpired(sessionLock) ? "warning" : "success") : "info");
+			if (sessionLock) {
+				notify(ctx, `  Owner: ${sessionLock.owner || "unknown"}`, "info");
+				notify(ctx, `  Agent: ${sessionLock.agent || "unknown"}`, "info");
+				notify(ctx, `  Target: ${sessionLock.targetRepo || "none"}`, "info");
+				notify(ctx, `  Expires: ${sessionLock.expiresAt || "never"}`, "info");
+			}
+			notify(ctx, `Target lock: ${targetLock ? (isLockExpired(targetLock) ? "expired" : "active") : "not present"}`, targetLock ? (isLockExpired(targetLock) ? "warning" : "success") : "info");
+			if (targetLock) {
+				notify(ctx, `  Owner: ${targetLock.owner || "unknown"}`, "info");
+				notify(ctx, `  Agent: ${targetLock.agent || "unknown"}`, "info");
+				notify(ctx, `  Target: ${targetLock.targetRepo || "none"}`, "info");
+				notify(ctx, `  Expires: ${targetLock.expiresAt || "never"}`, "info");
+			}
+			notify(ctx, "Locks are advisory. Copy .example.json templates to create lock files.", "info");
+			return;
+		}
+		if (command === "help") {
+			notify(ctx, "Heli Lock — Advisory Lock Management", "info");
+			notify(ctx, "Locks are lightweight advisory files to signal intent.", "info");
+			notify(ctx, "Copy session.lock.example.json or target.lock.example.json to create a lock.", "info");
+			notify(ctx, "/heli-lock status — show current lock state", "info");
+			notify(ctx, "/heli-lock help — show this message", "info");
+			return;
+		}
+		notify(ctx, "Usage: /heli-lock status | /heli-lock help", "warning");
 	};
 
 	const targetHandler = async (_args, ctx) => {
@@ -1075,4 +1209,5 @@ HELI_HOOK_OK`
 	pi.registerCommand("heli-impact", { description: "Impact analysis for planned changes", handler: workflowHandler("heli-impact", "impact analysis") });
 	pi.registerCommand("heli-hooks", { description: "Show Heli-Harness auto hooks status", handler: hooksStatusHandler });
 	pi.registerCommand("heli-target", { description: "Show or set the active target repo for multi-repo workspaces", handler: targetHandler });
+	pi.registerCommand("heli-lock", { description: "Show advisory lock state for multi-agent coordination", handler: lockHandler });
 }
