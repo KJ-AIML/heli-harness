@@ -1,5 +1,9 @@
 # Heli-Harness
 
+<p align="center">
+  <img src="assets/heli-harness-hero.png" alt="Heli-Harness mascot hero banner — governance for coding agents" width="100%">
+</p>
+
 Heli-Harness gives local coding agents a shared governance layer: protocols, repo profiles, policy overlays, state tracking, optional hooks, and adapter instructions. It is designed for a parent workspace that contains many repos and may be touched by many agents.
 
 The source of truth in this repository is `.heli-harness/HARNESS.md`. Tool-specific behavior lives only under `.heli-harness/adapters/`.

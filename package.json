@@ -16,6 +16,7 @@
   },
   "files": [
     ".heli-harness/",
+    "assets/",
     "extensions/",
     "scripts/",
     "install.sh",
