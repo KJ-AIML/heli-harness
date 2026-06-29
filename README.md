@@ -37,7 +37,7 @@ Install this repo into the current folder as a parent-workspace harness:
 
 https://github.com/KJ-AIML/heli-harness
 
-Use the latest stable tag (v0.1.1). Do not install globally. Treat the current
+Use the latest stable tag (v0.2.0). Do not install globally. Treat the current
 directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
@@ -49,7 +49,7 @@ and CLAUDE.md exist after install.
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.1.1
+git checkout v0.2.0
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install
@@ -61,7 +61,7 @@ Remove-Item -Recurse -Force hh-source
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.1.1
+git checkout v0.2.0
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -73,7 +73,7 @@ rm -rf hh-source
 Pi can load Heli-Harness as a package to get skills and an extension:
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.1.1
+pi install git:github.com/KJ-AIML/heli-harness@v0.2.0
 ```
 
 This installs the Pi package, which does two things:
@@ -89,15 +89,26 @@ On session start, the extension reports:
 
 **Pi extension commands:**
 
-- `/heli-install` (or `/hh-install`) — Install the workspace harness into the current folder. Asks for confirmation before modifying the workspace.
-- `/hh-status` — Report Heli-Harness status: current working directory, whether workspace harness is detected, and whether `HARNESS.md` exists.
+| Command | Purpose | Mutates files? |
+|---------|---------|----------------|
+| `/heli-install` | Install workspace harness | Yes, with confirmation |
+| `/hh-install` | Short alias for install | Yes, with confirmation |
+| `/hh-status` | Show harness status | No |
+| `/heli-help` | Show command help | No |
+| `/heli-init` | Bootstrap repo profile | Yes, profile/state only |
+| `/heli-review` | Review repo/diff | No by default |
+| `/heli-audit` | Audit repo/workspace | No by default |
+| `/heli-validate` | Run safe validation flow | Maybe, only with approval |
+| `/heli-impact` | Impact/risk analysis | No by default |
+
+All workflow commands (`/heli-init`, `/heli-review`, `/heli-audit`, `/heli-validate`, `/heli-impact`) are workspace-aware: they check for `.heli-harness/HARNESS.md` before proceeding and suggest `/heli-install` if missing.
 
 **Important:**
 
 - `pi install ...` does **not** automatically create `.heli-harness/` in every folder. Use `/heli-install` to set up the workspace harness in a specific folder.
 - Workspace install remains the source of truth for parent-workspace behavior.
 - Pi packages run with full system access. Inspect source code before installing.
-- **Status: supported** — verified with Pi v0.80.2 (local path install; remote `git:` install verified for v0.1.1).
+- **Status: supported** — verified with Pi v0.80.2 (local path install; remote `git:` install verified for v0.2.0).
 
 ### Codex
 
@@ -144,7 +155,7 @@ If you want to inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.1.1
+git checkout v0.2.0
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```

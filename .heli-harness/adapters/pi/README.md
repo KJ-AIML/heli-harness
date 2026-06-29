@@ -5,7 +5,7 @@ Heli-Harness can be installed as a Pi package to expose skills and a lightweight
 ## Install
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.1.1
+pi install git:github.com/KJ-AIML/heli-harness@v0.2.0
 ```
 
 This installs the Pi package, which does two things:
@@ -16,16 +16,20 @@ This installs the Pi package, which does two things:
 2. **Loads a lightweight Pi extension** (`extensions/pi-extension.js`) that:
    - Announces `Heli-Harness loaded` on session start
    - Detects whether workspace harness is installed in the current folder
-   - Provides `/heli-install` (alias `/hh-install`) command to install the workspace harness
-   - Provides `/hh-status` command to report harness status in current folder
+   - Provides install commands: `/heli-install`, `/hh-install`
+   - Provides status command: `/hh-status`
+   - Provides workflow commands: `/heli-help`, `/heli-init`, `/heli-review`, `/heli-audit`, `/heli-validate`, `/heli-impact`
+
+   All workflow commands are workspace-aware: they check for `.heli-harness/HARNESS.md` before proceeding and suggest `/heli-install` if missing.
 
 **What this does NOT do:**
 
 - Does **not** automatically create `.heli-harness/` in any workspace on startup.
 - Does **not** set up parent-workspace harness state, profiles, or adapter pointer files automatically.
 - Use `/heli-install` or `/hh-install` inside Pi to install the workspace harness into the current folder.
+- Workflow commands (`/heli-init`, `/heli-review`, etc.) require workspace harness to be installed first.
 
-**Status: supported.** Verified with Pi v0.80.2 (local path install). Remote `git:` install verified for v0.1.1.
+**Status: supported.** Verified with Pi v0.80.2 (local path install). Remote `git:` install verified for v0.2.0.
 
 ### 2. Workspace harness install (recommended)
 
@@ -47,7 +51,7 @@ Or run the installer manually:
 # macOS/Linux
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.1.1
+git checkout v0.2.0
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -56,7 +60,7 @@ rm -rf hh-source
 # Windows PowerShell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.1.1
+git checkout v0.2.0
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install

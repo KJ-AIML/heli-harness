@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
  * - Announces Heli-Harness status on session start
  * - Detects whether workspace harness is installed in cwd
  * - Provides /heli-install and /hh-install commands to install workspace harness
+ * - Provides workflow commands: /heli-help, /heli-init, /heli-review, /heli-audit, /heli-validate, /heli-impact
  */
 
 const __filename = fileURLToPath(import.meta.url);
@@ -150,6 +151,31 @@ export default function heliHarnessExtension(pi) {
 		}
 	};
 
+	// Helper to check workspace harness and send workflow message
+	const workflowHandler = (skillName, description) => {
+		return async (_args, ctx) => {
+			const cwd = process.cwd();
+			const harnessDetected = detectWorkspaceHarness(cwd);
+
+			if (!harnessDetected) {
+				ctx?.ui?.notify?.(
+					"Workspace harness not installed",
+					"warning",
+				);
+				ctx?.ui?.notify?.(
+					"Run /heli-install or /hh-install to set up workspace harness",
+					"info",
+				);
+				return;
+			}
+
+			ctx?.ui?.notify?.(`Running ${description}...`, "info");
+
+			// Send skill message to Pi (use /skill: prefix to invoke skill directly, not command)
+			pi.sendUserMessage(`/skill:${skillName}`);
+		};
+	};
+
 	pi.on("session_start", async (_event, ctx) => {
 		const cwd = process.cwd();
 		const harnessDetected = detectWorkspaceHarness(cwd);
@@ -186,5 +212,41 @@ export default function heliHarnessExtension(pi) {
 	pi.registerCommand("hh-status", {
 		description: "Report Heli-Harness status in current folder",
 		handler: statusHandler,
+	});
+
+	// Register /heli-help
+	pi.registerCommand("heli-help", {
+		description: "Show Heli-Harness commands and what they do",
+		handler: workflowHandler("heli-help", "Heli-Harness help"),
+	});
+
+	// Register /heli-init
+	pi.registerCommand("heli-init", {
+		description: "Bootstrap a repo profile for a target repo",
+		handler: workflowHandler("heli-init", "repo profile bootstrap"),
+	});
+
+	// Register /heli-review
+	pi.registerCommand("heli-review", {
+		description: "Review current repo/diff/task safely",
+		handler: workflowHandler("heli-review", "repo review"),
+	});
+
+	// Register /heli-audit
+	pi.registerCommand("heli-audit", {
+		description: "Repo-wide audit for issues and risks",
+		handler: workflowHandler("heli-audit", "repo audit"),
+	});
+
+	// Register /heli-validate
+	pi.registerCommand("heli-validate", {
+		description: "Run test-validation workflow safely",
+		handler: workflowHandler("heli-validate", "test validation"),
+	});
+
+	// Register /heli-impact
+	pi.registerCommand("heli-impact", {
+		description: "Impact analysis for planned changes",
+		handler: workflowHandler("heli-impact", "impact analysis"),
 	});
 }

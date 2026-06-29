@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.2.0 - Pi workflow commands
+
+### Added
+- `/heli-help` - Show Heli-Harness commands and what they do
+- `/heli-init` - Bootstrap repo profile for a target repo
+- `/heli-review` - Review current repo/diff/task safely
+- `/heli-audit` - Repo-wide audit for issues and risks
+- `/heli-validate` - Run test-validation workflow safely
+- `/heli-impact` - Impact analysis for planned changes
+
+### Changed
+- All workflow commands are workspace-aware: check for `.heli-harness/HARNESS.md` before proceeding
+- Commands suggest `/heli-install` if workspace harness is missing
+- Added 6 namespaced wrapper skills to avoid skill name collisions
+- Commands preserve safe, opt-in behavior
+- Commands avoid legacy names (no `helicopter-harness` references)
+
+### Notes
+- No breaking changes
+- No migration support added
+- All commands are non-destructive by default
 ## 0.1.2 - 2026-06-28
 
 ### Docs-only polish
