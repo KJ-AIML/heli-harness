@@ -133,14 +133,17 @@ Profiles should include evidence paths. They should avoid vague claims like "use
 
 Recommended profile taxonomy:
 
+- Policy references
 - Observed stack
 - Existing patterns
 - Recommended conventions
 - Known tech debt
 - Forbidden patterns
+- Safer alternatives
 - Command tiers
 - Repo risks
 - Exceptions
+- Evidence paths
 
 ## Policy Overlays
 
@@ -229,7 +232,7 @@ Reports should include:
 
 Reports prove process discipline. They should be lintable before a task is considered complete.
 
-In v0.4.0, Heli extends report lint through `/heli-validate lint` and `/heli-validate report` so reports can record policies loaded, safety overlays loaded, deviations, approval evidence, and safety events. The linter still warns by default rather than acting as a hard rule engine.
+In v0.4.1, Heli extends report lint so reports can also record the active profile, taxonomy warnings, profile-based decisions, tech debt copied or avoided, safer alternatives chosen, and profile deviations. The linter still warns by default rather than acting as a hard rule engine.
 
 ## Adapter Responsibilities
 

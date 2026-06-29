@@ -28,13 +28,21 @@ Bootstrap a repo profile for a target repo in the current parent workspace.
 3. **Create repo profile**
    - Create or update `.heli-harness/profiles/<repo>.md`
    - Include:
-     - Repo overview and architecture
-     - Test commands (classified by safety)
-     - Build commands
-     - Dependency state
-     - High-risk files and commands
-     - Git status
-     - Safest next action
+     - Observed stack
+     - Existing patterns
+     - Recommended conventions
+     - Known tech debt
+     - Forbidden patterns
+     - Safer alternatives
+     - Command tiers
+     - Repo risks
+     - Exceptions
+     - Evidence paths
+     - Policy references when overlays exist
+   - Treat observed patterns as facts, not automatic recommendations
+   - Require evidence paths for meaningful claims
+   - If a risky existing pattern exists, classify it as possible tech debt and provide a safer alternative
+   - Do not use vague phrases like "follow existing patterns" without classification
 
 4. **Update task state**
    - Update `.heli-harness/state/current-task.md`
@@ -61,10 +69,8 @@ Classify repo commands into:
 ## Output
 
 Create `.heli-harness/profiles/<repo>.md` with:
-- Overview and architecture
-- Test commands (classified)
-- Build commands
-- Dependency state
-- High-risk files/commands
-- Git status
-- Safest next action
+- taxonomy sections from the repo profile template
+- evidence paths for meaningful claims
+- tech-debt framing for risky existing patterns
+- safer alternatives for future work
+- policy references when policy overlays exist

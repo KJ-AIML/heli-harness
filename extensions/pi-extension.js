@@ -210,6 +210,39 @@ function normalizeText(text) {
 	return String(text || "").replace(/\r\n/g, "\n");
 }
 
+const PROFILE_REQUIRED_SECTIONS = [
+	"Policy references",
+	"Observed stack",
+	"Existing patterns",
+	"Recommended conventions",
+	"Known tech debt",
+	"Forbidden patterns",
+	"Safer alternatives",
+	"Command tiers",
+	"Repo risks",
+	"Exceptions",
+	"Evidence paths",
+];
+
+const PROFILE_RISKY_KEYWORDS = [
+	"hardcoded",
+	"localstorage",
+	"raw fetch",
+	"secret",
+	"token",
+	"api key",
+	"no tests",
+	"no lint",
+	"unsafe",
+	"bypass",
+	"wildcard",
+	"public",
+	"admin",
+	"production",
+	"deploy",
+	"publish",
+];
+
 function hasHeading(text, heading) {
 	const pattern = new RegExp(`^#{1,6}\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "im");
 	return pattern.test(text);
@@ -230,6 +263,18 @@ function sectionHasContent(text, heading) {
 	return /[a-z0-9]/i.test(getSectionBody(text, heading));
 }
 
+function sectionHasEvidence(text, heading) {
+	const body = getSectionBody(text, heading);
+	return (
+		/`[^`]+`/.test(body) ||
+		/(evidence path|package\.json|readme|agents\.md|claude\.md|tsconfig|vite|webpack|docker|compose|makefile|script|command|docs\/|\/|\\)/i.test(body)
+	);
+}
+
+function textHasRiskyKeyword(text) {
+	return PROFILE_RISKY_KEYWORDS.some((keyword) => text.toLowerCase().includes(keyword));
+}
+
 function pushMissingSectionWarnings(warnings, label, text, sections) {
 	for (const section of sections) {
 		if (!hasHeading(text, section)) warnings.push(`${label}: missing section "${section}"`);
@@ -238,16 +283,7 @@ function pushMissingSectionWarnings(warnings, label, text, sections) {
 
 function lintProfiles(cwd) {
 	const profilesDir = join(cwd, ".heli-harness", "profiles");
-	const requiredSections = [
-		"Observed stack",
-		"Existing patterns",
-		"Recommended conventions",
-		"Known tech debt",
-		"Forbidden patterns",
-		"Command tiers",
-		"Repo risks",
-		"Exceptions",
-	];
+	const policyFiles = getOverlayFiles(join(cwd, ".heli-harness", "policies"), [".md"]);
 	if (!isDirectory(profilesDir)) return { checked: 0, warnings: ["No profile directory found."] };
 	const profiles = safeListFiles(profilesDir).filter((path) => path.endsWith(".md") && isFile(path));
 	if (profiles.length === 0) return { checked: 0, warnings: ["No repo profiles found."] };
@@ -256,9 +292,9 @@ function lintProfiles(cwd) {
 		const label = profile.split(/[\\/]/).pop();
 		const text = normalizeText(safeReadText(profile));
 		const lower = text.toLowerCase();
-		pushMissingSectionWarnings(warnings, label, text, requiredSections);
-		if (/follow existing patterns/i.test(text) && !hasHeading(text, "Known tech debt")) {
-			warnings.push(`${label}: says "follow existing patterns" without a Known tech debt section`);
+		pushMissingSectionWarnings(warnings, label, text, PROFILE_REQUIRED_SECTIONS);
+		if (/(follow existing patterns|use existing approach)/i.test(text) && !sectionHasContent(text, "Known tech debt")) {
+			warnings.push(`${label}: references existing patterns without classifying possible tech debt`);
 		}
 		const descriptiveSections = ["Observed stack", "Existing patterns", "Repo risks"];
 		for (const section of descriptiveSections) {
@@ -267,12 +303,27 @@ function lintProfiles(cwd) {
 				warnings.push(`${label}: prescriptive language appears under "${section}"; move it to policy overlays`);
 			}
 		}
-		if (/(risky|unsafe|hardcoded|secret|credential|fragile|deprecated)/i.test(text) && !/known tech debt|forbidden patterns|repo risks/i.test(lower)) {
+		if (textHasRiskyKeyword(text) && !/known tech debt|forbidden patterns|repo risks/i.test(lower)) {
 			warnings.push(`${label}: mentions risky patterns without classifying them`);
 		}
 		const recommendedBody = getSectionBody(text, "Recommended conventions");
-		if (/\b(hardcoded|secret|credential|unsafe|deprecated|fragile|legacy)\b/i.test(recommendedBody)) {
-			warnings.push(`${label}: recommended conventions may be treating risky patterns as normal`);
+		if (textHasRiskyKeyword(recommendedBody) && !/justification|because|reason|policy/i.test(recommendedBody)) {
+			warnings.push(`${label}: recommended conventions mention risky patterns without justification`);
+		}
+		if (sectionHasContent(text, "Existing patterns") && !sectionHasEvidence(text, "Existing patterns") && !sectionHasContent(text, "Evidence paths")) {
+			warnings.push(`${label}: existing patterns section has no evidence paths`);
+		}
+		if (sectionHasContent(text, "Recommended conventions") && !sectionHasEvidence(text, "Recommended conventions") && !sectionHasContent(text, "Evidence paths")) {
+			warnings.push(`${label}: recommended conventions section has no evidence paths`);
+		}
+		if (sectionHasContent(text, "Known tech debt") && !sectionHasContent(text, "Safer alternatives")) {
+			warnings.push(`${label}: known tech debt has no safer alternatives`);
+		}
+		if (policyFiles.length > 0 && !sectionHasContent(text, "Policy references")) {
+			warnings.push(`${label}: policy overlays exist but the profile has no policy references`);
+		}
+		if (/(safe|safety|policy compliance|compliance|policy-compliant)/i.test(text) && !sectionHasContent(text, "Policy references")) {
+			warnings.push(`${label}: claims safety or compliance without policy references`);
 		}
 	}
 	return { checked: profiles.length, warnings };
@@ -340,12 +391,19 @@ function lintReports(cwd) {
 	const reportDirs = [join(cwd, ".heli-harness", "state", "reports"), join(cwd, ".heli-harness", "state")];
 	const requiredSections = [
 		"Target repo",
+		"Active profile",
 		"Task",
 		"Files changed",
 		"Commands run",
 		"Validation",
 		"Policies loaded",
 		"Safety overlays loaded",
+		"Profile taxonomy warnings",
+		"Profile-based decisions",
+		"Tech debt copied or avoided",
+		"Safer alternative chosen",
+		"Profile deviations",
+		"Policy references used",
 		"Policy decisions",
 		"Approval evidence",
 		"Safety events",
@@ -363,6 +421,7 @@ function lintReports(cwd) {
 	}
 	if (reports.length === 0) return { checked: 0, warnings: ["No run reports found."] };
 	const warnings = [];
+	const policyFiles = getOverlayFiles(join(cwd, ".heli-harness", "policies"), [".md"]);
 	for (const report of reports) {
 		const label = report.split(/[\\/]/).pop();
 		const text = normalizeText(safeReadText(report));
@@ -381,6 +440,21 @@ function lintReports(cwd) {
 		}
 		if (/(approved|approval received|user approved)/i.test(text) && /(publish|push|deploy|release|delete|destructive|secret)/i.test(text) && !sectionHasContent(text, "Approval evidence")) {
 			warnings.push(`${label}: records risky approval without approval evidence`);
+		}
+		if (/(followed the profile|per profile|using the profile)/i.test(text) && !sectionHasContent(text, "Active profile")) {
+			warnings.push(`${label}: says it followed the profile but no active profile is recorded`);
+		}
+		if (/(known tech debt|tech debt)/i.test(text) && /(copied|reused|matched|kept the same pattern)/i.test(text) && !/justification|because|reason/i.test(text)) {
+			warnings.push(`${label}: copies a known tech-debt pattern without justification`);
+		}
+		if (/safer alternative/i.test(text) && !/because|reason|rationale/i.test(text)) {
+			warnings.push(`${label}: mentions a safer alternative without rationale`);
+		}
+		if (/profile deviation/i.test(text) && !/because|reason|justification/i.test(text)) {
+			warnings.push(`${label}: mentions a profile deviation without reason`);
+		}
+		if (policyFiles.length > 0 && sectionHasContent(text, "Policies loaded") && !sectionHasContent(text, "Policy references used")) {
+			warnings.push(`${label}: policies were loaded but policy references used are not recorded`);
 		}
 		if (/skip|skipped/i.test(text) && /validation|test|check/i.test(text) && !/because|reason|not available|not applicable/i.test(text)) {
 			warnings.push(`${label}: mentions skipped validation without a reason`);
@@ -506,14 +580,14 @@ export default function heliHarnessExtension(pi) {
 		notify(ctx, `Skill count: ${getSkillCount(cwd)}`, "info");
 		notify(ctx, "Active hooks: session_start, before_agent_start, tool_call, input", "info");
 		notify(ctx, `Recent hooks: session_start=${lastSessionStartAt}; before_agent_start=${lastBeforeAgentStartAt}; tool_call_guard=${lastToolGuardAt}; input_shortcut=${lastInputShortcutAt}`, "info");
-		notify(ctx, `Probe state: prompt=${hookProbePromptPending ? "armed" : "inactive"}; guard=${hookProbeGuardPending ? "armed" : "inactive"}`, hookProbePromptPending || hookProbeGuardPending ? "warning" : "info");
+			notify(ctx, `Probe state: prompt=${hookProbePromptPending ? "armed" : "inactive"}; guard=${hookProbeGuardPending ? "armed" : "inactive"}`, hookProbePromptPending || hookProbeGuardPending ? "warning" : "info");
 		if (harnessDetected) {
 			notify(ctx, `HARNESS.md: ${harnessMd}`, "info");
 			if (policyFiles.length === 0) {
-				notify(ctx, "No policy overlays found. v0.4.0 supports .heli-harness/policies/. Use templates to create team rules.", "info");
+				notify(ctx, "No policy overlays found. v0.4.1 supports .heli-harness/policies/. Use templates to create team rules.", "info");
 			}
 			if (safetyFiles.length === 0) {
-				notify(ctx, "No safety overlays found. v0.4.0 supports .heli-harness/safety/. Use templates to define command tiers and secret handling.", "info");
+				notify(ctx, "No safety overlays found. v0.4.1 supports .heli-harness/safety/. Use templates to define command tiers and secret handling.", "info");
 			}
 		} else {
 			notify(ctx, "Next: run /heli-install or /hh-install to set up workspace harness", "info");

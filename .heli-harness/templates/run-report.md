@@ -10,6 +10,10 @@ Workspace:
 
 Git root:
 
+## Active profile
+
+Profile:
+
 ## Task
 
 Intent:
@@ -38,6 +42,34 @@ Summary:
 
 -
 
+## Policy references used
+
+-
+
+## Profile taxonomy warnings
+
+-
+
+## Profile-based decisions
+
+-
+
+## Tech debt copied or avoided
+
+-
+
+## Safer alternative chosen
+
+Choice:
+
+Rationale:
+
+## Profile deviations
+
+Deviation:
+
+Reason:
+
 ## Policy decisions
 
 Decisions:
@@ -61,6 +93,8 @@ Justification:
 Known limitations:
 
 Residual risks:
+
+Unresolved profile risks:
 
 Unresolved policy risks:
 

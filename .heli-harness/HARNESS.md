@@ -14,6 +14,7 @@ Heli-Harness is the source of truth for this parent workspace. It is tool-neutra
 - The agent must preserve dirty user work. Never revert, overwrite, move, or delete user changes unless explicitly asked.
 - The agent must not assume branch policy, test commands, generated-file policy, release process, deployment policy, or ownership unless a repo profile or repo docs say so.
 - Repo profiles remain descriptive. Team rules belong in policy overlays, and command-risk guidance belongs in safety overlays.
+- Repo profiles should classify weak existing patterns as tech debt when appropriate, include evidence paths for meaningful claims, and record safer alternatives for future work.
 - The agent must not run expensive loops repeatedly. Use the smallest useful check first, then widen only when evidence requires it.
 - After two failed fix attempts, stop coding and write a diagnosis with evidence, likely causes, and the next smallest action.
 

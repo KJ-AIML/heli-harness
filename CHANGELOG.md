@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.4.1 - Profile Taxonomy and Tech-Debt Classification
+
+### Added
+- Strengthened repo profile taxonomy with explicit policy references, safer alternatives, evidence paths, and classification guidance.
+- Added report template sections for active profile, taxonomy warnings, profile-based decisions, tech debt copied or avoided, safer alternatives chosen, and profile deviations.
+
+### Changed
+- Improved profile lint to warn on vague "follow existing patterns" language, missing evidence paths, missing safer alternatives, risky recommended conventions, and missing policy references.
+- Updated `heli-init` guidance to require taxonomy classification and tech-debt framing for risky existing patterns.
+- Updated docs and install examples to the `v0.4.1` baseline.
+
+### Notes
+- No runtime, orchestration, database, hosted telemetry, or vector memory expansion.
+- v0.4.2 multi-repo targeting and v0.5.0 governance benchmark work remain future milestones.
+
 ## v0.4.0 - Policy Overlays
 
 ### Added

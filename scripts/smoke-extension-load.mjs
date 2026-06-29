@@ -8,45 +8,113 @@ const tempDir = mkdtempSync(join(tmpdir(), "heli-extension-"));
 mkdirSync(join(tempDir, "extensions"), { recursive: true });
 mkdirSync(join(tempDir, ".heli-harness"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "HARNESS.md"), "# Harness\n");
-writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.4.0" }));
+writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.4.1" }));
 mkdirSync(join(tempDir, ".heli-harness", "profiles"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "profiles", "demo.md"), `# Demo
 
-Policy references:
+## Policy references
 
 - .heli-harness/policies/engineering.md
 
 ## Observed stack
 
-JavaScript.
+- Fact: JavaScript package
+- Evidence path: \`package.json\`
 
 ## Existing patterns
 
-Small extension file.
+- Observed pattern: local status and lint helpers live in one extension file
+- Classification: fact only
+- Evidence path: \`extensions/pi-extension.js\`
+- Notes: keep shared logic small and inspectable
 
 ## Recommended conventions
 
-Keep behavior local and inspectable.
+- Recommended convention: keep harness behavior local and inspectable
+- Why new work should follow it: matches the existing adapter shape
+- Evidence path: \`extensions/pi-extension.js\`
 
 ## Known tech debt
 
-None recorded.
+- Debt: none recorded
+- Why it is debt: not applicable
+- Evidence path: \`README.md\`
 
 ## Forbidden patterns
 
-Do not store secrets.
+- Forbidden pattern: introducing secret-bearing fixtures into the repo
+- Policy backing or rationale: security policy forbids printing or hardcoding secrets
+- Evidence path: \`.heli-harness/policies/security.md\`
+
+## Safer alternatives
+
+- Safer alternative: keep secret examples redacted and keep adapter logic local
+- Replaces: copying weak token handling from application code
+- Why it is safer: avoids treating risky existing patterns as recommendations
+- Evidence path: \`.heli-harness/templates/repo-profile.md\`
 
 ## Command tiers
 
-Safe checks first.
+Safe:
+- Command: \`node --check extensions/pi-extension.js\`
+- Evidence path: \`package.json\`
+
+Requires approval:
+- Command: \`git tag\`
+- Evidence path: \`.heli-harness/safety/command-tiers.md\`
+
+Forbidden:
+- Command: \`rm -rf\`
+- Evidence path: \`.heli-harness/safety/command-tiers.md\`
 
 ## Repo risks
 
-Hook host APIs may differ.
+- Risk: hook host APIs may differ
+- Evidence path: \`README.md\`
 
 ## Exceptions
 
-None.
+- Exception: none recorded
+- Scope: n/a
+- Rationale: n/a
+- Approval evidence: n/a
+
+## Evidence paths
+
+- Claim: package mode provides a lightweight extension
+- Path: \`extensions/pi-extension.js\`
+- What it proves: status, lint, and hook handling live in the extension
+`);
+writeFileSync(join(tempDir, ".heli-harness", "profiles", "bad.md"), `# Bad
+
+## Observed stack
+
+- Fact: JavaScript
+
+## Existing patterns
+
+- Use existing approach for API calls with raw fetch and token handling
+
+## Recommended conventions
+
+- Follow existing patterns with raw fetch and localStorage token use
+
+## Forbidden patterns
+
+- none
+
+## Command tiers
+
+Safe:
+- \`rg\`
+
+## Repo risks
+
+- production publish path exists
+
+## Exceptions
+
+- none
 `);
 mkdirSync(join(tempDir, ".heli-harness", "policies"), { recursive: true });
 for (const name of ["engineering", "release", "security", "testing"]) {
@@ -117,6 +185,10 @@ writeFileSync(join(tempDir, ".heli-harness", "state", "reports", "run.md"), `# R
 
 demo
 
+## Active profile
+
+demo
+
 ## Task
 
 Smoke test.
@@ -140,6 +212,34 @@ engineering.md, release.md, security.md, testing.md
 ## Safety overlays loaded
 
 command-tiers.md, command-rules.json, secrets.md
+
+## Policy references used
+
+.heli-harness/policies/engineering.md
+
+## Profile taxonomy warnings
+
+Avoid copying weak token handling if found.
+
+## Profile-based decisions
+
+Used the demo profile taxonomy and ignored the bad fixture pattern.
+
+## Tech debt copied or avoided
+
+Avoided copying raw fetch token handling from the bad fixture.
+
+## Safer alternative chosen
+
+Choice: keep extension logic local and inspectable
+
+Rationale: matches the recommended convention and avoids copying risky auth patterns
+
+## Profile deviations
+
+Deviation: none
+
+Reason: n/a
 
 ## Policy decisions
 
@@ -231,7 +331,7 @@ const baselinePrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
 assert(!baselinePrompt.systemPrompt.includes("HELI_HOOK_OK"));
 
 await commands.find((command) => command.name === "hh-status").options.handler({}, ctx);
-assert(notifications.some((item) => item.message === "Version: 0.4.0"));
+assert(notifications.some((item) => item.message === "Version: 0.4.1"));
 assert(notifications.some((item) => item.message === "Mode: package + workspace"));
 assert(notifications.some((item) => item.message === "Target repo: demo"));
 assert(notifications.some((item) => item.message === "Policy directory: detected"));
@@ -259,6 +359,7 @@ assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git push"
 await commands.find((command) => command.name === "heli-hooks").options.handler("probe-off", ctx);
 await commands.find((command) => command.name === "heli-hooks").options.handler({}, ctx);
 await commands.find((command) => command.name === "heli-validate").options.handler("lint", ctx);
+await commands.find((command) => command.name === "heli-validate").options.handler("profile", ctx);
 await commands.find((command) => command.name === "heli-validate").options.handler("policy", ctx);
 await commands.find((command) => command.name === "heli-validate").options.handler("safety", ctx);
 await commands.find((command) => command.name === "heli-help").options.handler({}, ctx);
@@ -271,6 +372,9 @@ assert(notifications.some((item) => item.message === "Heli profile lint"));
 assert(notifications.some((item) => item.message === "Heli policy lint"));
 assert(notifications.some((item) => item.message === "Heli safety lint"));
 assert(notifications.some((item) => item.message === "Heli report lint"));
+assert(notifications.some((item) => item.message.includes('bad.md: missing section "Known tech debt"')));
+assert(notifications.some((item) => item.message.includes("bad.md: existing patterns section has no evidence paths")));
+assert(notifications.some((item) => item.message.includes("bad.md: references existing patterns without classifying possible tech debt")));
 assert.deepEqual(messages, ["/skill:heli-help"]);
 
 console.log("extension smoke ok");
