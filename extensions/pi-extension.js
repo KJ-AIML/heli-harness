@@ -100,6 +100,18 @@ function canConfirm(ctx) {
 	return !!(ui && typeof ui.confirm === "function");
 }
 
+function normalizeCommandText(args) {
+	if (typeof args === "string") return args.trim();
+	if (Array.isArray(args)) return args.map((value) => String(value)).join(" ").trim();
+	if (args && typeof args === "object") {
+		if (typeof args.text === "string") return args.text.trim();
+		if (typeof args.command === "string") return args.command.trim();
+		if (typeof args.args === "string") return args.args.trim();
+		if (Array.isArray(args.args)) return args.args.map((value) => String(value)).join(" ").trim();
+	}
+	return "";
+}
+
 async function confirmDangerous(ctx, title, message, reason) {
 	const ui = getUi(ctx);
 	if (ui && typeof ui.confirm === "function") {
@@ -113,6 +125,8 @@ async function confirmDangerous(ctx, title, message, reason) {
 export default function heliHarnessExtension(pi) {
 	let workspaceDetected = false;
 	let lastCtx = null;
+	let hookProbePromptPending = false;
+	let hookProbeGuardPending = false;
 
 	function syncStatus(ctx) {
 		if (ctx) lastCtx = ctx;
@@ -122,6 +136,20 @@ export default function heliHarnessExtension(pi) {
 		} else {
 			setStatus(c, "heli", "○ Heli-Harness: package-only");
 		}
+	}
+
+	function armHookProbe(ctx) {
+		hookProbePromptPending = true;
+		hookProbeGuardPending = true;
+		notify(ctx, "Heli hook probe armed", "info");
+		notify(ctx, "Next turn should surface HELI_HOOK_OK in the prompt", "info");
+		notify(ctx, "Run /heli-hooks test-guard, then a dangerous command, to surface HELI_GUARD_OK", "info");
+	}
+
+	function clearHookProbe(ctx) {
+		hookProbePromptPending = false;
+		hookProbeGuardPending = false;
+		notify(ctx, "Heli hook probe cleared", "info");
 	}
 
 	const installHandler = async (_args, ctx) => {
@@ -188,6 +216,21 @@ export default function heliHarnessExtension(pi) {
 	};
 
 	const hooksStatusHandler = async (_args, ctx) => {
+		const action = normalizeCommandText(_args).toLowerCase();
+		if (action === "probe") {
+			armHookProbe(ctx);
+			return;
+		}
+		if (action === "probe-off") {
+			clearHookProbe(ctx);
+			return;
+		}
+		if (action === "test-guard") {
+			hookProbeGuardPending = true;
+			notify(ctx, "Heli tool_call guard probe armed", "info");
+			notify(ctx, "Next dangerous command should return HELI_GUARD_OK", "info");
+			return;
+		}
 		const cwd = process.cwd();
 		const harnessDetected = detectWorkspaceHarness(cwd);
 		notify(ctx, "Heli-Harness Auto Hooks Status", "info");
@@ -195,6 +238,8 @@ export default function heliHarnessExtension(pi) {
 		notify(ctx, `before_agent_start injection: ${harnessDetected ? "active" : "inactive"}`, "info");
 		notify(ctx, "tool_call safety guard: active", "info");
 		notify(ctx, "input shortcuts: active", "info");
+		notify(ctx, `probe mode: ${hookProbePromptPending || hookProbeGuardPending ? "armed" : "inactive"}`, "info");
+		notify(ctx, "Use /heli-hooks probe, /heli-hooks probe-off, or /heli-hooks test-guard", "info");
 		if (!harnessDetected) {
 			notify(ctx, "Run /heli-install to activate workspace hooks", "info");
 		}
@@ -226,7 +271,15 @@ Before non-trivial work:
 - Classify commands before running them.
 - Do not run mutating, API-credit, release, publish, push, or destructive commands without explicit user approval.
 - Prefer safe audit-only and non-mutating checks first.`;
-		return { systemPrompt: `${existingPrompt}\n\n${heliInstructions}` };
+		const probeInstructions = hookProbePromptPending
+			? `
+
+HELI_HOOK_PROBE_ACTIVE
+For this one test turn only, start your next response with:
+HELI_HOOK_OK`
+			: "";
+		hookProbePromptPending = false;
+		return { systemPrompt: `${existingPrompt}\n\n${heliInstructions}${probeInstructions}` };
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
@@ -237,6 +290,10 @@ Before non-trivial work:
 			const command = String(input.command);
 			for (const { pattern, reason } of DANGEROUS_BASH_PATTERNS) {
 				if (!pattern.test(command)) continue;
+				if (hookProbeGuardPending) {
+					hookProbeGuardPending = false;
+					return { block: true, reason: `HELI_GUARD_OK: intercepted ${reason}` };
+				}
 				return confirmDangerous(ctx, "Dangerous command detected", `${reason}\n\nCommand: ${command}\n\nAllow?`, reason);
 			}
 		}
@@ -245,11 +302,19 @@ Before non-trivial work:
 			const path = String(input.path);
 			if (isSuspiciousHarnessRuntimePath(path)) {
 				const reason = "Suspicious harness runtime folder detected";
+				if (hookProbeGuardPending) {
+					hookProbeGuardPending = false;
+					return { block: true, reason: `HELI_GUARD_OK: intercepted ${reason}` };
+				}
 				return confirmDangerous(ctx, "Dangerous file operation", `${reason}\n\nPath: ${path}\n\nAllow?`, reason);
 			}
 
 			for (const { pattern, reason } of DANGEROUS_FILE_PATTERNS) {
 				if (pattern.test(path)) {
+					if (hookProbeGuardPending) {
+						hookProbeGuardPending = false;
+						return { block: true, reason: `HELI_GUARD_OK: intercepted ${reason}` };
+					}
 					return confirmDangerous(ctx, "Dangerous file operation", `${reason}\n\nPath: ${path}\n\nAllow?`, reason);
 				}
 			}

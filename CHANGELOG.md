@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.3.2 - Hook Observability Probes
+
+### Added
+- `/heli-hooks probe`
+- One-shot `before_agent_start` canary with `HELI_HOOK_OK`
+- `/heli-hooks test-guard`
+- One-shot `tool_call` guard canary with `HELI_GUARD_OK`
+- Probe behavior stays opt-in and one-shot
+
+### Changed
+- Normal hook behavior is unchanged
+- Extension smoke coverage now verifies probe and test-guard paths
+
 ## v0.3.1 - AXGA extension loader compatibility hotfix
 
 ### Fixed

@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
-import { copyFileSync, mkdtempSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const root = process.cwd();
 const tempDir = mkdtempSync(join(tmpdir(), "heli-extension-"));
+mkdirSync(join(tempDir, ".heli-harness"), { recursive: true });
+writeFileSync(join(tempDir, ".heli-harness", "HARNESS.md"), "# Harness\n");
 const tempExtension = join(tempDir, "pi-extension.mjs");
 copyFileSync(join(root, "extensions", "pi-extension.js"), tempExtension);
+process.chdir(tempDir);
 
 const events = [];
 const commands = [];
@@ -67,11 +70,39 @@ assert.deepEqual(await toolCall({ toolName: "write", input: { path: ".env" } }, 
 	reason: "Blocked: .env files contain secrets. Run operation explicitly to override.",
 });
 
+const sessionStart = events.find((event) => event.name === "session_start").handler;
+const beforeAgentStart = events.find((event) => event.name === "before_agent_start").handler;
+await sessionStart({}, ctx);
+const baselinePrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
+assert(!baselinePrompt.systemPrompt.includes("HELI_HOOK_OK"));
+
 await commands.find((command) => command.name === "hh-status").options.handler({}, ctx);
+await commands.find((command) => command.name === "heli-hooks").options.handler("probe", ctx);
+const probePrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
+assert(probePrompt.systemPrompt.includes("HELI_HOOK_OK"));
+const afterProbePrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
+assert(!afterProbePrompt.systemPrompt.includes("HELI_HOOK_OK"));
+await commands.find((command) => command.name === "heli-hooks").options.handler({}, ctx);
+assert(notifications.some((item) => item.message === "probe mode: armed"));
+
+await commands.find((command) => command.name === "heli-hooks").options.handler("test-guard", ctx);
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git push" } }, ctx), {
+	block: true,
+	reason: "HELI_GUARD_OK: intercepted git push is a remote operation",
+});
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git push" } }, ctx), {
+	block: true,
+	reason: "Blocked: git push is a remote operation. Run operation explicitly to override.",
+});
+
+await commands.find((command) => command.name === "heli-hooks").options.handler("probe-off", ctx);
 await commands.find((command) => command.name === "heli-hooks").options.handler({}, ctx);
 await commands.find((command) => command.name === "heli-help").options.handler({}, ctx);
 assert(notifications.some((item) => item.message === "Heli-Harness Status"));
 assert(notifications.some((item) => item.message === "Heli-Harness Auto Hooks Status"));
+assert(notifications.some((item) => item.message === "Heli hook probe armed"));
+assert(notifications.some((item) => item.message === "Heli tool_call guard probe armed"));
+assert(notifications.some((item) => item.message === "probe mode: inactive"));
 assert.deepEqual(messages, ["/skill:heli-help"]);
 
 console.log("extension smoke ok");
