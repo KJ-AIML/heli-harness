@@ -7,6 +7,7 @@ Scope:
 ## Required
 
 - State the target repo before non-trivial edits.
+- In multi-repo workspaces, use workspace index and target state before write workflows.
 - Prefer the smallest correct change that fixes the root cause.
 - Record validation and remaining risks in the run report.
 

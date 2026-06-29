@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.4.1
+## Current Baseline: v0.4.2
 
-Latest stable release: `v0.4.1`
+Latest stable release: `v0.4.2`
 
-Release commit: see tag `v0.4.1`
+Release commit: see tag `v0.4.2`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.4.1>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.4.2>
 
 Stable behavior in this baseline:
 
@@ -36,6 +36,12 @@ Stable behavior in this baseline:
   - evidence path expectations
   - safer alternative expectations
   - report integration for profile decisions
+- Multi-repo targeting and workspace index:
+  - `.heli-harness/workspace/`
+  - workspace index and target state
+  - `/heli-target`
+  - workspace and target lint
+  - report target-context checks
 
 ## Product Positioning
 

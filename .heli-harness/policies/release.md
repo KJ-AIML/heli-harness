@@ -8,6 +8,7 @@ Scope:
 
 - Verify the version and changelog agree before tagging.
 - Run the release validation checklist before push and release.
+- Confirm target repo context before release, publish, or deploy actions in multi-repo workspaces.
 - Record the release commit, tag, and verification evidence.
 
 ## Recommended

@@ -44,7 +44,7 @@ Install this repo into the current folder as a parent-workspace harness:
 
 https://github.com/KJ-AIML/heli-harness
 
-Use the latest stable tag (v0.4.1). Do not install globally. Treat the current
+Use the latest stable tag (v0.4.2). Do not install globally. Treat the current
 directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
@@ -56,7 +56,7 @@ and CLAUDE.md exist after install.
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.4.1
+git checkout v0.4.2
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install
@@ -68,7 +68,7 @@ Remove-Item -Recurse -Force hh-source
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.4.1
+git checkout v0.4.2
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -80,8 +80,8 @@ rm -rf hh-source
 Pi and AXGA can load Heli-Harness as a package to get skills and a lightweight extension:
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.4.1
-axga install git:github.com/KJ-AIML/heli-harness@v0.4.1
+pi install git:github.com/KJ-AIML/heli-harness@v0.4.2
+axga install git:github.com/KJ-AIML/heli-harness@v0.4.2
 ```
 
 This installs the agent package, which does two things:
@@ -109,14 +109,15 @@ On session start, the extension reports:
 | `/heli-validate` | Run safe validation flow | Maybe, only with approval |
 | `/heli-impact` | Impact/risk analysis | No by default |
 | `/heli-hooks` | Show auto hooks status | No |
+| `/heli-target` | Show or set active target repo | Yes, target state only |
 | `/heli-hooks probe` | Arm one-shot `before_agent_start` canary | No |
 | `/heli-hooks test-guard` | Arm one-shot `tool_call` guard canary | No |
 
 All workflow commands (`/heli-init`, `/heli-review`, `/heli-audit`, `/heli-validate`, `/heli-impact`) are workspace-aware: they check for `.heli-harness/HARNESS.md` before proceeding and suggest `/heli-install` if missing.
 
-In v0.4.1, `/hh-status` shows visible harness state: package version, package/workspace mode, current working directory, target repo if known, active profile if known, policy directory and files, safety directory and files, `command-rules.json` parse state, active hooks, recent hook activity, skill count, and probe state.
+In v0.4.2, `/hh-status` shows visible harness state: package version, package/workspace mode, current working directory, policy/safety state, workspace index state, known repos, selected target repo, target git root, writes allowed under, target profile state, cwd alignment, active hooks, recent hook activity, skill count, and probe state.
 
-`/heli-validate lint` now runs lightweight local checks for repo profiles, policy overlays, safety overlays, and run report completeness. In v0.4.1, profile lint also checks taxonomy strength, evidence paths, safer alternatives, and risky patterns that are being treated like conventions. Policy overlays are markdown-first and prescriptive. Repo profiles remain descriptive.
+`/heli-validate lint` now runs lightweight local checks for repo profiles, policy overlays, safety overlays, workspace index, target state, and run report completeness. `/heli-validate workspace` and `/heli-validate target` provide focused checks.
 
 Hook observability is opt-in and one-shot:
 
@@ -129,21 +130,18 @@ Hook observability is opt-in and one-shot:
 - `pi install ...` does **not** automatically create `.heli-harness/` in every folder. Use `/heli-install` to set up the workspace harness in a specific folder.
 - Workspace install remains the source of truth for parent-workspace behavior.
 - Agent packages may run with broad local access. Inspect source code before installing.
-- **Status: supported** - verified with AXGA and Pi loading v0.4.1.
+- **Status: supported** - verified with AXGA and Pi loading v0.4.2.
 
-### Profile taxonomy
+### Multi-repo targeting
 
-v0.4.1 tightens repo profiles so they classify:
+v0.4.2 adds a lightweight workspace model for parent workspaces with many repos:
 
-- observed patterns
-- recommended conventions
-- known tech debt
-- forbidden patterns
-- safer alternatives
-- evidence paths
-- policy references
+- `.heli-harness/workspace/index.json` lists known repos, git roots, and profile mappings
+- `.heli-harness/workspace/target.json` records the active target repo for current work
+- `/heli-target` shows, lists, sets, and clears target state
+- write workflows can be warned or intercepted when no target is selected in a configured multi-repo workspace
 
-Existing patterns are facts, not recommendations. Known tech debt should include safer alternatives, and evidence paths are expected for meaningful claims. Policies remain prescriptive in `.heli-harness/policies/`, while profiles remain descriptive. Full adapter compilation of policy overlays is not implemented yet, and v0.4.2 multi-repo targeting plus v0.5.0 benchmark work remain future milestones.
+This is explicit target identity, not orchestration, dependency solving, or monorepo planning. Policies remain prescriptive in `.heli-harness/policies/`, profiles remain descriptive, and v0.5.0 benchmark work remains future work.
 
 ### Codex
 
@@ -190,7 +188,7 @@ If you want to inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.4.1
+git checkout v0.4.2
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```
@@ -205,9 +203,11 @@ After a successful workspace install, you can delete the source checkout folder 
 
 1. **Start your agent** (Codex, Claude Code, Cursor, Pi, or generic) from the parent workspace folder.
 2. **Read HARNESS.md** — the agent should read `.heli-harness/HARNESS.md` as the source of truth.
-3. **Clone or create a target repo** inside the parent workspace.
-4. **Create a repo profile** — add a profile under `.heli-harness/profiles/<repo>.md` describing the repo's conventions, test commands, and risk areas. Use templates in `.heli-harness/templates/` as a starting point.
-5. **Run test-validation in audit-only mode** — validate that your repo profile's test commands are safe and non-mutating before relying on them.
+3. **Clone or create target repos** inside the parent workspace.
+4. **Map repos in `.heli-harness/workspace/index.json`** so Heli can show known git roots and profile mappings.
+5. **Select the active target repo** with `/heli-target set <repo>` before write workflows in a multi-repo workspace.
+6. **Create a repo profile** — add a profile under `.heli-harness/profiles/<repo>.md` describing the repo's conventions, test commands, and risk areas. Use templates in `.heli-harness/templates/` as a starting point.
+7. **Run test-validation in audit-only mode** — validate that your repo profile's test commands are safe and non-mutating before relying on them.
 
 ## First-run prompt
 

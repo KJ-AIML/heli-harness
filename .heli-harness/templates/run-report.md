@@ -2,17 +2,29 @@
 
 Date:
 
+## Workspace root
+
+Workspace root:
+
 ## Target repo
 
 Target repo:
 
-Workspace:
+Target git root:
 
-Git root:
+Writes allowed under:
 
 ## Active profile
 
 Profile:
+
+## Target context
+
+Current cwd matched target:
+
+Workspace index used:
+
+Target selection method:
 
 ## Task
 
@@ -85,6 +97,10 @@ Justification:
 -
 
 ## Safety events
+
+-
+
+## Out-of-target warnings
 
 -
 

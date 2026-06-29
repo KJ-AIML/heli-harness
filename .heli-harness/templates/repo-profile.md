@@ -4,6 +4,12 @@ Repo name:
 
 Purpose:
 
+Target repo mapping:
+
+- Workspace index entry:
+- Repo path:
+- Git root:
+
 ## Policy references
 
 - `.heli-harness/policies/engineering.md`

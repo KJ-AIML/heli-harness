@@ -214,6 +214,28 @@ It should include:
 
 Task state is not long-term memory. It is a current-run coordination artifact.
 
+## Workspace Index
+
+Workspace index files make target identity explicit in parent workspaces with many repos.
+
+They should record:
+
+- known repo names
+- repo paths
+- git roots
+- profile mappings
+- default target when appropriate
+
+Target state should record:
+
+- target repo
+- target git root
+- writes allowed under
+- active profile
+- selection metadata
+
+This is coordination state, not orchestration.
+
 ## Reports
 
 Reports are durable review artifacts. They should make the run inspectable without replaying the chat.
@@ -232,7 +254,7 @@ Reports should include:
 
 Reports prove process discipline. They should be lintable before a task is considered complete.
 
-In v0.4.1, Heli extends report lint so reports can also record the active profile, taxonomy warnings, profile-based decisions, tech debt copied or avoided, safer alternatives chosen, and profile deviations. The linter still warns by default rather than acting as a hard rule engine.
+In v0.4.2, Heli extends report lint so reports can also record workspace root, target repo, target git root, writes allowed under, workspace index usage, target selection method, and out-of-target warnings. The linter still warns by default rather than acting as a hard rule engine.
 
 ## Adapter Responsibilities
 

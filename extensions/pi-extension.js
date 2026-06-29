@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { join, dirname, resolve, relative } from "node:path";
 import { execSync } from "node:child_process";
 import { platform } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -41,6 +41,15 @@ function safeReadJson(path) {
 		return JSON.parse(readFileSync(path, "utf8"));
 	} catch (_error) {
 		return null;
+	}
+}
+
+function safeWriteJson(path, value) {
+	try {
+		writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+		return true;
+	} catch (_error) {
+		return false;
 	}
 }
 
@@ -165,7 +174,82 @@ function getSkillCount(cwd) {
 	return "unknown";
 }
 
+function getWorkspacePaths(cwd) {
+	const workspaceDir = join(cwd, ".heli-harness", "workspace");
+	return {
+		workspaceDir,
+		indexPath: join(workspaceDir, "index.json"),
+		targetPath: join(workspaceDir, "target.json"),
+	};
+}
+
+function readWorkspaceIndex(cwd) {
+	return safeReadJson(getWorkspacePaths(cwd).indexPath);
+}
+
+function readTargetState(cwd) {
+	return safeReadJson(getWorkspacePaths(cwd).targetPath);
+}
+
+function pathExists(path) {
+	return !!path && (isFile(path) || isDirectory(path));
+}
+
+function pathIsInside(basePath, candidatePath) {
+	if (!basePath || !candidatePath) return false;
+	const base = resolve(basePath);
+	const candidate = resolve(candidatePath);
+	const rel = relative(base, candidate);
+	return rel === "" || (!rel.startsWith("..") && !rel.includes(":"));
+}
+
+function getWorkspaceRoot(cwd, index) {
+	if (index && typeof index.workspaceRoot === "string" && index.workspaceRoot.trim()) {
+		return resolve(cwd, index.workspaceRoot.trim());
+	}
+	return cwd;
+}
+
+function normalizeRepoEntry(cwd, index, repo) {
+	const workspaceRoot = getWorkspaceRoot(cwd, index);
+	const rawPath = repo && typeof repo.path === "string" ? repo.path : "";
+	const rawGitRoot = repo && typeof repo.gitRoot === "string" ? repo.gitRoot : "";
+	const rawProfile = repo && typeof repo.profile === "string" ? repo.profile : "";
+	return {
+		name: repo && repo.name ? String(repo.name) : "",
+		path: rawPath,
+		gitRoot: rawGitRoot,
+		profile: rawProfile,
+		defaultTarget: !!(repo && repo.defaultTarget),
+		notes: repo && repo.notes ? String(repo.notes) : "",
+		resolvedPath: rawPath ? resolve(workspaceRoot, rawPath) : "",
+		resolvedGitRoot: rawGitRoot ? resolve(workspaceRoot, rawGitRoot) : "",
+		resolvedProfile: rawProfile ? resolve(cwd, rawProfile) : "",
+	};
+}
+
+function getWorkspaceRepos(cwd) {
+	const index = readWorkspaceIndex(cwd);
+	if (!index || !Array.isArray(index.repos)) return [];
+	return index.repos.map((repo) => normalizeRepoEntry(cwd, index, repo));
+}
+
+function findWorkspaceRepo(cwd, selector) {
+	const repos = getWorkspaceRepos(cwd);
+	const trimmed = String(selector || "").trim().toLowerCase();
+	if (!trimmed) return null;
+	for (const repo of repos) {
+		const values = [repo.name, repo.path, repo.gitRoot, repo.resolvedPath, repo.resolvedGitRoot]
+			.filter(Boolean)
+			.map((value) => String(value).toLowerCase());
+		if (values.includes(trimmed)) return repo;
+	}
+	return null;
+}
+
 function getTargetRepo(cwd) {
+	const targetState = readTargetState(cwd);
+	if (targetState && targetState.targetRepo) return targetState.targetRepo;
 	const task = safeReadText(join(cwd, ".heli-harness", "state", "current-task.md"));
 	const match = task.match(/^Target repo:\s*(.+)$/im);
 	if (!match || !match[1].trim()) return "not configured";
@@ -387,11 +471,68 @@ function lintSafety(cwd) {
 	return { checked: files.length, warnings };
 }
 
+function lintWorkspace(cwd) {
+	const { workspaceDir, indexPath } = getWorkspacePaths(cwd);
+	if (!isDirectory(workspaceDir)) return { checked: 0, warnings: ["No workspace directory found."] };
+	if (!isFile(indexPath)) return { checked: 0, warnings: ["No workspace index found."] };
+	const index = safeReadJson(indexPath);
+	if (!index) return { checked: 0, warnings: ["workspace/index.json: invalid JSON"] };
+	const warnings = [];
+	if (index.schemaVersion !== 1) warnings.push("workspace/index.json: schemaVersion should be 1");
+	if (!index.workspaceRoot || !String(index.workspaceRoot).trim()) warnings.push("workspace/index.json: workspaceRoot is missing");
+	if (!Array.isArray(index.repos)) warnings.push("workspace/index.json: repos array is missing");
+	const repos = Array.isArray(index.repos) ? index.repos.map((repo) => normalizeRepoEntry(cwd, index, repo)) : [];
+	const names = new Set();
+	let defaultTargets = 0;
+	for (const repo of repos) {
+		if (!repo.name) warnings.push("workspace/index.json: repo entry missing name");
+		if (!repo.path) warnings.push(`${repo.name || "repo"}: path is missing`);
+		if (!repo.gitRoot) warnings.push(`${repo.name || "repo"}: gitRoot is missing`);
+		if (!repo.profile) warnings.push(`${repo.name || "repo"}: profile is missing`);
+		if (repo.name && names.has(repo.name)) warnings.push(`workspace/index.json: duplicate repo name "${repo.name}"`);
+		if (repo.name) names.add(repo.name);
+		if (repo.defaultTarget) defaultTargets += 1;
+		if (repo.resolvedPath && !pathExists(repo.resolvedPath)) warnings.push(`${repo.name || repo.path}: path does not exist`);
+		if (repo.resolvedGitRoot && !pathExists(repo.resolvedGitRoot)) warnings.push(`${repo.name || repo.gitRoot}: gitRoot does not exist`);
+		if (repo.resolvedProfile && !pathExists(repo.resolvedProfile)) warnings.push(`${repo.name || repo.profile}: profile does not exist`);
+	}
+	if (defaultTargets > 1) warnings.push("workspace/index.json: more than one defaultTarget is set");
+	return { checked: repos.length, warnings };
+}
+
+function lintTarget(cwd) {
+	const { workspaceDir, targetPath } = getWorkspacePaths(cwd);
+	if (!isDirectory(workspaceDir)) return { checked: 0, warnings: ["No workspace directory found."] };
+	if (!isFile(targetPath)) return { checked: 0, warnings: ["No target state found."] };
+	const target = safeReadJson(targetPath);
+	if (!target) return { checked: 0, warnings: ["workspace/target.json: invalid JSON"] };
+	const warnings = [];
+	if (target.schemaVersion !== 1) warnings.push("workspace/target.json: schemaVersion should be 1");
+	if (!target.targetRepo) warnings.push("workspace/target.json: targetRepo is missing");
+	if (!target.targetGitRoot) warnings.push("workspace/target.json: targetGitRoot is missing");
+	if (!target.writesAllowedUnder) warnings.push("workspace/target.json: writesAllowedUnder is missing");
+	if (!target.activeProfile) warnings.push("workspace/target.json: activeProfile is missing");
+	const targetGitRoot = target.targetGitRoot ? resolve(cwd, target.targetGitRoot) : "";
+	const writesAllowedUnder = target.writesAllowedUnder ? resolve(cwd, target.writesAllowedUnder) : "";
+	const activeProfile = target.activeProfile ? resolve(cwd, target.activeProfile) : "";
+	if (targetGitRoot && !pathExists(targetGitRoot)) warnings.push("workspace/target.json: targetGitRoot does not exist");
+	if (activeProfile && !pathExists(activeProfile)) warnings.push("workspace/target.json: activeProfile does not exist");
+	if (targetGitRoot && !pathIsInside(targetGitRoot, cwd)) warnings.push("workspace/target.json: current cwd is outside targetGitRoot");
+	if (targetGitRoot && writesAllowedUnder && !pathIsInside(targetGitRoot, writesAllowedUnder)) warnings.push("workspace/target.json: writesAllowedUnder is outside targetGitRoot");
+	return { checked: 1, warnings };
+}
+
 function lintReports(cwd) {
 	const reportDirs = [join(cwd, ".heli-harness", "state", "reports"), join(cwd, ".heli-harness", "state")];
 	const requiredSections = [
+		"Workspace root",
 		"Target repo",
+		"Target git root",
+		"Writes allowed under",
 		"Active profile",
+		"Current cwd matched target",
+		"Workspace index used",
+		"Target selection method",
 		"Task",
 		"Files changed",
 		"Commands run",
@@ -407,6 +548,7 @@ function lintReports(cwd) {
 		"Policy decisions",
 		"Approval evidence",
 		"Safety events",
+		"Out-of-target warnings",
 		"Risks",
 		"Next steps",
 	];
@@ -455,6 +597,21 @@ function lintReports(cwd) {
 		}
 		if (policyFiles.length > 0 && sectionHasContent(text, "Policies loaded") && !sectionHasContent(text, "Policy references used")) {
 			warnings.push(`${label}: policies were loaded but policy references used are not recorded`);
+		}
+		if (/(implemented|implementation|edited|changed|write workflow|mutating)/i.test(text) && !sectionHasContent(text, "Target repo")) {
+			warnings.push(`${label}: implementation work is recorded without a target repo`);
+		}
+		if (sectionHasContent(text, "Files changed") && !sectionHasContent(text, "Target git root")) {
+			warnings.push(`${label}: files changed are recorded without a target git root`);
+		}
+		if (/target deviation/i.test(text) && !/because|reason|justification/i.test(text)) {
+			warnings.push(`${label}: mentions a target deviation without reason`);
+		}
+		if (/profile/i.test(text) && !sectionHasContent(text, "Active profile")) {
+			warnings.push(`${label}: references a profile but no active profile is recorded`);
+		}
+		if (/(multi-repo|multiple repos|workspace index)/i.test(text) && !sectionHasContent(text, "Workspace index used")) {
+			warnings.push(`${label}: describes multi-repo work without recording the workspace index used`);
 		}
 		if (/skip|skipped/i.test(text) && /validation|test|check/i.test(text) && !/because|reason|not available|not applicable/i.test(text)) {
 			warnings.push(`${label}: mentions skipped validation without a reason`);
@@ -561,9 +718,15 @@ export default function heliHarnessExtension(pi) {
 		const targetRepo = getTargetRepo(cwd);
 		const policiesDir = join(harnessPath, "policies");
 		const safetyDir = join(harnessPath, "safety");
+		const workspacePaths = getWorkspacePaths(cwd);
+		const workspaceIndex = readWorkspaceIndex(cwd);
+		const workspaceRepos = getWorkspaceRepos(cwd);
+		const targetState = readTargetState(cwd);
 		const policyFiles = getOverlayFiles(policiesDir, [".md"]);
 		const safetyFiles = getOverlayFiles(safetyDir, [".md", ".json"]);
 		const commandRulesStatus = getCommandRulesStatus(cwd);
+		const targetGitRoot = targetState && targetState.targetGitRoot ? resolve(cwd, targetState.targetGitRoot) : "";
+		const targetProfile = targetState && targetState.activeProfile ? resolve(cwd, targetState.activeProfile) : "";
 		notify(ctx, "Heli-Harness Status", "info");
 		notify(ctx, `Version: ${getPackageVersion()}`, "info");
 		notify(ctx, `Mode: ${harnessDetected ? "package + workspace" : "package only"}`, harnessDetected ? "success" : "warning");
@@ -577,6 +740,14 @@ export default function heliHarnessExtension(pi) {
 		notify(ctx, `Safety directory: ${isDirectory(safetyDir) ? "detected" : "missing"}`, isDirectory(safetyDir) ? "success" : "warning");
 		notify(ctx, `Safety files: ${safetyFiles.length > 0 ? safetyFiles.join(", ") : "none"}`, safetyFiles.length > 0 ? "info" : "warning");
 		notify(ctx, `command-rules.json: ${commandRulesStatus}`, commandRulesStatus === "parseable" ? "success" : commandRulesStatus === "invalid JSON" ? "warning" : "info");
+		notify(ctx, `Workspace index: ${isFile(workspacePaths.indexPath) ? "detected" : "not configured"}`, isFile(workspacePaths.indexPath) ? "success" : "warning");
+		notify(ctx, `Known repos: ${workspaceIndex && Array.isArray(workspaceIndex.repos) ? workspaceRepos.length : 0}`, "info");
+		notify(ctx, `Target repo: ${targetState && targetState.targetRepo ? targetState.targetRepo : "not selected"}`, targetState && targetState.targetRepo ? "success" : "warning");
+		notify(ctx, `Target git root: ${targetState && targetState.targetGitRoot ? targetState.targetGitRoot : "not selected"}`, "info");
+		notify(ctx, `Writes allowed under: ${targetState && targetState.writesAllowedUnder ? targetState.writesAllowedUnder : "not selected"}`, "info");
+		notify(ctx, `Target active profile: ${targetState && targetState.activeProfile ? targetState.activeProfile : "not selected"}`, "info");
+		notify(ctx, `Target profile exists: ${targetProfile ? (pathExists(targetProfile) ? "yes" : "no") : "not selected"}`, targetProfile ? (pathExists(targetProfile) ? "success" : "warning") : "warning");
+		notify(ctx, `CWD inside target root: ${targetGitRoot ? (pathIsInside(targetGitRoot, cwd) ? "yes" : "no") : "not selected"}`, targetGitRoot ? (pathIsInside(targetGitRoot, cwd) ? "success" : "warning") : "warning");
 		notify(ctx, `Skill count: ${getSkillCount(cwd)}`, "info");
 		notify(ctx, "Active hooks: session_start, before_agent_start, tool_call, input", "info");
 		notify(ctx, `Recent hooks: session_start=${lastSessionStartAt}; before_agent_start=${lastBeforeAgentStartAt}; tool_call_guard=${lastToolGuardAt}; input_shortcut=${lastInputShortcutAt}`, "info");
@@ -584,10 +755,16 @@ export default function heliHarnessExtension(pi) {
 		if (harnessDetected) {
 			notify(ctx, `HARNESS.md: ${harnessMd}`, "info");
 			if (policyFiles.length === 0) {
-				notify(ctx, "No policy overlays found. v0.4.1 supports .heli-harness/policies/. Use templates to create team rules.", "info");
+				notify(ctx, "No policy overlays found. v0.4.2 supports .heli-harness/policies/. Use templates to create team rules.", "info");
 			}
 			if (safetyFiles.length === 0) {
-				notify(ctx, "No safety overlays found. v0.4.1 supports .heli-harness/safety/. Use templates to define command tiers and secret handling.", "info");
+				notify(ctx, "No safety overlays found. v0.4.2 supports .heli-harness/safety/. Use templates to define command tiers and secret handling.", "info");
+			}
+			if (!isFile(workspacePaths.indexPath)) {
+				notify(ctx, "Workspace index: not configured. Create .heli-harness/workspace/index.json to track repos.", "info");
+			}
+			if ((!targetState || !targetState.targetRepo) && workspaceRepos.length > 1) {
+				notify(ctx, "Target repo: not selected. Use /heli-target list or /heli-target set <repo> before write workflows.", "warning");
 			}
 		} else {
 			notify(ctx, "Next: run /heli-install or /hh-install to set up workspace harness", "info");
@@ -623,11 +800,105 @@ export default function heliHarnessExtension(pi) {
 			notifyLintResult(ctx, "Heli safety lint", lintSafety(cwd));
 			if (action !== "lint") return;
 		}
+		if (action === "lint" || action === "workspace") {
+			notifyLintResult(ctx, "Heli workspace lint", lintWorkspace(cwd));
+			if (action !== "lint") return;
+		}
+		if (action === "lint" || action === "target") {
+			notifyLintResult(ctx, "Heli target lint", lintTarget(cwd));
+			if (action !== "lint") return;
+		}
 		if (action === "lint" || action === "report" || action === "reports") {
 			notifyLintResult(ctx, "Heli report lint", lintReports(cwd));
 			return;
 		}
 		return workflowHandler("heli-validate", "test validation")(_args, ctx);
+	};
+
+	const targetHandler = async (_args, ctx) => {
+		const cwd = process.cwd();
+		const actionText = normalizeCommandText(_args);
+		const parts = actionText ? actionText.split(/\s+/) : [];
+		const command = parts[0] ? parts[0].toLowerCase() : "show";
+		const selector = parts.slice(1).join(" ").trim();
+		const { indexPath, targetPath } = getWorkspacePaths(cwd);
+		const index = readWorkspaceIndex(cwd);
+		const repos = getWorkspaceRepos(cwd);
+		const target = readTargetState(cwd);
+
+		if (!actionText || command === "show") {
+			notify(ctx, "Heli target status", "info");
+			notify(ctx, `Workspace index: ${isFile(indexPath) ? "detected" : "not configured"}`, isFile(indexPath) ? "success" : "warning");
+			notify(ctx, `Target repo: ${target && target.targetRepo ? target.targetRepo : "not selected"}`, target && target.targetRepo ? "success" : "warning");
+			notify(ctx, `Target git root: ${target && target.targetGitRoot ? target.targetGitRoot : "not selected"}`, "info");
+			notify(ctx, `Writes allowed under: ${target && target.writesAllowedUnder ? target.writesAllowedUnder : "not selected"}`, "info");
+			notify(ctx, `Active profile: ${target && target.activeProfile ? target.activeProfile : "not selected"}`, "info");
+			notify(ctx, "Usage: /heli-target list | /heli-target show | /heli-target set <repo> | /heli-target clear", "info");
+			return;
+		}
+
+		if (command === "list") {
+			if (!index || !Array.isArray(index.repos)) {
+				notify(ctx, "Workspace index is not configured", "warning");
+				notify(ctx, "Create .heli-harness/workspace/index.json to track repos", "info");
+				return;
+			}
+			notify(ctx, `Known repos: ${repos.length}`, "info");
+			for (const repo of repos) {
+				notify(ctx, `${repo.name || "(unnamed)"} -> path=${repo.path || "missing"}; gitRoot=${repo.gitRoot || "missing"}; profile=${repo.profile || "missing"}${repo.defaultTarget ? "; default" : ""}`, "info");
+			}
+			return;
+		}
+
+		if (command === "set") {
+			if (!selector) {
+				notify(ctx, "Usage: /heli-target set <repo-name-or-path>", "warning");
+				return;
+			}
+			const repo = findWorkspaceRepo(cwd, selector);
+			if (!repo) {
+				notify(ctx, `No workspace repo matched "${selector}"`, "warning");
+				return;
+			}
+			const nextTarget = {
+				schemaVersion: 1,
+				targetRepo: repo.name,
+				targetGitRoot: repo.gitRoot || repo.path,
+				writesAllowedUnder: repo.gitRoot || repo.path,
+				activeProfile: repo.profile || "",
+				selectedAt: new Date().toISOString(),
+				selectedBy: "heli-target",
+				reason: selector,
+			};
+			if (!safeWriteJson(targetPath, nextTarget)) {
+				notify(ctx, "Failed to write workspace/target.json", "error");
+				return;
+			}
+			notify(ctx, `Target repo set: ${repo.name}`, "success");
+			notify(ctx, `Target git root: ${nextTarget.targetGitRoot}`, "info");
+			return;
+		}
+
+		if (command === "clear") {
+			const clearedTarget = {
+				schemaVersion: 1,
+				targetRepo: "",
+				targetGitRoot: "",
+				writesAllowedUnder: "",
+				activeProfile: "",
+				selectedAt: new Date().toISOString(),
+				selectedBy: "heli-target",
+				reason: "cleared",
+			};
+			if (!safeWriteJson(targetPath, clearedTarget)) {
+				notify(ctx, "Failed to clear workspace/target.json", "error");
+				return;
+			}
+			notify(ctx, "Target repo cleared", "info");
+			return;
+		}
+
+		notify(ctx, "Usage: /heli-target list | /heli-target show | /heli-target set <repo> | /heli-target clear", "warning");
 	};
 
 	const hooksStatusHandler = async (_args, ctx) => {
@@ -685,6 +956,7 @@ Heli-Harness workspace detected.
 
 Before non-trivial work:
 - Read .heli-harness/HARNESS.md.
+- Read .heli-harness/workspace/index.json and target.json when present.
 - Identify the target repo.
 - Read .heli-harness/profiles/<repo>.md if present.
 - Preserve dirty work.
@@ -706,6 +978,16 @@ HELI_HOOK_OK`
 	pi.on("tool_call", async (event, ctx) => {
 		const toolName = event && event.toolName;
 		const input = event && event.input ? event.input : {};
+		const cwd = process.cwd();
+		const workspaceRepos = getWorkspaceRepos(cwd);
+		const targetState = readTargetState(cwd);
+		const hasMultiRepoIndex = workspaceRepos.length > 1;
+		const hasTargetSelection = !!(targetState && targetState.targetRepo);
+		const targetContext = hasTargetSelection
+			? `Target repo: ${targetState.targetRepo}`
+			: hasMultiRepoIndex
+				? "No target repo selected in multi-repo workspace"
+				: "No target context";
 
 		if (toolName === "bash" && input.command) {
 			const command = String(input.command);
@@ -716,12 +998,25 @@ HELI_HOOK_OK`
 					hookProbeGuardPending = false;
 					return { block: true, reason: `HELI_GUARD_OK: intercepted ${reason}` };
 				}
-				return confirmDangerous(ctx, "Dangerous command detected", `${reason}\n\nCommand: ${command}\n\nAllow?`, reason);
+				return confirmDangerous(ctx, "Dangerous command detected", `${reason}\n${targetContext}\n\nCommand: ${command}\n\nAllow?`, `${reason}. ${targetContext}`);
 			}
 		}
 
 		if ((toolName === "write" || toolName === "edit") && input.path) {
 			const path = String(input.path);
+			const resolvedPath = resolve(cwd, path);
+			const targetStatePath = resolve(getWorkspacePaths(cwd).targetPath);
+			if (hasMultiRepoIndex && !hasTargetSelection && resolvedPath !== targetStatePath) {
+				lastToolGuardAt = new Date().toISOString();
+				return { block: true, reason: "Blocked: target repo not selected in multi-repo workspace" };
+			}
+			if (hasTargetSelection && targetState.writesAllowedUnder) {
+				const allowedRoot = resolve(cwd, targetState.writesAllowedUnder);
+				if (!pathIsInside(allowedRoot, resolvedPath) && resolvedPath !== targetStatePath) {
+					lastToolGuardAt = new Date().toISOString();
+					return { block: true, reason: `Blocked: write path is outside writesAllowedUnder for ${targetState.targetRepo}` };
+				}
+			}
 			if (isSuspiciousHarnessRuntimePath(path)) {
 				const reason = "Suspicious harness runtime folder detected";
 				lastToolGuardAt = new Date().toISOString();
@@ -776,7 +1071,8 @@ HELI_HOOK_OK`
 	pi.registerCommand("heli-init", { description: "Bootstrap a repo profile for a target repo", handler: workflowHandler("heli-init", "repo profile bootstrap") });
 	pi.registerCommand("heli-review", { description: "Review current repo/diff/task safely", handler: workflowHandler("heli-review", "repo review") });
 	pi.registerCommand("heli-audit", { description: "Repo-wide audit for issues and risks", handler: workflowHandler("heli-audit", "repo audit") });
-	pi.registerCommand("heli-validate", { description: "Run test-validation workflow safely; use lint/profile/policy/safety/report for local checks", handler: validateHandler });
+	pi.registerCommand("heli-validate", { description: "Run test-validation workflow safely; use lint/profile/policy/safety/workspace/target/report for local checks", handler: validateHandler });
 	pi.registerCommand("heli-impact", { description: "Impact analysis for planned changes", handler: workflowHandler("heli-impact", "impact analysis") });
 	pi.registerCommand("heli-hooks", { description: "Show Heli-Harness auto hooks status", handler: hooksStatusHandler });
+	pi.registerCommand("heli-target", { description: "Show or set the active target repo for multi-repo workspaces", handler: targetHandler });
 }

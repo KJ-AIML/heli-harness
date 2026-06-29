@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.4.2 - Multi-Repo Targeting and Workspace Index
+
+### Added
+- Added `.heli-harness/workspace/` with `index.json`, `target.json`, and workspace notes.
+- Added `/heli-target` for showing, listing, setting, and clearing active target repo state.
+- Added workspace and target lint through `/heli-validate workspace` and `/heli-validate target`.
+
+### Changed
+- Improved `/hh-status` to show workspace index state, known repos, selected target, target git root, writes allowed under, target profile state, and cwd alignment.
+- Added report template and lint checks for workspace root, target context, workspace index usage, and out-of-target warnings.
+- Added conservative write-path guarding for ambiguous multi-repo workspaces and obvious out-of-target writes.
+
+### Notes
+- Keeps Heli lightweight, markdown-first, local, inspectable, and adapter-friendly.
+- Does not add runtime orchestration, a database, hosted telemetry, vector memory, or cross-repo dependency solving.
+- v0.5.0 benchmark work remains a future milestone.
+
 ## v0.4.1 - Profile Taxonomy and Tech-Debt Classification
 
 ### Added

@@ -6,6 +6,8 @@ Heli-Harness is the source of truth for this parent workspace. It is tool-neutra
 
 - The agent starts from the parent workspace that contains multiple repos and `.heli-harness/`.
 - The agent must identify the target repo before editing.
+- In multi-repo workspaces, the agent should read `.heli-harness/workspace/index.json` and select a target repo before write workflows begin.
+- The agent should treat `.heli-harness/workspace/target.json` as the active target record when it exists.
 - The agent must read the relevant profile in `.heli-harness/profiles/` when one exists.
 - The agent must read policy overlays in `.heli-harness/policies/` when they exist.
 - The agent must read safety overlays in `.heli-harness/safety/` when they exist.
@@ -15,6 +17,7 @@ Heli-Harness is the source of truth for this parent workspace. It is tool-neutra
 - The agent must not assume branch policy, test commands, generated-file policy, release process, deployment policy, or ownership unless a repo profile or repo docs say so.
 - Repo profiles remain descriptive. Team rules belong in policy overlays, and command-risk guidance belongs in safety overlays.
 - Repo profiles should classify weak existing patterns as tech debt when appropriate, include evidence paths for meaningful claims, and record safer alternatives for future work.
+- Write workflows in multi-repo workspaces should not proceed silently when target identity is ambiguous.
 - The agent must not run expensive loops repeatedly. Use the smallest useful check first, then widen only when evidence requires it.
 - After two failed fix attempts, stop coding and write a diagnosis with evidence, likely causes, and the next smallest action.
 

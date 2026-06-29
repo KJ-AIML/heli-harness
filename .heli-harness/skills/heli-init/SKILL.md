@@ -17,6 +17,7 @@ Bootstrap a repo profile for a target repo in the current parent workspace.
 1. **Read harness context**
    - Read `.heli-harness/HARNESS.md` as source of truth
    - Read `.heli-harness/profiles/` to see existing profiles
+   - Read `.heli-harness/workspace/index.json` when present
    - Identify target repo from context or ask user
 
 2. **Inspect target repo**
@@ -27,6 +28,7 @@ Bootstrap a repo profile for a target repo in the current parent workspace.
 
 3. **Create repo profile**
    - Create or update `.heli-harness/profiles/<repo>.md`
+   - Map the profile to one repo entry from `.heli-harness/workspace/index.json` when the workspace index exists
    - Include:
      - Observed stack
      - Existing patterns
@@ -64,6 +66,7 @@ Classify repo commands into:
 - Do NOT run mutating commands without approval
 - Do NOT run API-credit-consuming commands without approval
 - Preserve dirty user work
+- If multiple repos are configured, confirm the target repo before write workflows
 - If dependencies are missing, report before installing
 
 ## Output

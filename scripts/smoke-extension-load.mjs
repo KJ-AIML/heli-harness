@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,9 +8,15 @@ const tempDir = mkdtempSync(join(tmpdir(), "heli-extension-"));
 mkdirSync(join(tempDir, "extensions"), { recursive: true });
 mkdirSync(join(tempDir, ".heli-harness"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "HARNESS.md"), "# Harness\n");
-writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.4.1" }));
+writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.4.2" }));
 mkdirSync(join(tempDir, ".heli-harness", "profiles"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "profiles", "demo.md"), `# Demo
+
+Target repo mapping:
+
+- Workspace index entry: demo
+- Repo path: .
+- Git root: .
 
 ## Policy references
 
@@ -24,7 +30,8 @@ writeFileSync(join(tempDir, ".heli-harness", "profiles", "demo.md"), `# Demo
 ## Existing patterns
 
 - Observed pattern: local status and lint helpers live in one extension file
-- Classification: fact only
+- Classification:
+  - fact only
 - Evidence path: \`extensions/pi-extension.js\`
 - Notes: keep shared logic small and inspectable
 
@@ -174,6 +181,39 @@ Do not hardcode keys.
 Adapter support varies.
 Use approval when needed.
 `);
+mkdirSync(join(tempDir, ".heli-harness", "workspace"), { recursive: true });
+writeFileSync(join(tempDir, ".heli-harness", "workspace", "index.json"), JSON.stringify({
+	schemaVersion: 1,
+	workspaceRoot: ".",
+	repos: [
+		{
+			name: "demo",
+			path: ".",
+			gitRoot: ".",
+			profile: ".heli-harness/profiles/demo.md",
+			defaultTarget: true,
+			notes: "local smoke repo",
+		},
+		{
+			name: "ghost",
+			path: "ghost",
+			gitRoot: "ghost",
+			profile: ".heli-harness/profiles/ghost.md",
+			defaultTarget: false,
+			notes: "intentionally missing to prove lint warnings",
+		},
+	],
+}, null, 2));
+writeFileSync(join(tempDir, ".heli-harness", "workspace", "target.json"), JSON.stringify({
+	schemaVersion: 1,
+	targetRepo: "demo",
+	targetGitRoot: ".",
+	writesAllowedUnder: ".",
+	activeProfile: ".heli-harness/profiles/demo.md",
+	selectedAt: "2026-01-01T00:00:00.000Z",
+	selectedBy: "smoke",
+	reason: "fixture",
+}, null, 2));
 mkdirSync(join(tempDir, ".heli-harness", "state", "reports"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "state", "current-task.md"), `# Current Task
 
@@ -181,13 +221,34 @@ Target repo: demo
 `);
 writeFileSync(join(tempDir, ".heli-harness", "state", "reports", "run.md"), `# Run Report
 
+## Workspace root
+
+.
+
 ## Target repo
 
 demo
 
+Target git root:
+.
+
+Writes allowed under:
+.
+
 ## Active profile
 
 demo
+
+## Target context
+
+Current cwd matched target:
+yes
+
+Workspace index used:
+.heli-harness/workspace/index.json
+
+Target selection method:
+fixture
 
 ## Task
 
@@ -253,6 +314,10 @@ None.
 
 None.
 
+## Out-of-target warnings
+
+None.
+
 ## Risks
 
 None.
@@ -261,6 +326,7 @@ None.
 
 None.
 `);
+
 const tempExtension = join(tempDir, "extensions", "pi-extension.mjs");
 copyFileSync(join(root, "extensions", "pi-extension.js"), tempExtension);
 process.chdir(tempDir);
@@ -310,15 +376,15 @@ assert.deepEqual(commands.map((command) => command.name), [
 	"heli-validate",
 	"heli-impact",
 	"heli-hooks",
+	"heli-target",
 ]);
 
 const toolCall = events.find((event) => event.name === "tool_call").handler;
 assert.equal(await toolCall({ toolName: "bash", input: { command: "echo ok" } }, {}), undefined);
 assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git push" } }, {}), {
 	block: true,
-	reason: "Blocked: git push is a remote operation. Run operation explicitly to override.",
+	reason: "Blocked: git push is a remote operation. Target repo: demo. Run operation explicitly to override.",
 });
-assert.equal(await toolCall({ toolName: "write", input: { path: "notes.txt" } }, {}), undefined);
 assert.deepEqual(await toolCall({ toolName: "write", input: { path: ".env" } }, {}), {
 	block: true,
 	reason: "Blocked: .env files contain secrets. Run operation explicitly to override.",
@@ -331,12 +397,32 @@ const baselinePrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
 assert(!baselinePrompt.systemPrompt.includes("HELI_HOOK_OK"));
 
 await commands.find((command) => command.name === "hh-status").options.handler({}, ctx);
-assert(notifications.some((item) => item.message === "Version: 0.4.1"));
+assert(notifications.some((item) => item.message === "Version: 0.4.2"));
 assert(notifications.some((item) => item.message === "Mode: package + workspace"));
 assert(notifications.some((item) => item.message === "Target repo: demo"));
 assert(notifications.some((item) => item.message === "Policy directory: detected"));
 assert(notifications.some((item) => item.message === "Safety directory: detected"));
 assert(notifications.some((item) => item.message === "command-rules.json: parseable"));
+assert(notifications.some((item) => item.message === "Workspace index: detected"));
+assert(notifications.some((item) => item.message === "Known repos: 2"));
+assert(notifications.some((item) => item.message === "Writes allowed under: ."));
+
+await commands.find((command) => command.name === "heli-target").options.handler({}, ctx);
+await commands.find((command) => command.name === "heli-target").options.handler("list", ctx);
+await commands.find((command) => command.name === "heli-target").options.handler("clear", ctx);
+assert.deepEqual(await toolCall({ toolName: "write", input: { path: "notes.txt" } }, {}), {
+	block: true,
+	reason: "Blocked: target repo not selected in multi-repo workspace",
+});
+await commands.find((command) => command.name === "heli-target").options.handler("set demo", ctx);
+const targetState = JSON.parse(readFileSync(join(tempDir, ".heli-harness", "workspace", "target.json"), "utf8"));
+assert.equal(targetState.targetRepo, "demo");
+assert.equal(await toolCall({ toolName: "write", input: { path: "notes.txt" } }, {}), undefined);
+assert.deepEqual(await toolCall({ toolName: "write", input: { path: "..\\outside.txt" } }, {}), {
+	block: true,
+	reason: "Blocked: write path is outside writesAllowedUnder for demo",
+});
+
 await commands.find((command) => command.name === "heli-hooks").options.handler("probe", ctx);
 const probePrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
 assert(probePrompt.systemPrompt.includes("HELI_HOOK_OK"));
@@ -353,7 +439,7 @@ assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git push"
 });
 assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git push" } }, ctx), {
 	block: true,
-	reason: "Blocked: git push is a remote operation. Run operation explicitly to override.",
+	reason: "Blocked: git push is a remote operation. Target repo: demo. Run operation explicitly to override.",
 });
 
 await commands.find((command) => command.name === "heli-hooks").options.handler("probe-off", ctx);
@@ -362,7 +448,10 @@ await commands.find((command) => command.name === "heli-validate").options.handl
 await commands.find((command) => command.name === "heli-validate").options.handler("profile", ctx);
 await commands.find((command) => command.name === "heli-validate").options.handler("policy", ctx);
 await commands.find((command) => command.name === "heli-validate").options.handler("safety", ctx);
+await commands.find((command) => command.name === "heli-validate").options.handler("workspace", ctx);
+await commands.find((command) => command.name === "heli-validate").options.handler("target", ctx);
 await commands.find((command) => command.name === "heli-help").options.handler({}, ctx);
+
 assert(notifications.some((item) => item.message === "Heli-Harness Status"));
 assert(notifications.some((item) => item.message === "Heli-Harness Auto Hooks Status"));
 assert(notifications.some((item) => item.message === "Heli hook probe armed"));
@@ -371,10 +460,15 @@ assert(notifications.some((item) => item.message === "test-guard probe: inactive
 assert(notifications.some((item) => item.message === "Heli profile lint"));
 assert(notifications.some((item) => item.message === "Heli policy lint"));
 assert(notifications.some((item) => item.message === "Heli safety lint"));
+assert(notifications.some((item) => item.message === "Heli workspace lint"));
+assert(notifications.some((item) => item.message === "Heli target lint"));
 assert(notifications.some((item) => item.message === "Heli report lint"));
 assert(notifications.some((item) => item.message.includes('bad.md: missing section "Known tech debt"')));
 assert(notifications.some((item) => item.message.includes("bad.md: existing patterns section has no evidence paths")));
 assert(notifications.some((item) => item.message.includes("bad.md: references existing patterns without classifying possible tech debt")));
+assert(notifications.some((item) => item.message.includes("ghost: path does not exist")));
+assert(notifications.some((item) => item.message.includes("ghost: profile does not exist")));
+assert(notifications.some((item) => item.message === "Target repo set: demo"));
 assert.deepEqual(messages, ["/skill:heli-help"]);
 
 console.log("extension smoke ok");

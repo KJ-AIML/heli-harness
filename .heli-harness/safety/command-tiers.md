@@ -29,6 +29,7 @@
 
 - Examples: `git push`, `git tag`, `npm publish`, release creation
 - Default guidance: explicit approval only
+- Multi-repo note: require target repo context before running these commands
 
 ## T6 - Destructive, secret-bearing, or outside-root actions
 
