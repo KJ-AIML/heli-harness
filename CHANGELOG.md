@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.3.1 - AXGA extension loader compatibility hotfix
+
+### Fixed
+- Fixed `tool_call` handler structure so `event` is only read inside the callback.
+- Ensured AXGA can load `extensions/pi-extension.js` with plain loader-friendly JavaScript.
+- Kept v0.3.0 safe auto hooks behavior, including `/heli-hooks`.
+- Added extension load smoke validation for event hooks and commands.
+
 ## v0.3.0 - Safe Auto Hooks
 
 ### Added
@@ -44,7 +52,7 @@
 - Commands suggest `/heli-install` if workspace harness is missing
 - Added 6 namespaced wrapper skills to avoid skill name collisions
 - Commands preserve safe, opt-in behavior
-- Commands avoid legacy names (no `helicopter-harness` references)
+- Commands avoid legacy names.
 
 ### Notes
 - No breaking changes
@@ -64,8 +72,8 @@
 
 ### Clean reference hotfix
 
-- Fixed Claude hook example path from `.helicopter-harness` to `.heli-harness` in `settings.local.json.example`
-- Fixed `.gitignore` patterns from `.helicopter-harness` to `.heli-harness`
+- Fixed Claude hook example path to `.heli-harness` in `settings.local.json.example`
+- Fixed `.gitignore` patterns to `.heli-harness`
 - Confirmed zero legacy references in codebase
 - No behavior changes
 - No migration support added

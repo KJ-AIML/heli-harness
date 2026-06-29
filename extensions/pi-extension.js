@@ -46,7 +46,7 @@ function runInstaller(cwd) {
 }
 
 function isSuspiciousHarnessRuntimePath(filePath) {
-	const normalized = String(filePath || "").replaceAll("\\", "/");
+	const normalized = String(filePath || "").split("\\").join("/");
 	const hasHiddenHarnessFolder = /(^|\/)\.[^/]*harness(\/|$)/.test(normalized);
 	const isCurrentRuntime =
 		normalized.includes("/.heli-harness/") ||
@@ -76,6 +76,40 @@ const DANGEROUS_FILE_PATTERNS = [
 	{ pattern: /credentials/, reason: "Credential files contain secrets" },
 ];
 
+function getUi(ctx) {
+	if (!ctx || !ctx.ui) return null;
+	return ctx.ui;
+}
+
+function notify(ctx, message, level) {
+	const ui = getUi(ctx);
+	if (ui && typeof ui.notify === "function") {
+		ui.notify(message, level);
+	}
+}
+
+function setStatus(ctx, key, value) {
+	const ui = getUi(ctx);
+	if (ui && typeof ui.setStatus === "function") {
+		ui.setStatus(key, value);
+	}
+}
+
+function canConfirm(ctx) {
+	const ui = getUi(ctx);
+	return !!(ui && typeof ui.confirm === "function");
+}
+
+async function confirmDangerous(ctx, title, message, reason) {
+	const ui = getUi(ctx);
+	if (ui && typeof ui.confirm === "function") {
+		const ok = await ui.confirm(title, message);
+		if (ok) return undefined;
+		return { block: true, reason: `Blocked: ${reason}` };
+	}
+	return { block: true, reason: `Blocked: ${reason}. Run operation explicitly to override.` };
+}
+
 export default function heliHarnessExtension(pi) {
 	let workspaceDetected = false;
 	let lastCtx = null;
@@ -83,42 +117,44 @@ export default function heliHarnessExtension(pi) {
 	function syncStatus(ctx) {
 		if (ctx) lastCtx = ctx;
 		const c = ctx || lastCtx;
-		if (!c?.ui?.setStatus) return;
 		if (workspaceDetected) {
-			c.ui.setStatus("heli", "● Heli-Harness: active");
+			setStatus(c, "heli", "● Heli-Harness: active");
 		} else {
-			c.ui.setStatus("heli", "○ Heli-Harness: package-only");
+			setStatus(c, "heli", "○ Heli-Harness: package-only");
 		}
 	}
 
 	const installHandler = async (_args, ctx) => {
 		const cwd = process.cwd();
 		if (detectWorkspaceHarness(cwd)) {
-			ctx?.ui?.notify?.("Workspace harness already installed in this folder", "warning");
+			notify(ctx, "Workspace harness already installed in this folder", "warning");
 			return;
 		}
-		const confirmed = await ctx?.ui?.confirm?.("Install Heli-Harness workspace harness into current folder?", "This will create .heli-harness/ and adapter pointer files (AGENTS.md, CLAUDE.md) in the current directory.");
+		let confirmed = false;
+		if (canConfirm(ctx)) {
+			confirmed = await getUi(ctx).confirm("Install Heli-Harness workspace harness into current folder?", "This will create .heli-harness/ and adapter pointer files (AGENTS.md, CLAUDE.md) in the current directory.");
+		}
 		if (!confirmed) {
-			ctx?.ui?.notify?.("Install cancelled", "info");
+			notify(ctx, "Install cancelled", "info");
 			return;
 		}
-		ctx?.ui?.notify?.("Installing workspace harness...", "info");
+		notify(ctx, "Installing workspace harness...", "info");
 		const result = runInstaller(cwd);
 		if (result.success) {
 			const verification = verifyInstall(cwd);
 			if (verification.success) {
-				ctx?.ui?.notify?.("Workspace harness installed successfully", "success");
-				ctx?.ui?.notify?.("Created: .heli-harness/, AGENTS.md, CLAUDE.md", "info");
-				ctx?.ui?.notify?.("Next: Create a repo profile under .heli-harness/profiles/", "info");
+				notify(ctx, "Workspace harness installed successfully", "success");
+				notify(ctx, "Created: .heli-harness/, AGENTS.md, CLAUDE.md", "info");
+				notify(ctx, "Next: Create a repo profile under .heli-harness/profiles/", "info");
 				workspaceDetected = true;
 				syncStatus(ctx);
 			} else {
-				ctx?.ui?.notify?.("Install completed but verification failed", "warning");
-				ctx?.ui?.notify?.(`Missing: ${verification.missing.join(", ")}`, "warning");
+				notify(ctx, "Install completed but verification failed", "warning");
+				notify(ctx, `Missing: ${verification.missing.join(", ")}`, "warning");
 			}
 		} else {
-			ctx?.ui?.notify?.("Install failed", "error");
-			ctx?.ui?.notify?.(result.error || "Unknown error", "error");
+			notify(ctx, "Install failed", "error");
+			notify(ctx, result.error || "Unknown error", "error");
 		}
 	};
 
@@ -127,13 +163,13 @@ export default function heliHarnessExtension(pi) {
 		const harnessPath = join(cwd, ".heli-harness");
 		const harnessMd = join(harnessPath, "HARNESS.md");
 		const harnessDetected = detectWorkspaceHarness(cwd);
-		ctx?.ui?.notify?.("Heli-Harness Status", "info");
-		ctx?.ui?.notify?.(`CWD: ${cwd}`, "info");
-		ctx?.ui?.notify?.(`Workspace harness: ${harnessDetected ? "detected" : "not installed"}`, harnessDetected ? "success" : "warning");
+		notify(ctx, "Heli-Harness Status", "info");
+		notify(ctx, `CWD: ${cwd}`, "info");
+		notify(ctx, `Workspace harness: ${harnessDetected ? "detected" : "not installed"}`, harnessDetected ? "success" : "warning");
 		if (harnessDetected) {
-			ctx?.ui?.notify?.(`HARNESS.md: ${harnessMd}`, "info");
+			notify(ctx, `HARNESS.md: ${harnessMd}`, "info");
 		} else {
-			ctx?.ui?.notify?.("Run /heli-install or /hh-install to set up workspace harness", "info");
+			notify(ctx, "Run /heli-install or /hh-install to set up workspace harness", "info");
 		}
 	};
 
@@ -142,11 +178,11 @@ export default function heliHarnessExtension(pi) {
 			const cwd = process.cwd();
 			const harnessDetected = detectWorkspaceHarness(cwd);
 			if (!harnessDetected) {
-				ctx?.ui?.notify?.("Workspace harness not installed", "warning");
-				ctx?.ui?.notify?.("Run /heli-install or /hh-install to set up workspace harness", "info");
+				notify(ctx, "Workspace harness not installed", "warning");
+				notify(ctx, "Run /heli-install or /hh-install to set up workspace harness", "info");
 				return;
 			}
-			ctx?.ui?.notify?.(`Running ${description}...`, "info");
+			notify(ctx, `Running ${description}...`, "info");
 			pi.sendUserMessage(`/skill:${skillName}`);
 		};
 	};
@@ -154,13 +190,13 @@ export default function heliHarnessExtension(pi) {
 	const hooksStatusHandler = async (_args, ctx) => {
 		const cwd = process.cwd();
 		const harnessDetected = detectWorkspaceHarness(cwd);
-		ctx?.ui?.notify?.("Heli-Harness Auto Hooks Status", "info");
-		ctx?.ui?.notify?.(`Workspace harness: ${harnessDetected ? "detected" : "not installed"}`, harnessDetected ? "success" : "warning");
-		ctx?.ui?.notify?.(`before_agent_start injection: ${harnessDetected ? "active" : "inactive"}`, "info");
-		ctx?.ui?.notify?.(`tool_call safety guard: active`, "info");
-		ctx?.ui?.notify?.(`input shortcuts: active`, "info");
+		notify(ctx, "Heli-Harness Auto Hooks Status", "info");
+		notify(ctx, `Workspace harness: ${harnessDetected ? "detected" : "not installed"}`, harnessDetected ? "success" : "warning");
+		notify(ctx, `before_agent_start injection: ${harnessDetected ? "active" : "inactive"}`, "info");
+		notify(ctx, "tool_call safety guard: active", "info");
+		notify(ctx, "input shortcuts: active", "info");
 		if (!harnessDetected) {
-			ctx?.ui?.notify?.("Run /heli-install to activate workspace hooks", "info");
+			notify(ctx, "Run /heli-install to activate workspace hooks", "info");
 		}
 	};
 
@@ -168,15 +204,16 @@ export default function heliHarnessExtension(pi) {
 		const cwd = process.cwd();
 		workspaceDetected = detectWorkspaceHarness(cwd);
 		if (workspaceDetected) {
-			ctx?.ui?.notify?.("Heli-Harness active", "success");
+			notify(ctx, "Heli-Harness active", "success");
 		} else {
-			ctx?.ui?.notify?.("Heli-Harness package loaded; run /heli-install to set up workspace harness", "info");
+			notify(ctx, "Heli-Harness package loaded; run /heli-install to set up workspace harness", "info");
 		}
 		syncStatus(ctx);
 	});
 
 	pi.on("before_agent_start", async (event) => {
-		if (!workspaceDetected) return;
+		if (!workspaceDetected) return undefined;
+		const existingPrompt = event && event.systemPrompt ? event.systemPrompt : "";
 		const heliInstructions = `
 Heli-Harness workspace detected.
 
@@ -189,88 +226,64 @@ Before non-trivial work:
 - Classify commands before running them.
 - Do not run mutating, API-credit, release, publish, push, or destructive commands without explicit user approval.
 - Prefer safe audit-only and non-mutating checks first.`;
-		return { systemPrompt: `${event.systemPrompt}\n\n${heliInstructions}` };
+		return { systemPrompt: `${existingPrompt}\n\n${heliInstructions}` };
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
-		if (event.toolName === "bash" && event.input?.command) {
-			const command = event.input.command;
+		const toolName = event && event.toolName;
+		const input = event && event.input ? event.input : {};
+
+		if (toolName === "bash" && input.command) {
+			const command = String(input.command);
 			for (const { pattern, reason } of DANGEROUS_BASH_PATTERNS) {
-				if (pattern.test(command)) {
-					if (ctx?.ui?.confirm) {
-						const ok = await ctx.ui.confirm("Dangerous command detected", `${reason}\n\nCommand: ${command}\n\nAllow?`);
-						if (!ok) {
-							return { block: true, reason: `Blocked: ${reason}` };
-						}
+				if (!pattern.test(command)) continue;
+				return confirmDangerous(ctx, "Dangerous command detected", `${reason}\n\nCommand: ${command}\n\nAllow?`, reason);
+			}
+		}
 
-					}
-				} else {
-					return { block: true, reason: `Blocked: ${reason}. Run command explicitly to override.` };
+		if ((toolName === "write" || toolName === "edit") && input.path) {
+			const path = String(input.path);
+			if (isSuspiciousHarnessRuntimePath(path)) {
+				const reason = "Suspicious harness runtime folder detected";
+				return confirmDangerous(ctx, "Dangerous file operation", `${reason}\n\nPath: ${path}\n\nAllow?`, reason);
+			}
+
+			for (const { pattern, reason } of DANGEROUS_FILE_PATTERNS) {
+				if (pattern.test(path)) {
+					return confirmDangerous(ctx, "Dangerous file operation", `${reason}\n\nPath: ${path}\n\nAllow?`, reason);
 				}
 			}
 		}
-	}
-	if ((event.toolName === "write" || event.toolName === "edit") && event.input?.path) {
-		const path = event.input.path;
-		if (isSuspiciousHarnessRuntimePath(path)) {
-			const reason = "Suspicious harness runtime folder detected";
-			if (ctx?.ui?.confirm) {
-				const ok = await ctx.ui.confirm("Dangerous file operation", `${reason}
 
-Path: ${path}
+		return undefined;
+	});
 
-Allow?`);
-				if (!ok) {
-					return { block: true, reason: `Blocked: ${reason}` };
-				}
-			} else {
-				return { block: true, reason: `Blocked: ${reason}. Run operation explicitly to override.` };
-			}
+	pi.on("input", async (event) => {
+		if (event && event.source === "extension") return undefined;
+		const text = String(event && event.text ? event.text : "").trim();
+		if (text === "/review") {
+			return { action: "transform", text: "/heli-review" };
 		}
-		for (const { pattern, reason } of DANGEROUS_FILE_PATTERNS) {
-			if (pattern.test(path)) {
-				if (ctx?.ui?.confirm) {
-					const ok = await ctx.ui.confirm("Dangerous file operation", `${reason}
-
-Path: ${path}
-
-Allow?`);
-					if (!ok) {
-						return { block: true, reason: `Blocked: ${reason}` };
-					}
-				} else {
-					return { block: true, reason: `Blocked: ${reason}. Run operation explicitly to override.` };
-				}
-			}
+		if (text === "/audit") {
+			return { action: "transform", text: "/heli-audit" };
 		}
-	}
-});
+		if (text === "/validate") {
+			return { action: "transform", text: "/heli-validate" };
+		}
+		if (text === "/impact") {
+			return { action: "transform", text: "/heli-impact" };
+		}
+		return undefined;
+	});
 
-pi.on("input", async (event) => {
-	if (event?.source === "extension") return;
-	const text = String(event?.text || "").trim();
-	if (text === "/review") {
-		return { action: "transform", text: "/heli-review" };
-	}
-	if (text === "/audit") {
-		return { action: "transform", text: "/heli-audit" };
-	}
-	if (text === "/validate") {
-		return { action: "transform", text: "/heli-validate" };
-	}
-	if (text === "/impact") {
-		return { action: "transform", text: "/heli-impact" };
-	}
-});
-
-pi.registerCommand("heli-install", { description: "Install Heli-Harness workspace harness into current folder", handler: installHandler });
-pi.registerCommand("hh-install", { description: "Alias for /heli-install", handler: installHandler });
-pi.registerCommand("hh-status", { description: "Report Heli-Harness status in current folder", handler: statusHandler });
-pi.registerCommand("heli-help", { description: "Show Heli-Harness commands and what they do", handler: workflowHandler("heli-help", "Heli-Harness help") });
-pi.registerCommand("heli-init", { description: "Bootstrap a repo profile for a target repo", handler: workflowHandler("heli-init", "repo profile bootstrap") });
-pi.registerCommand("heli-review", { description: "Review current repo/diff/task safely", handler: workflowHandler("heli-review", "repo review") });
-pi.registerCommand("heli-audit", { description: "Repo-wide audit for issues and risks", handler: workflowHandler("heli-audit", "repo audit") });
-pi.registerCommand("heli-validate", { description: "Run test-validation workflow safely", handler: workflowHandler("heli-validate", "test validation") });
-pi.registerCommand("heli-impact", { description: "Impact analysis for planned changes", handler: workflowHandler("heli-impact", "impact analysis") });
-pi.registerCommand("heli-hooks", { description: "Show Heli-Harness auto hooks status", handler: hooksStatusHandler });
+	pi.registerCommand("heli-install", { description: "Install Heli-Harness workspace harness into current folder", handler: installHandler });
+	pi.registerCommand("hh-install", { description: "Alias for /heli-install", handler: installHandler });
+	pi.registerCommand("hh-status", { description: "Report Heli-Harness status in current folder", handler: statusHandler });
+	pi.registerCommand("heli-help", { description: "Show Heli-Harness commands and what they do", handler: workflowHandler("heli-help", "Heli-Harness help") });
+	pi.registerCommand("heli-init", { description: "Bootstrap a repo profile for a target repo", handler: workflowHandler("heli-init", "repo profile bootstrap") });
+	pi.registerCommand("heli-review", { description: "Review current repo/diff/task safely", handler: workflowHandler("heli-review", "repo review") });
+	pi.registerCommand("heli-audit", { description: "Repo-wide audit for issues and risks", handler: workflowHandler("heli-audit", "repo audit") });
+	pi.registerCommand("heli-validate", { description: "Run test-validation workflow safely", handler: workflowHandler("heli-validate", "test validation") });
+	pi.registerCommand("heli-impact", { description: "Impact analysis for planned changes", handler: workflowHandler("heli-impact", "impact analysis") });
+	pi.registerCommand("heli-hooks", { description: "Show Heli-Harness auto hooks status", handler: hooksStatusHandler });
 }
