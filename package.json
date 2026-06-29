@@ -1,6 +1,6 @@
 {
   "name": "heli-harness",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "description": "Parent-workspace AI development harness for multi-repo, multi-agent engineering work.",
   "keywords": [
     "pi-package",

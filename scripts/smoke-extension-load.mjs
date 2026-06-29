@@ -8,9 +8,13 @@ const tempDir = mkdtempSync(join(tmpdir(), "heli-extension-"));
 mkdirSync(join(tempDir, "extensions"), { recursive: true });
 mkdirSync(join(tempDir, ".heli-harness"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "HARNESS.md"), "# Harness\n");
-writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.3.3" }));
+writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.4.0" }));
 mkdirSync(join(tempDir, ".heli-harness", "profiles"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "profiles", "demo.md"), `# Demo
+
+Policy references:
+
+- .heli-harness/policies/engineering.md
 
 ## Observed stack
 
@@ -44,6 +48,64 @@ Hook host APIs may differ.
 
 None.
 `);
+mkdirSync(join(tempDir, ".heli-harness", "policies"), { recursive: true });
+for (const name of ["engineering", "release", "security", "testing"]) {
+	writeFileSync(join(tempDir, ".heli-harness", "policies", `${name}.md`), `# ${name}
+
+## Required
+
+- Record what happened.
+
+## Recommended
+
+- Keep the rule readable.
+
+## Forbidden
+
+- Do not skip evidence.
+
+## Requires approval
+
+- Release actions.
+
+## Exceptions
+
+- Scope:
+- Approval:
+- Justification:
+`);
+}
+mkdirSync(join(tempDir, ".heli-harness", "safety"), { recursive: true });
+writeFileSync(join(tempDir, ".heli-harness", "safety", "command-tiers.md"), `# Command Tiers
+
+T0
+T1
+T2
+T3
+T4
+T5
+T6
+`);
+writeFileSync(join(tempDir, ".heli-harness", "safety", "command-rules.json"), JSON.stringify({
+	version: 1,
+	defaultTierGuidance: {
+		T0: "allow",
+		T1: "allow",
+		T2: "allow-with-context",
+		T3: "ask-or-report",
+		T4: "explicit-approval",
+		T5: "explicit-approval",
+		T6: "block",
+	},
+	rules: [{ id: "git-push", match: "git push", tier: "T5", reason: "Remote git writes need explicit approval" }],
+}));
+writeFileSync(join(tempDir, ".heli-harness", "safety", "secrets.md"), `# Secret Handling
+
+Do not print secrets.
+Do not hardcode keys.
+Adapter support varies.
+Use approval when needed.
+`);
 mkdirSync(join(tempDir, ".heli-harness", "state", "reports"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "state", "current-task.md"), `# Current Task
 
@@ -71,9 +133,25 @@ node scripts/smoke-extension-load.mjs
 
 Smoke passed.
 
+## Policies loaded
+
+engineering.md, release.md, security.md, testing.md
+
+## Safety overlays loaded
+
+command-tiers.md, command-rules.json, secrets.md
+
 ## Policy decisions
 
 No deviations.
+
+## Approval evidence
+
+None.
+
+## Safety events
+
+None.
 
 ## Risks
 
@@ -153,9 +231,12 @@ const baselinePrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
 assert(!baselinePrompt.systemPrompt.includes("HELI_HOOK_OK"));
 
 await commands.find((command) => command.name === "hh-status").options.handler({}, ctx);
-assert(notifications.some((item) => item.message === "Version: 0.3.3"));
+assert(notifications.some((item) => item.message === "Version: 0.4.0"));
 assert(notifications.some((item) => item.message === "Mode: package + workspace"));
 assert(notifications.some((item) => item.message === "Target repo: demo"));
+assert(notifications.some((item) => item.message === "Policy directory: detected"));
+assert(notifications.some((item) => item.message === "Safety directory: detected"));
+assert(notifications.some((item) => item.message === "command-rules.json: parseable"));
 await commands.find((command) => command.name === "heli-hooks").options.handler("probe", ctx);
 const probePrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
 assert(probePrompt.systemPrompt.includes("HELI_HOOK_OK"));
@@ -178,6 +259,8 @@ assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git push"
 await commands.find((command) => command.name === "heli-hooks").options.handler("probe-off", ctx);
 await commands.find((command) => command.name === "heli-hooks").options.handler({}, ctx);
 await commands.find((command) => command.name === "heli-validate").options.handler("lint", ctx);
+await commands.find((command) => command.name === "heli-validate").options.handler("policy", ctx);
+await commands.find((command) => command.name === "heli-validate").options.handler("safety", ctx);
 await commands.find((command) => command.name === "heli-help").options.handler({}, ctx);
 assert(notifications.some((item) => item.message === "Heli-Harness Status"));
 assert(notifications.some((item) => item.message === "Heli-Harness Auto Hooks Status"));
@@ -185,6 +268,8 @@ assert(notifications.some((item) => item.message === "Heli hook probe armed"));
 assert(notifications.some((item) => item.message === "Heli tool_call guard probe armed"));
 assert(notifications.some((item) => item.message === "test-guard probe: inactive"));
 assert(notifications.some((item) => item.message === "Heli profile lint"));
+assert(notifications.some((item) => item.message === "Heli policy lint"));
+assert(notifications.some((item) => item.message === "Heli safety lint"));
 assert(notifications.some((item) => item.message === "Heli report lint"));
 assert.deepEqual(messages, ["/skill:heli-help"]);
 

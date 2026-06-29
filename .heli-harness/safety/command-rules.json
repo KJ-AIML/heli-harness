@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "defaultTierGuidance": {
+    "T0": "allow",
+    "T1": "allow",
+    "T2": "allow-with-context",
+    "T3": "ask-or-report",
+    "T4": "explicit-approval",
+    "T5": "explicit-approval",
+    "T6": "block"
+  },
+  "rules": [
+    {
+      "id": "git-push",
+      "match": "git push",
+      "tier": "T5",
+      "reason": "Remote git writes need explicit approval"
+    },
+    {
+      "id": "git-tag",
+      "match": "git tag",
+      "tier": "T5",
+      "reason": "Version tags are release actions"
+    },
+    {
+      "id": "npm-publish",
+      "match": "npm publish",
+      "tier": "T5",
+      "reason": "Publish actions are release operations"
+    },
+    {
+      "id": "destructive-delete",
+      "match": "rm -rf",
+      "tier": "T6",
+      "reason": "Recursive delete is destructive"
+    }
+  ],
+  "notes": [
+    "This file is intentionally lightweight and future-facing.",
+    "Adapters may enforce only a subset of these rules."
+  ]
+}

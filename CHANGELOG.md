@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.4.0 - Policy Overlays
+
+### Added
+- Added `.heli-harness/policies/` with markdown-first templates for engineering, security, release, and testing rules.
+- Added `.heli-harness/safety/` with command tiers, lightweight command rules JSON, and secret-handling guidance.
+- Added policy and safety visibility in `/hh-status`.
+- Added policy and safety lint through `/heli-validate lint`, `/heli-validate policy`, and `/heli-validate safety`.
+- Added report checks for policies loaded, safety overlays loaded, approval evidence, safety events, and policy-deviation justification.
+
+### Changed
+- Updated repo profile and run report templates to keep profiles descriptive and move prescriptive rules into overlays.
+- Improved profile lint so prescriptive language under descriptive sections is warned on.
+
+### Notes
+- Keeps Heli lightweight, markdown-first, local, inspectable, and adapter-friendly.
+- Does not add runtime orchestration, a database, hosted telemetry, or vector memory.
+- v0.4.1 profile taxonomy refinements and v0.4.2 multi-repo targeting remain future milestones.
+
 ## v0.3.3 - Status, Profile Lint, and Report Gates
 
 ### Added
@@ -11,7 +29,6 @@
 
 ### Notes
 - No runtime, orchestration, database, hosted telemetry, or vector memory expansion.
-- Policy overlays remain deferred to v0.4.0.
 - Heli remains lightweight, local, markdown-first, inspectable, and adapter-friendly.
 
 ## v0.3.2 - Hook Observability Probes

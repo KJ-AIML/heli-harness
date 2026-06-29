@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.3.3
+## Current Baseline: v0.4.0
 
-Latest stable release: `v0.3.3`
+Latest stable release: `v0.4.0`
 
-Release commit: see tag `v0.3.3`
+Release commit: see tag `v0.4.0`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.3.3>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.4.0>
 
 Stable behavior in this baseline:
 
@@ -25,6 +25,12 @@ Stable behavior in this baseline:
   - `/heli-validate lint`
   - profile taxonomy warnings
   - report completeness warnings
+- Policy overlays:
+  - `.heli-harness/policies/`
+  - `.heli-harness/safety/`
+  - policy and safety visibility in `/hh-status`
+  - policy and safety lint
+  - report policy-deviation checks
 
 ## Product Positioning
 

@@ -4,6 +4,13 @@ Repo name:
 
 Purpose:
 
+Policy references:
+
+- `.heli-harness/policies/engineering.md`
+- `.heli-harness/policies/security.md`
+- `.heli-harness/policies/release.md`
+- `.heli-harness/policies/testing.md`
+
 ## Observed stack
 
 -
@@ -15,7 +22,8 @@ Purpose:
 
 ## Recommended conventions
 
--
+- This section stays descriptive to the repo.
+- Team rules belong in policy overlays, not here.
 
 ## Known tech debt
 
@@ -25,7 +33,8 @@ Purpose:
 
 ## Forbidden patterns
 
--
+- Record repo-local patterns new work must avoid copying.
+- Reference policy overlays when the rule comes from team policy.
 
 ## Command tiers
 
@@ -46,6 +55,7 @@ Forbidden:
 
 - Exception:
 - Justification:
+- Approval evidence:
 
 ## Operational notes
 

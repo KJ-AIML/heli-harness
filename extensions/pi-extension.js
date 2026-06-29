@@ -46,7 +46,7 @@ function safeReadJson(path) {
 
 function safeListFiles(dir) {
 	try {
-		return readdirSync(dir).map((name) => join(dir, name));
+		return readdirSync(dir).sort().map((name) => join(dir, name));
 	} catch (_error) {
 		return [];
 	}
@@ -193,9 +193,41 @@ function getActivePolicies(cwd) {
 	return policies.map((path) => path.split(/[\\/]/).pop()).join(", ");
 }
 
+function getOverlayFiles(dir, extensions) {
+	if (!isDirectory(dir)) return [];
+	return safeListFiles(dir)
+		.filter((path) => isFile(path) && extensions.some((extension) => path.endsWith(extension)))
+		.map((path) => path.split(/[\\/]/).pop());
+}
+
+function getCommandRulesStatus(cwd) {
+	const rulesPath = join(cwd, ".heli-harness", "safety", "command-rules.json");
+	if (!isFile(rulesPath)) return "not configured";
+	return safeReadJson(rulesPath) ? "parseable" : "invalid JSON";
+}
+
+function normalizeText(text) {
+	return String(text || "").replace(/\r\n/g, "\n");
+}
+
 function hasHeading(text, heading) {
 	const pattern = new RegExp(`^#{1,6}\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "im");
 	return pattern.test(text);
+}
+
+function getSectionBody(text, heading) {
+	const normalized = normalizeText(text);
+	const headingPattern = new RegExp(`^#{1,6}\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "im");
+	const match = headingPattern.exec(normalized);
+	if (!match) return "";
+	const start = match.index + match[0].length;
+	const rest = normalized.slice(start);
+	const nextHeading = /\n#{1,6}\s+/m.exec(rest);
+	return (nextHeading ? rest.slice(0, nextHeading.index) : rest).trim();
+}
+
+function sectionHasContent(text, heading) {
+	return /[a-z0-9]/i.test(getSectionBody(text, heading));
 }
 
 function pushMissingSectionWarnings(warnings, label, text, sections) {
@@ -222,20 +254,86 @@ function lintProfiles(cwd) {
 	const warnings = [];
 	for (const profile of profiles) {
 		const label = profile.split(/[\\/]/).pop();
-		const text = safeReadText(profile);
+		const text = normalizeText(safeReadText(profile));
 		const lower = text.toLowerCase();
 		pushMissingSectionWarnings(warnings, label, text, requiredSections);
 		if (/follow existing patterns/i.test(text) && !hasHeading(text, "Known tech debt")) {
 			warnings.push(`${label}: says "follow existing patterns" without a Known tech debt section`);
 		}
-		if (/(required|must|forbidden|do not|requires approval)/i.test(text) && !hasHeading(text, "Forbidden patterns")) {
-			warnings.push(`${label}: may mix prescriptive policy with repo facts; move policy to overlays in v0.4.0`);
+		const descriptiveSections = ["Observed stack", "Existing patterns", "Repo risks"];
+		for (const section of descriptiveSections) {
+			const body = getSectionBody(text, section);
+			if (/\b(must|required|forbidden|do not|requires approval)\b/i.test(body)) {
+				warnings.push(`${label}: prescriptive language appears under "${section}"; move it to policy overlays`);
+			}
 		}
 		if (/(risky|unsafe|hardcoded|secret|credential|fragile|deprecated)/i.test(text) && !/known tech debt|forbidden patterns|repo risks/i.test(lower)) {
 			warnings.push(`${label}: mentions risky patterns without classifying them`);
 		}
+		const recommendedBody = getSectionBody(text, "Recommended conventions");
+		if (/\b(hardcoded|secret|credential|unsafe|deprecated|fragile|legacy)\b/i.test(recommendedBody)) {
+			warnings.push(`${label}: recommended conventions may be treating risky patterns as normal`);
+		}
 	}
 	return { checked: profiles.length, warnings };
+}
+
+function lintPolicies(cwd) {
+	const policiesDir = join(cwd, ".heli-harness", "policies");
+	const expectedFiles = ["engineering.md", "security.md", "release.md", "testing.md"];
+	const requiredSections = ["Required", "Recommended", "Forbidden", "Requires approval", "Exceptions"];
+	if (!isDirectory(policiesDir)) return { checked: 0, warnings: ["No policy directory found."] };
+	const policies = safeListFiles(policiesDir).filter((path) => path.endsWith(".md") && isFile(path));
+	if (policies.length === 0) return { checked: 0, warnings: ["No policy overlays found."] };
+	const warnings = [];
+	const found = policies.map((path) => path.split(/[\\/]/).pop());
+	for (const expected of expectedFiles) {
+		if (!found.includes(expected)) warnings.push(`policies: missing suggested file "${expected}"`);
+	}
+	for (const policy of policies) {
+		const label = policy.split(/[\\/]/).pop();
+		const text = normalizeText(safeReadText(policy));
+		pushMissingSectionWarnings(warnings, label, text, requiredSections);
+		for (const section of requiredSections) {
+			if (hasHeading(text, section) && !sectionHasContent(text, section)) {
+				warnings.push(`${label}: section "${section}" is empty`);
+			}
+		}
+		const strictBody = `${getSectionBody(text, "Required")}\n${getSectionBody(text, "Forbidden")}`;
+		if (/(best practice|use judgment|be careful|as appropriate|where appropriate|reasonable)/i.test(strictBody)) {
+			warnings.push(`${label}: required or forbidden rules are too vague to enforce consistently`);
+		}
+		const exceptionsBody = getSectionBody(text, "Exceptions");
+		if (/[a-z0-9]/i.test(exceptionsBody) && !/(scope:|condition:|approval:|justification:)/i.test(exceptionsBody)) {
+			warnings.push(`${label}: exceptions should record scope, approval, and justification`);
+		}
+	}
+	return { checked: policies.length, warnings };
+}
+
+function lintSafety(cwd) {
+	const safetyDir = join(cwd, ".heli-harness", "safety");
+	const expectedFiles = ["command-tiers.md", "command-rules.json", "secrets.md"];
+	if (!isDirectory(safetyDir)) return { checked: 0, warnings: ["No safety directory found."] };
+	const warnings = [];
+	const files = getOverlayFiles(safetyDir, [".md", ".json"]);
+	for (const expected of expectedFiles) {
+		if (!files.includes(expected)) warnings.push(`safety: missing suggested file "${expected}"`);
+	}
+	const commandTiers = safeReadText(join(safetyDir, "command-tiers.md"));
+	if (commandTiers) {
+		for (const tier of ["T0", "T1", "T2", "T3", "T4", "T5", "T6"]) {
+			if (!new RegExp(`\\b${tier}\\b`).test(commandTiers)) warnings.push(`command-tiers.md: missing ${tier}`);
+		}
+	}
+	const secrets = normalizeText(safeReadText(join(safetyDir, "secrets.md")));
+	if (secrets && !/(do not print|do not hardcode|approval|adapter support)/i.test(secrets)) {
+		warnings.push("secrets.md: expected guidance on printing secrets, hardcoding, approval, and adapter support");
+	}
+	const rulesStatus = getCommandRulesStatus(cwd);
+	if (rulesStatus === "invalid JSON") warnings.push("command-rules.json: invalid JSON");
+	if (rulesStatus === "not configured") warnings.push("command-rules.json: missing");
+	return { checked: files.length, warnings };
 }
 
 function lintReports(cwd) {
@@ -246,7 +344,11 @@ function lintReports(cwd) {
 		"Files changed",
 		"Commands run",
 		"Validation",
+		"Policies loaded",
+		"Safety overlays loaded",
 		"Policy decisions",
+		"Approval evidence",
+		"Safety events",
 		"Risks",
 		"Next steps",
 	];
@@ -263,13 +365,22 @@ function lintReports(cwd) {
 	const warnings = [];
 	for (const report of reports) {
 		const label = report.split(/[\\/]/).pop();
-		const text = safeReadText(report);
+		const text = normalizeText(safeReadText(report));
 		pushMissingSectionWarnings(warnings, label, text, requiredSections);
 		if (/complete|completed|done/i.test(text) && !/validation|test|check/i.test(text)) {
 			warnings.push(`${label}: claims completion without validation evidence`);
 		}
 		if (/policy deviation|deviation/i.test(text) && !/justification|because|reason/i.test(text)) {
 			warnings.push(`${label}: mentions policy deviation without justification`);
+		}
+		if (/exception/i.test(text) && !/approval|approved|ticket|issue|pr|justification/i.test(text)) {
+			warnings.push(`${label}: mentions an exception without approval evidence or justification`);
+		}
+		if (/policy compliance|complies with policy|policy-compliant/i.test(text) && !sectionHasContent(text, "Policies loaded")) {
+			warnings.push(`${label}: claims policy compliance without listing loaded policies`);
+		}
+		if (/(approved|approval received|user approved)/i.test(text) && /(publish|push|deploy|release|delete|destructive|secret)/i.test(text) && !sectionHasContent(text, "Approval evidence")) {
+			warnings.push(`${label}: records risky approval without approval evidence`);
 		}
 		if (/skip|skipped/i.test(text) && /validation|test|check/i.test(text) && !/because|reason|not available|not applicable/i.test(text)) {
 			warnings.push(`${label}: mentions skipped validation without a reason`);
@@ -374,6 +485,11 @@ export default function heliHarnessExtension(pi) {
 		const harnessMd = join(harnessPath, "HARNESS.md");
 		const harnessDetected = detectWorkspaceHarness(cwd);
 		const targetRepo = getTargetRepo(cwd);
+		const policiesDir = join(harnessPath, "policies");
+		const safetyDir = join(harnessPath, "safety");
+		const policyFiles = getOverlayFiles(policiesDir, [".md"]);
+		const safetyFiles = getOverlayFiles(safetyDir, [".md", ".json"]);
+		const commandRulesStatus = getCommandRulesStatus(cwd);
 		notify(ctx, "Heli-Harness Status", "info");
 		notify(ctx, `Version: ${getPackageVersion()}`, "info");
 		notify(ctx, `Mode: ${harnessDetected ? "package + workspace" : "package only"}`, harnessDetected ? "success" : "warning");
@@ -382,12 +498,23 @@ export default function heliHarnessExtension(pi) {
 		notify(ctx, `Target repo: ${targetRepo}`, "info");
 		notify(ctx, `Active profile: ${getActiveProfile(cwd, targetRepo)}`, "info");
 		notify(ctx, `Active policies: ${getActivePolicies(cwd)}`, "info");
+		notify(ctx, `Policy directory: ${isDirectory(policiesDir) ? "detected" : "missing"}`, isDirectory(policiesDir) ? "success" : "warning");
+		notify(ctx, `Policy files: ${policyFiles.length > 0 ? policyFiles.join(", ") : "none"}`, policyFiles.length > 0 ? "info" : "warning");
+		notify(ctx, `Safety directory: ${isDirectory(safetyDir) ? "detected" : "missing"}`, isDirectory(safetyDir) ? "success" : "warning");
+		notify(ctx, `Safety files: ${safetyFiles.length > 0 ? safetyFiles.join(", ") : "none"}`, safetyFiles.length > 0 ? "info" : "warning");
+		notify(ctx, `command-rules.json: ${commandRulesStatus}`, commandRulesStatus === "parseable" ? "success" : commandRulesStatus === "invalid JSON" ? "warning" : "info");
 		notify(ctx, `Skill count: ${getSkillCount(cwd)}`, "info");
 		notify(ctx, "Active hooks: session_start, before_agent_start, tool_call, input", "info");
 		notify(ctx, `Recent hooks: session_start=${lastSessionStartAt}; before_agent_start=${lastBeforeAgentStartAt}; tool_call_guard=${lastToolGuardAt}; input_shortcut=${lastInputShortcutAt}`, "info");
 		notify(ctx, `Probe state: prompt=${hookProbePromptPending ? "armed" : "inactive"}; guard=${hookProbeGuardPending ? "armed" : "inactive"}`, hookProbePromptPending || hookProbeGuardPending ? "warning" : "info");
 		if (harnessDetected) {
 			notify(ctx, `HARNESS.md: ${harnessMd}`, "info");
+			if (policyFiles.length === 0) {
+				notify(ctx, "No policy overlays found. v0.4.0 supports .heli-harness/policies/. Use templates to create team rules.", "info");
+			}
+			if (safetyFiles.length === 0) {
+				notify(ctx, "No safety overlays found. v0.4.0 supports .heli-harness/safety/. Use templates to define command tiers and secret handling.", "info");
+			}
 		} else {
 			notify(ctx, "Next: run /heli-install or /hh-install to set up workspace harness", "info");
 		}
@@ -412,6 +539,14 @@ export default function heliHarnessExtension(pi) {
 		const cwd = process.cwd();
 		if (action === "lint" || action === "profile" || action === "profiles") {
 			notifyLintResult(ctx, "Heli profile lint", lintProfiles(cwd));
+			if (action !== "lint") return;
+		}
+		if (action === "lint" || action === "policy" || action === "policies") {
+			notifyLintResult(ctx, "Heli policy lint", lintPolicies(cwd));
+			if (action !== "lint") return;
+		}
+		if (action === "lint" || action === "safety") {
+			notifyLintResult(ctx, "Heli safety lint", lintSafety(cwd));
 			if (action !== "lint") return;
 		}
 		if (action === "lint" || action === "report" || action === "reports") {
@@ -567,7 +702,7 @@ HELI_HOOK_OK`
 	pi.registerCommand("heli-init", { description: "Bootstrap a repo profile for a target repo", handler: workflowHandler("heli-init", "repo profile bootstrap") });
 	pi.registerCommand("heli-review", { description: "Review current repo/diff/task safely", handler: workflowHandler("heli-review", "repo review") });
 	pi.registerCommand("heli-audit", { description: "Repo-wide audit for issues and risks", handler: workflowHandler("heli-audit", "repo audit") });
-	pi.registerCommand("heli-validate", { description: "Run test-validation workflow safely; use lint/profile/report for local checks", handler: validateHandler });
+	pi.registerCommand("heli-validate", { description: "Run test-validation workflow safely; use lint/profile/policy/safety/report for local checks", handler: validateHandler });
 	pi.registerCommand("heli-impact", { description: "Impact analysis for planned changes", handler: workflowHandler("heli-impact", "impact analysis") });
 	pi.registerCommand("heli-hooks", { description: "Show Heli-Harness auto hooks status", handler: hooksStatusHandler });
 }

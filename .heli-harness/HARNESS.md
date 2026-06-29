@@ -7,10 +7,13 @@ Heli-Harness is the source of truth for this parent workspace. It is tool-neutra
 - The agent starts from the parent workspace that contains multiple repos and `.heli-harness/`.
 - The agent must identify the target repo before editing.
 - The agent must read the relevant profile in `.heli-harness/profiles/` when one exists.
+- The agent must read policy overlays in `.heli-harness/policies/` when they exist.
+- The agent must read safety overlays in `.heli-harness/safety/` when they exist.
 - The agent must also read repo-local `AGENTS.md`, `CLAUDE.md`, `README*`, package files, build files, and test configuration where relevant.
 - The agent must create or update `.heli-harness/state/current-task.md` before non-trivial edits.
 - The agent must preserve dirty user work. Never revert, overwrite, move, or delete user changes unless explicitly asked.
 - The agent must not assume branch policy, test commands, generated-file policy, release process, deployment policy, or ownership unless a repo profile or repo docs say so.
+- Repo profiles remain descriptive. Team rules belong in policy overlays, and command-risk guidance belongs in safety overlays.
 - The agent must not run expensive loops repeatedly. Use the smallest useful check first, then widen only when evidence requires it.
 - After two failed fix attempts, stop coding and write a diagnosis with evidence, likely causes, and the next smallest action.
 

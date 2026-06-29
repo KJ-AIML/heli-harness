@@ -44,7 +44,7 @@ Install this repo into the current folder as a parent-workspace harness:
 
 https://github.com/KJ-AIML/heli-harness
 
-Use the latest stable tag (v0.3.3). Do not install globally. Treat the current
+Use the latest stable tag (v0.4.0). Do not install globally. Treat the current
 directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
@@ -56,7 +56,7 @@ and CLAUDE.md exist after install.
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.3.3
+git checkout v0.4.0
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install
@@ -68,7 +68,7 @@ Remove-Item -Recurse -Force hh-source
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.3.3
+git checkout v0.4.0
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -80,8 +80,8 @@ rm -rf hh-source
 Pi and AXGA can load Heli-Harness as a package to get skills and a lightweight extension:
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.3.3
-axga install git:github.com/KJ-AIML/heli-harness@v0.3.3
+pi install git:github.com/KJ-AIML/heli-harness@v0.4.0
+axga install git:github.com/KJ-AIML/heli-harness@v0.4.0
 ```
 
 This installs the agent package, which does two things:
@@ -114,9 +114,9 @@ On session start, the extension reports:
 
 All workflow commands (`/heli-init`, `/heli-review`, `/heli-audit`, `/heli-validate`, `/heli-impact`) are workspace-aware: they check for `.heli-harness/HARNESS.md` before proceeding and suggest `/heli-install` if missing.
 
-In v0.3.3, `/hh-status` shows visible harness state: package version, package/workspace mode, current working directory, target repo if known, active profile if known, active policies if any, active hooks, recent hook activity, skill count, and probe state.
+In v0.4.0, `/hh-status` shows visible harness state: package version, package/workspace mode, current working directory, target repo if known, active profile if known, policy directory and files, safety directory and files, `command-rules.json` parse state, active hooks, recent hook activity, skill count, and probe state.
 
-`/heli-validate lint` runs lightweight local checks for repo profile taxonomy and run report completeness. It warns by default so older workspaces are not broken aggressively. Policy overlays are still planned for v0.4.0.
+`/heli-validate lint` now runs lightweight local checks for repo profiles, policy overlays, safety overlays, and run report completeness. Policy overlays are markdown-first and prescriptive. Repo profiles remain descriptive. `command-rules.json` is intentionally lightweight and future-facing rather than a full rule engine.
 
 Hook observability is opt-in and one-shot:
 
@@ -129,7 +129,16 @@ Hook observability is opt-in and one-shot:
 - `pi install ...` does **not** automatically create `.heli-harness/` in every folder. Use `/heli-install` to set up the workspace harness in a specific folder.
 - Workspace install remains the source of truth for parent-workspace behavior.
 - Agent packages may run with broad local access. Inspect source code before installing.
-- **Status: supported** - verified with AXGA and Pi loading v0.3.3.
+- **Status: supported** - verified with AXGA and Pi loading v0.4.0.
+
+### Policy overlays
+
+v0.4.0 adds two new workspace layers:
+
+- `.heli-harness/policies/` for prescriptive team rules.
+- `.heli-harness/safety/` for command tiers, secret guidance, and a lightweight `command-rules.json` sidecar.
+
+Use policy overlays for `Required`, `Recommended`, `Forbidden`, `Requires approval`, and `Exceptions`. Keep repo profiles descriptive. Full adapter compilation of policy overlays is not implemented yet, and v0.4.1 profile taxonomy refinements plus v0.4.2 multi-repo targeting remain future milestones.
 
 ### Codex
 
@@ -176,7 +185,7 @@ If you want to inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.3.3
+git checkout v0.4.0
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```

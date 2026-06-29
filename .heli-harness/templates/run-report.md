@@ -24,23 +24,45 @@ Summary:
 
 ## Commands run
 
-- 
+-
 
 ## Validation
 
-- 
+-
+
+## Policies loaded
+
+-
+
+## Safety overlays loaded
+
+-
 
 ## Policy decisions
 
+Decisions:
+
 Deviations:
 
+Exception used:
+
 Justification:
+
+## Approval evidence
+
+-
+
+## Safety events
+
+-
 
 ## Risks
 
 Known limitations:
 
 Residual risks:
+
+Unresolved policy risks:
 
 Rollback notes:
 
