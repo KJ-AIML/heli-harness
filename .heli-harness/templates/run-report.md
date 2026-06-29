@@ -2,27 +2,48 @@
 
 Date:
 
+## Target repo
+
 Target repo:
 
-Task:
+Workspace:
+
+Git root:
+
+## Task
+
+Intent:
 
 Risk tier:
 
 Summary:
 
-Files changed:
+## Files changed
+
+-
+
+## Commands run
+
 - 
 
-Verification commands:
+## Validation
+
 - 
 
-Results:
+## Policy decisions
 
-Failed attempts:
+Deviations:
+
+Justification:
+
+## Risks
+
+Known limitations:
 
 Residual risks:
 
 Rollback notes:
 
-Next actions:
+## Next steps
 
+Next safest action:

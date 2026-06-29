@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.3.3 - Status, Profile Lint, and Report Gates
+
+### Added
+- Improved `/hh-status` with version, workspace mode, profile, policies, hooks, recent hook activity, skill count, and probe state.
+- Clearer `/heli-hooks` status with probe explanations and explicit one-shot probe state.
+- Profile taxonomy lint through `/heli-validate lint` and `/heli-validate profile`.
+- Report completeness lint through `/heli-validate lint` and `/heli-validate report`.
+- Updated profile and run report templates for taxonomy and report gates.
+
+### Notes
+- No runtime, orchestration, database, hosted telemetry, or vector memory expansion.
+- Policy overlays remain deferred to v0.4.0.
+- Heli remains lightweight, local, markdown-first, inspectable, and adapter-friendly.
+
 ## v0.3.2 - Hook Observability Probes
 
 ### Added

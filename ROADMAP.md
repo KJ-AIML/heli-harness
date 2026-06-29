@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.3.2
+## Current Baseline: v0.3.3
 
-Latest stable release: `v0.3.2`
+Latest stable release: `v0.3.3`
 
-Release commit: `906fafa50d495941500bc43d4fdb26a1e7dd2ade`
+Release commit: see tag `v0.3.3`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.3.2>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.3.3>
 
 Stable behavior in this baseline:
 
@@ -19,6 +19,12 @@ Stable behavior in this baseline:
   - one-shot `before_agent_start` canary with `HELI_HOOK_OK`
   - `/heli-hooks test-guard`
   - one-shot `tool_call` guard canary with `HELI_GUARD_OK`
+- Status and lint gates:
+  - improved `/hh-status`
+  - clearer `/heli-hooks` status
+  - `/heli-validate lint`
+  - profile taxonomy warnings
+  - report completeness warnings
 
 ## Product Positioning
 

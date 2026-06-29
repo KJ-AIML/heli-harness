@@ -4,7 +4,50 @@ Repo name:
 
 Purpose:
 
-Primary languages/frameworks:
+## Observed stack
+
+-
+
+## Existing patterns
+
+- Pattern:
+- Evidence path:
+
+## Recommended conventions
+
+-
+
+## Known tech debt
+
+- Debt:
+- Evidence path:
+- Safer alternative:
+
+## Forbidden patterns
+
+-
+
+## Command tiers
+
+Safe:
+-
+
+Requires approval:
+-
+
+Forbidden:
+-
+
+## Repo risks
+
+-
+
+## Exceptions
+
+- Exception:
+- Justification:
+
+## Operational notes
 
 Branch policy:
 
@@ -21,10 +64,3 @@ Deployment policy:
 Release policy:
 
 Ownership/review expectations:
-
-Known fragile areas:
-
-S2/S3 surfaces:
-
-Notes:
-

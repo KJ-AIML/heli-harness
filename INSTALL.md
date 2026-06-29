@@ -7,7 +7,7 @@
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.3.0
+git checkout v0.3.3
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install
@@ -19,7 +19,7 @@ Remove-Item -Recurse -Force hh-source
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.3.0
+git checkout v0.3.3
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -38,13 +38,14 @@ rm -rf hh-source
 2. Start agents from the parent workspace
 3. Use the first-run prompt (see README.md)
 
-## Pi package install
+## Pi / AXGA package install
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.3.0
+pi install git:github.com/KJ-AIML/heli-harness@v0.3.3
+axga install git:github.com/KJ-AIML/heli-harness@v0.3.3
 ```
 
-Then run `/heli-install` inside Pi to install the workspace harness.
+Then run `/heli-install` inside Pi or AXGA to install the workspace harness.
 
 ## Uninstall
 

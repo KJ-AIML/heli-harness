@@ -229,6 +229,8 @@ Reports should include:
 
 Reports prove process discipline. They should be lintable before a task is considered complete.
 
+In v0.3.3, Heli adds lightweight report lint through `/heli-validate lint` and `/heli-validate report`. The linter warns by default when reports omit target repo, task, files changed, commands run, validation, policy decisions, risks, or next steps. It does not enforce full policy overlays yet; those remain part of v0.4.0.
+
 ## Adapter Responsibilities
 
 Adapters translate the harness into each tool's loading model.

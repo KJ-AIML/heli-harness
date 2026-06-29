@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { execSync } from "node:child_process";
 import { platform } from "node:os";
@@ -26,6 +26,46 @@ function verifyInstall(cwd) {
 	];
 	const missing = checks.filter((path) => !existsSync(path));
 	return { success: missing.length === 0, missing };
+}
+
+function safeReadText(path) {
+	try {
+		return readFileSync(path, "utf8");
+	} catch (_error) {
+		return "";
+	}
+}
+
+function safeReadJson(path) {
+	try {
+		return JSON.parse(readFileSync(path, "utf8"));
+	} catch (_error) {
+		return null;
+	}
+}
+
+function safeListFiles(dir) {
+	try {
+		return readdirSync(dir).map((name) => join(dir, name));
+	} catch (_error) {
+		return [];
+	}
+}
+
+function isFile(path) {
+	try {
+		return statSync(path).isFile();
+	} catch (_error) {
+		return false;
+	}
+}
+
+function isDirectory(path) {
+	try {
+		return statSync(path).isDirectory();
+	} catch (_error) {
+		return false;
+	}
 }
 
 function runInstaller(cwd) {
@@ -112,6 +152,144 @@ function normalizeCommandText(args) {
 	return "";
 }
 
+function getPackageVersion() {
+	const packageJson = safeReadJson(join(getPackageRoot(), "package.json"));
+	return packageJson && packageJson.version ? packageJson.version : "unknown";
+}
+
+function getSkillCount(cwd) {
+	const manifest =
+		safeReadJson(join(cwd, ".heli-harness", "manifest.json")) ||
+		safeReadJson(join(getPackageRoot(), ".heli-harness", "manifest.json"));
+	if (manifest && Array.isArray(manifest.skills)) return manifest.skills.length;
+	return "unknown";
+}
+
+function getTargetRepo(cwd) {
+	const task = safeReadText(join(cwd, ".heli-harness", "state", "current-task.md"));
+	const match = task.match(/^Target repo:\s*(.+)$/im);
+	if (!match || !match[1].trim()) return "not configured";
+	return match[1].trim();
+}
+
+function getActiveProfile(cwd, targetRepo) {
+	const profilesDir = join(cwd, ".heli-harness", "profiles");
+	if (!isDirectory(profilesDir)) return "not installed in this workspace";
+	if (targetRepo && targetRepo !== "not configured") {
+		const direct = join(profilesDir, `${targetRepo}.md`);
+		if (existsSync(direct)) return direct;
+	}
+	const profiles = safeListFiles(profilesDir).filter((path) => path.endsWith(".md") && isFile(path));
+	if (profiles.length === 0) return "not configured";
+	if (profiles.length === 1) return profiles[0];
+	return `${profiles.length} profiles found; target repo not resolved`;
+}
+
+function getActivePolicies(cwd) {
+	const policiesDir = join(cwd, ".heli-harness", "policies");
+	if (!isDirectory(policiesDir)) return "not configured";
+	const policies = safeListFiles(policiesDir).filter((path) => path.endsWith(".md") && isFile(path));
+	if (policies.length === 0) return "not configured";
+	return policies.map((path) => path.split(/[\\/]/).pop()).join(", ");
+}
+
+function hasHeading(text, heading) {
+	const pattern = new RegExp(`^#{1,6}\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "im");
+	return pattern.test(text);
+}
+
+function pushMissingSectionWarnings(warnings, label, text, sections) {
+	for (const section of sections) {
+		if (!hasHeading(text, section)) warnings.push(`${label}: missing section "${section}"`);
+	}
+}
+
+function lintProfiles(cwd) {
+	const profilesDir = join(cwd, ".heli-harness", "profiles");
+	const requiredSections = [
+		"Observed stack",
+		"Existing patterns",
+		"Recommended conventions",
+		"Known tech debt",
+		"Forbidden patterns",
+		"Command tiers",
+		"Repo risks",
+		"Exceptions",
+	];
+	if (!isDirectory(profilesDir)) return { checked: 0, warnings: ["No profile directory found."] };
+	const profiles = safeListFiles(profilesDir).filter((path) => path.endsWith(".md") && isFile(path));
+	if (profiles.length === 0) return { checked: 0, warnings: ["No repo profiles found."] };
+	const warnings = [];
+	for (const profile of profiles) {
+		const label = profile.split(/[\\/]/).pop();
+		const text = safeReadText(profile);
+		const lower = text.toLowerCase();
+		pushMissingSectionWarnings(warnings, label, text, requiredSections);
+		if (/follow existing patterns/i.test(text) && !hasHeading(text, "Known tech debt")) {
+			warnings.push(`${label}: says "follow existing patterns" without a Known tech debt section`);
+		}
+		if (/(required|must|forbidden|do not|requires approval)/i.test(text) && !hasHeading(text, "Forbidden patterns")) {
+			warnings.push(`${label}: may mix prescriptive policy with repo facts; move policy to overlays in v0.4.0`);
+		}
+		if (/(risky|unsafe|hardcoded|secret|credential|fragile|deprecated)/i.test(text) && !/known tech debt|forbidden patterns|repo risks/i.test(lower)) {
+			warnings.push(`${label}: mentions risky patterns without classifying them`);
+		}
+	}
+	return { checked: profiles.length, warnings };
+}
+
+function lintReports(cwd) {
+	const reportDirs = [join(cwd, ".heli-harness", "state", "reports"), join(cwd, ".heli-harness", "state")];
+	const requiredSections = [
+		"Target repo",
+		"Task",
+		"Files changed",
+		"Commands run",
+		"Validation",
+		"Policy decisions",
+		"Risks",
+		"Next steps",
+	];
+	const reports = [];
+	for (const dir of reportDirs) {
+		for (const file of safeListFiles(dir)) {
+			const name = file.split(/[\\/]/).pop();
+			if (!file.endsWith(".md") || !isFile(file)) continue;
+			if (["README.md", "current-task.md", "decisions.md"].includes(name)) continue;
+			reports.push(file);
+		}
+	}
+	if (reports.length === 0) return { checked: 0, warnings: ["No run reports found."] };
+	const warnings = [];
+	for (const report of reports) {
+		const label = report.split(/[\\/]/).pop();
+		const text = safeReadText(report);
+		pushMissingSectionWarnings(warnings, label, text, requiredSections);
+		if (/complete|completed|done/i.test(text) && !/validation|test|check/i.test(text)) {
+			warnings.push(`${label}: claims completion without validation evidence`);
+		}
+		if (/policy deviation|deviation/i.test(text) && !/justification|because|reason/i.test(text)) {
+			warnings.push(`${label}: mentions policy deviation without justification`);
+		}
+		if (/skip|skipped/i.test(text) && /validation|test|check/i.test(text) && !/because|reason|not available|not applicable/i.test(text)) {
+			warnings.push(`${label}: mentions skipped validation without a reason`);
+		}
+	}
+	return { checked: reports.length, warnings };
+}
+
+function notifyLintResult(ctx, title, result) {
+	notify(ctx, title, result.warnings.length === 0 ? "success" : "warning");
+	notify(ctx, `Checked: ${result.checked}`, "info");
+	if (result.warnings.length === 0) {
+		notify(ctx, "Warnings: none", "success");
+		return;
+	}
+	for (const warning of result.warnings) {
+		notify(ctx, `Warning: ${warning}`, "warning");
+	}
+}
+
 async function confirmDangerous(ctx, title, message, reason) {
 	const ui = getUi(ctx);
 	if (ui && typeof ui.confirm === "function") {
@@ -127,6 +305,10 @@ export default function heliHarnessExtension(pi) {
 	let lastCtx = null;
 	let hookProbePromptPending = false;
 	let hookProbeGuardPending = false;
+	let lastSessionStartAt = "not observed";
+	let lastBeforeAgentStartAt = "not observed";
+	let lastToolGuardAt = "not observed";
+	let lastInputShortcutAt = "not observed";
 
 	function syncStatus(ctx) {
 		if (ctx) lastCtx = ctx;
@@ -191,13 +373,23 @@ export default function heliHarnessExtension(pi) {
 		const harnessPath = join(cwd, ".heli-harness");
 		const harnessMd = join(harnessPath, "HARNESS.md");
 		const harnessDetected = detectWorkspaceHarness(cwd);
+		const targetRepo = getTargetRepo(cwd);
 		notify(ctx, "Heli-Harness Status", "info");
+		notify(ctx, `Version: ${getPackageVersion()}`, "info");
+		notify(ctx, `Mode: ${harnessDetected ? "package + workspace" : "package only"}`, harnessDetected ? "success" : "warning");
 		notify(ctx, `CWD: ${cwd}`, "info");
 		notify(ctx, `Workspace harness: ${harnessDetected ? "detected" : "not installed"}`, harnessDetected ? "success" : "warning");
+		notify(ctx, `Target repo: ${targetRepo}`, "info");
+		notify(ctx, `Active profile: ${getActiveProfile(cwd, targetRepo)}`, "info");
+		notify(ctx, `Active policies: ${getActivePolicies(cwd)}`, "info");
+		notify(ctx, `Skill count: ${getSkillCount(cwd)}`, "info");
+		notify(ctx, "Active hooks: session_start, before_agent_start, tool_call, input", "info");
+		notify(ctx, `Recent hooks: session_start=${lastSessionStartAt}; before_agent_start=${lastBeforeAgentStartAt}; tool_call_guard=${lastToolGuardAt}; input_shortcut=${lastInputShortcutAt}`, "info");
+		notify(ctx, `Probe state: prompt=${hookProbePromptPending ? "armed" : "inactive"}; guard=${hookProbeGuardPending ? "armed" : "inactive"}`, hookProbePromptPending || hookProbeGuardPending ? "warning" : "info");
 		if (harnessDetected) {
 			notify(ctx, `HARNESS.md: ${harnessMd}`, "info");
 		} else {
-			notify(ctx, "Run /heli-install or /hh-install to set up workspace harness", "info");
+			notify(ctx, "Next: run /heli-install or /hh-install to set up workspace harness", "info");
 		}
 	};
 
@@ -213,6 +405,20 @@ export default function heliHarnessExtension(pi) {
 			notify(ctx, `Running ${description}...`, "info");
 			pi.sendUserMessage(`/skill:${skillName}`);
 		};
+	};
+
+	const validateHandler = async (_args, ctx) => {
+		const action = normalizeCommandText(_args).toLowerCase();
+		const cwd = process.cwd();
+		if (action === "lint" || action === "profile" || action === "profiles") {
+			notifyLintResult(ctx, "Heli profile lint", lintProfiles(cwd));
+			if (action !== "lint") return;
+		}
+		if (action === "lint" || action === "report" || action === "reports") {
+			notifyLintResult(ctx, "Heli report lint", lintReports(cwd));
+			return;
+		}
+		return workflowHandler("heli-validate", "test validation")(_args, ctx);
 	};
 
 	const hooksStatusHandler = async (_args, ctx) => {
@@ -234,11 +440,15 @@ export default function heliHarnessExtension(pi) {
 		const cwd = process.cwd();
 		const harnessDetected = detectWorkspaceHarness(cwd);
 		notify(ctx, "Heli-Harness Auto Hooks Status", "info");
-		notify(ctx, `Workspace harness: ${harnessDetected ? "detected" : "not installed"}`, harnessDetected ? "success" : "warning");
-		notify(ctx, `before_agent_start injection: ${harnessDetected ? "active" : "inactive"}`, "info");
+		notify(ctx, `session_start hook: ${lastSessionStartAt === "not observed" ? "registered, not observed this session" : `observed at ${lastSessionStartAt}`}`, "info");
+		notify(ctx, `before_agent_start injection: ${harnessDetected ? "active when workspace is detected" : "inactive; workspace not installed"}`, harnessDetected ? "success" : "warning");
 		notify(ctx, "tool_call safety guard: active", "info");
 		notify(ctx, "input shortcuts: active", "info");
-		notify(ctx, `probe mode: ${hookProbePromptPending || hookProbeGuardPending ? "armed" : "inactive"}`, "info");
+		notify(ctx, `prompt probe: ${hookProbePromptPending ? "armed" : "inactive"}`, hookProbePromptPending ? "warning" : "info");
+		notify(ctx, `test-guard probe: ${hookProbeGuardPending ? "armed" : "inactive"}`, hookProbeGuardPending ? "warning" : "info");
+		notify(ctx, "/heli-hooks probe proves next-turn prompt injection by asking for HELI_HOOK_OK", "info");
+		notify(ctx, "/heli-hooks test-guard proves tool_call interception by returning HELI_GUARD_OK before execution", "info");
+		notify(ctx, "Probes do not prove every future host hook event; they prove this adapter path is active now", "info");
 		notify(ctx, "Use /heli-hooks probe, /heli-hooks probe-off, or /heli-hooks test-guard", "info");
 		if (!harnessDetected) {
 			notify(ctx, "Run /heli-install to activate workspace hooks", "info");
@@ -248,6 +458,7 @@ export default function heliHarnessExtension(pi) {
 	pi.on("session_start", async (_event, ctx) => {
 		const cwd = process.cwd();
 		workspaceDetected = detectWorkspaceHarness(cwd);
+		lastSessionStartAt = new Date().toISOString();
 		if (workspaceDetected) {
 			notify(ctx, "Heli-Harness active", "success");
 		} else {
@@ -258,6 +469,7 @@ export default function heliHarnessExtension(pi) {
 
 	pi.on("before_agent_start", async (event) => {
 		if (!workspaceDetected) return undefined;
+		lastBeforeAgentStartAt = new Date().toISOString();
 		const existingPrompt = event && event.systemPrompt ? event.systemPrompt : "";
 		const heliInstructions = `
 Heli-Harness workspace detected.
@@ -290,6 +502,7 @@ HELI_HOOK_OK`
 			const command = String(input.command);
 			for (const { pattern, reason } of DANGEROUS_BASH_PATTERNS) {
 				if (!pattern.test(command)) continue;
+				lastToolGuardAt = new Date().toISOString();
 				if (hookProbeGuardPending) {
 					hookProbeGuardPending = false;
 					return { block: true, reason: `HELI_GUARD_OK: intercepted ${reason}` };
@@ -302,6 +515,7 @@ HELI_HOOK_OK`
 			const path = String(input.path);
 			if (isSuspiciousHarnessRuntimePath(path)) {
 				const reason = "Suspicious harness runtime folder detected";
+				lastToolGuardAt = new Date().toISOString();
 				if (hookProbeGuardPending) {
 					hookProbeGuardPending = false;
 					return { block: true, reason: `HELI_GUARD_OK: intercepted ${reason}` };
@@ -311,6 +525,7 @@ HELI_HOOK_OK`
 
 			for (const { pattern, reason } of DANGEROUS_FILE_PATTERNS) {
 				if (pattern.test(path)) {
+					lastToolGuardAt = new Date().toISOString();
 					if (hookProbeGuardPending) {
 						hookProbeGuardPending = false;
 						return { block: true, reason: `HELI_GUARD_OK: intercepted ${reason}` };
@@ -327,15 +542,19 @@ HELI_HOOK_OK`
 		if (event && event.source === "extension") return undefined;
 		const text = String(event && event.text ? event.text : "").trim();
 		if (text === "/review") {
+			lastInputShortcutAt = new Date().toISOString();
 			return { action: "transform", text: "/heli-review" };
 		}
 		if (text === "/audit") {
+			lastInputShortcutAt = new Date().toISOString();
 			return { action: "transform", text: "/heli-audit" };
 		}
 		if (text === "/validate") {
+			lastInputShortcutAt = new Date().toISOString();
 			return { action: "transform", text: "/heli-validate" };
 		}
 		if (text === "/impact") {
+			lastInputShortcutAt = new Date().toISOString();
 			return { action: "transform", text: "/heli-impact" };
 		}
 		return undefined;
@@ -348,7 +567,7 @@ HELI_HOOK_OK`
 	pi.registerCommand("heli-init", { description: "Bootstrap a repo profile for a target repo", handler: workflowHandler("heli-init", "repo profile bootstrap") });
 	pi.registerCommand("heli-review", { description: "Review current repo/diff/task safely", handler: workflowHandler("heli-review", "repo review") });
 	pi.registerCommand("heli-audit", { description: "Repo-wide audit for issues and risks", handler: workflowHandler("heli-audit", "repo audit") });
-	pi.registerCommand("heli-validate", { description: "Run test-validation workflow safely", handler: workflowHandler("heli-validate", "test validation") });
+	pi.registerCommand("heli-validate", { description: "Run test-validation workflow safely; use lint/profile/report for local checks", handler: validateHandler });
 	pi.registerCommand("heli-impact", { description: "Impact analysis for planned changes", handler: workflowHandler("heli-impact", "impact analysis") });
 	pi.registerCommand("heli-hooks", { description: "Show Heli-Harness auto hooks status", handler: hooksStatusHandler });
 }
