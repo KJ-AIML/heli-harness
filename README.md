@@ -24,6 +24,13 @@ Heli-Harness provides that shared layer without replacing repo-local docs.
 - Pi: `.heli-harness/adapters/pi/`
 - Generic agents: `.heli-harness/adapters/generic/`
 
+## Roadmap and Architecture
+
+- [Roadmap](ROADMAP.md)
+- [Governance model](docs/architecture/governance-model.md)
+- [Agent governance research synthesis](docs/research/agent-governance-research-synthesis.md)
+- [ADR 0001: Heli as governance harness](docs/decisions/0001-heli-as-governance-harness.md)
+
 ## Install
 
 Heli-Harness has two install modes. The **workspace harness** is the primary mode — it installs `.heli-harness/` into your parent workspace and is what most users want. The **agent package** mode exposes harness skills/rules to a specific agent host (Pi, etc.) without replacing the workspace model.
