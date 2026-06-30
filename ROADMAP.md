@@ -141,7 +141,8 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.3 | Rules-as-Enforcement | Make safety command rules executable in Pi/AXGA command guards. |
 | v0.5.4 | Safety Classifier Hardening | Harden command classification beyond simple pattern matching. |
 | v0.5.5 | Update Preservation & Tool Coverage | Preserve local overlays during update, broaden tool and path guard coverage. |
-| v0.5.6 | Adapter Wiring Coverage | Improve classifier coverage for git global flags and adapter robustness. |
+| v0.5.6 | Classifier Git Global Flags Hotfix | Normalize git global flags (-C, -c) before rule matching. |
+| v0.5.7 | Adapter Wiring Coverage | Verify adapter file presence, update support matrix, add adapter validation. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -603,16 +604,15 @@ Acceptance criteria:
 - Smoke tests cover tool-agnostic command guard, multi-tool file guard, backup suffix paths, and update preservation.
 - Docs explain update overlay preservation behavior.
 
-## v0.5.6 - Adapter Wiring Coverage (Implemented)
+## v0.5.6 - Classifier Git Global Flags Hotfix (Implemented)
 
 Goal:
-Improve classifier coverage for git global flags and adapter robustness without breaking v0.5.3 command-rules.json source-of-truth or v0.5.4 classifier architecture.
+Normalize git global flags in the command classifier before rule matching, without breaking v0.5.3 command-rules.json source-of-truth or v0.5.4 classifier architecture.
 
 Scope:
 
 - Add git global flags normalization (`-C`, `-c`) in the command classifier.
 - Ensure commands like `git -C repo push` are correctly identified as `git push` for rule matching.
-- Improve adapter wiring robustness for command-bearing tool calls.
 - Add smoke coverage for git global flags normalization.
 
 Non-goals:
@@ -620,12 +620,39 @@ Non-goals:
 - No Claude/Codex/OpenCode adapter implementation.
 - No benchmark matrix runs.
 - No changes to command-rules.json source-of-truth.
+- No adapter wiring verification.
 
 Acceptance criteria:
 
 - `npm run check` passes.
 - Smoke tests cover git global flags normalization (`-C`, `-c`, combined forms).
 - Commands with git global flags are correctly matched against command rules.
+
+## v0.5.7 - Adapter Wiring Coverage (Planned)
+
+Goal:
+Verify that adapter files are present, correctly wired, and documented in the support matrix. Move from "adapter instructions exist" to "adapter wiring is validated."
+
+Scope:
+
+- Add adapter file presence checks to release validation.
+- Verify Pi adapter status documentation is current.
+- Update Cursor/Claude/Codex/OpenCode support matrix with evidence.
+- Add smoke tests for adapter file presence and expected config output.
+- Document which adapters are supported vs. documented vs. planned.
+
+Non-goals:
+
+- No Claude/Codex/OpenCode runtime implementation.
+- No benchmark matrix runs.
+- No changes to command-rules.json source-of-truth.
+
+Acceptance criteria:
+
+- `npm run check` includes adapter wiring validation.
+- Adapter support matrix has evidence for each claimed support level.
+- Smoke tests verify adapter file presence.
+- Docs distinguish supported vs. documented vs. planned adapters.
 
 ## Post-v0.5 Stabilization
 

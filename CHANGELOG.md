@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.5.6 - Adapter Wiring Coverage
+## v0.5.6 - Classifier Git Global Flags Hotfix
 
 ### Added
 
@@ -10,13 +10,13 @@
 ### Changed
 
 - Improved command classifier to strip git global flags before rule matching, closing the gap where `git -C repo push` could bypass push detection.
-- Enhanced adapter wiring robustness for command-bearing tool calls.
 
 ### Notes
 
 - Does not add Claude/Codex/OpenCode adapter implementation.
 - Does not start benchmark matrix runs.
 - Preserves v0.5.3 command-rules.json source-of-truth and v0.5.4 classifier architecture.
+- Adapter Wiring Coverage is deferred to v0.5.7.
 
 ## v0.5.5 - Update Preservation & Tool Coverage
 
