@@ -7,7 +7,7 @@
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.1
+git checkout v0.5.2
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install
@@ -19,7 +19,7 @@ Remove-Item -Recurse -Force hh-source
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.1
+git checkout v0.5.2
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -43,8 +43,8 @@ rm -rf hh-source
 ## Pi / AXGA package install
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.1
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.1
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.2
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.2
 ```
 
 Then run `/heli-install` inside Pi or AXGA to install the workspace harness.

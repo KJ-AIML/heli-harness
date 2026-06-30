@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.5.2 - Dogfood Lint Hotfix
+
+### Fixed
+
+- Fixed Pi/AXGA profile lint so `.heli-harness/profiles/README.md` and `*.example.md` files are not treated as active repo profiles.
+- Added smoke coverage proving profile documentation is ignored, valid active profiles are still checked, and invalid active profiles still emit warnings.
+
+### Notes
+
+- Keeps v0.5.1 intact as published.
+- Moves Rules-as-Enforcement to the next v0.5.x milestone.
+
 ## v0.5.1 - Self-Consistency and Dogfood Cleanup
 
 ### Changed

@@ -18,7 +18,7 @@ These expose harness rules/skills to a specific agent host. They do not replace 
 
 | Host | Command | Status | What it installs | Notes |
 |------|---------|--------|------------------|-------|
-| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.1` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.1` | **supported** | 23 skills + lightweight extension (startup status, `/heli-install`, `/hh-install`, `/hh-status`, `/heli-target`, `/heli-lock`, `/heli-hooks`, `/heli-validate lint`) | Does not auto-create `.heli-harness/`. Use `/heli-install` or `/hh-install` to set up workspace. Local path and remote `git:` verified for v0.5.1 |
+| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.2` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.2` | **supported** | 23 skills + lightweight extension (startup status, `/heli-install`, `/hh-install`, `/hh-status`, `/heli-target`, `/heli-lock`, `/heli-hooks`, `/heli-validate lint`) | Does not auto-create `.heli-harness/`. Use `/heli-install` or `/hh-install` to set up workspace. Local path and remote `git:` verified for v0.5.2 |
 | Codex | Workspace `AGENTS.md` → `.heli-harness/adapters/codex/AGENTS.md` | **supported** | Adapter pointer file created by workspace installer | No marketplace plugin. Requires workspace install first |
 | Claude Code | Workspace `CLAUDE.md` → `.heli-harness/adapters/claude/CLAUDE.md` | **supported** | Adapter pointer file created by workspace installer. Optional hooks require review/consent | No marketplace plugin. Requires workspace install first |
 | Cursor | Workspace `.cursor/rules/` → `.heli-harness/adapters/cursor/CURSOR.md` | **supported** | Adapter created by workspace installer | Requires workspace install first |
@@ -51,7 +51,7 @@ To inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.5.1
+git checkout v0.5.2
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```

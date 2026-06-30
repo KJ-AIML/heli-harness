@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.1
+## Current Baseline: v0.5.2
 
-Latest stable release: `v0.5.1`
+Latest stable release: `v0.5.2`
 
-Release commit: see tag `v0.5.1`
+Release commit: see tag `v0.5.2`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.1>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.2>
 
 Stable behavior in this baseline:
 
@@ -61,6 +61,9 @@ Stable behavior in this baseline:
   - active `heli-harness` repo profile and self-dogfood workspace target defaults
   - release validation covers adapter docs, internal install docs, extension strings, shipped defaults, profile taxonomy, policy exceptions, and benchmark labeling
   - benchmark examples clearly labeled as illustrative until measured runs exist
+- Dogfood lint hotfix:
+  - profile lint ignores documentation and example markdown in `.heli-harness/profiles/`
+  - active profiles remain linted, including invalid active profiles in smoke fixtures
 
 ## Product Positioning
 
@@ -126,6 +129,8 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.4.3 | CI and state safety polish | Self-validate on GitHub, check docs/version consistency, advisory lock warnings for parallel agents. |
 | v0.5.0 | Governance benchmark pack | Measure Heli as a governance layer with repeatable experiments. |
 | v0.5.1 | Self-consistency and dogfood cleanup | Make current claims, shipped defaults, and release validation align before adapter/benchmark expansion. |
+| v0.5.2 | Dogfood lint hotfix | Remove Pi/AXGA profile lint noise from profile docs while preserving active-profile checks. |
+| v0.5.3 | Rules-as-Enforcement | Harden command-rule classification and enforcement behavior. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -482,6 +487,35 @@ Acceptance criteria:
 - `npm run check` passes.
 - `node scripts/validate-release.mjs` catches stale current install examples, stale adapter docs, stale internal install docs, stale extension support strings, invalid active profiles, invalid policy exception blocks, and unlabeled hypothetical benchmark examples.
 - Current baseline and latest stable references point to v0.5.1.
+
+## v0.5.2 - Dogfood Lint Hotfix (Implemented)
+
+Goal:
+Fix a real Pi/AXGA dogfood lint issue found after v0.5.1: profile documentation files under `.heli-harness/profiles/` were being linted as active repo profiles.
+
+Scope:
+
+- Share active-profile file discovery between status/profile selection and profile lint.
+- Ignore `README.md` and `*.example.md` in profile lint.
+- Keep real active profiles such as `heli-harness.md` linted.
+- Keep invalid active profiles warning in smoke coverage.
+
+Non-goals:
+
+- No tag movement for v0.5.1.
+- No Rules-as-Enforcement implementation.
+- No change to report-lint absence warnings.
+
+Acceptance criteria:
+
+- `npm run check` passes.
+- Pi/AXGA `/heli-validate lint` profile lint checks one active shipped profile and reports no profile warnings for `profiles/README.md`.
+- Report absence warnings may remain non-blocking until report semantics are revisited.
+
+## v0.5.3 - Rules-as-Enforcement (Planned)
+
+Goal:
+Turn command-rule classification into stronger enforcement behavior without expanding Heli into a full runtime.
 
 ## Post-v0.5 Stabilization
 
