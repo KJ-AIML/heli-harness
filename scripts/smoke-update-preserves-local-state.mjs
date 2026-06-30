@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { copyFileSync, cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { tmpdir, platform } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const root = process.cwd();
@@ -17,10 +17,32 @@ function run(command, args) {
 	});
 	if (result.status !== 0) {
 		throw new Error(
-			`${command} ${args.join(" ")} failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+			`${command} ${args.join(" ")} failed\nerror:\n${result.error?.message ?? "none"}\nstdout:\n${result.stdout ?? ""}\nstderr:\n${result.stderr ?? ""}`,
 		);
 	}
 	return result;
+}
+
+function copyFilePortable(source, destination) {
+	try {
+		mkdirSync(dirname(destination), { recursive: true });
+		copyFileSync(source, destination);
+	} catch (error) {
+		throw new Error(
+			`copy file failed\nsource: ${source}\ndestination: ${destination}\nplatform: ${platform()}\ncwd: ${process.cwd()}\nerror: ${error.message}`,
+		);
+	}
+}
+
+function copyDirPortable(source, destination) {
+	try {
+		mkdirSync(dirname(destination), { recursive: true });
+		cpSync(source, destination, { recursive: true, force: true });
+	} catch (error) {
+		throw new Error(
+			`copy directory failed\nsource: ${source}\ndestination: ${destination}\nplatform: ${platform()}\ncwd: ${process.cwd()}\nerror: ${error.message}`,
+		);
+	}
 }
 
 function read(path) {
@@ -28,8 +50,8 @@ function read(path) {
 }
 
 function write(path, content) {
-	const dir = join(path, "..");
-	if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+	const dir = dirname(path);
+	mkdirSync(dir, { recursive: true });
 	writeFileSync(path, content);
 }
 
@@ -45,19 +67,20 @@ try {
 		const src = join(sourceRoot, dir);
 		const dst = join(harnessRoot, dir);
 		if (existsSync(src)) {
-			run(platform() === "win32" ? "powershell" : "cp",
-				platform() === "win32"
-					? ["-Command", `Copy-Item -LiteralPath "${src}" -Destination "${dst}" -Recurse -Force`]
-					: ["-R", src, dst]);
+			copyDirPortable(src, dst);
+			assert.ok(existsSync(dst), `${dir}/ should be copied into temp harness`);
 		}
 	}
 	// Copy essential root files
 	for (const file of ["HARNESS.md", "manifest.json"]) {
 		const src = join(sourceRoot, file);
 		if (existsSync(src)) {
-			run("cp", [src, join(harnessRoot, file)]);
+			const dst = join(harnessRoot, file);
+			copyFilePortable(src, dst);
+			assert.ok(existsSync(dst), `${file} should be copied into temp harness`);
 		}
 	}
+	assert.ok(existsSync(join(harnessRoot, "HARNESS.md")), "HARNESS.md should exist before update");
 
 	// Write custom local overlay files
 	const customIndex = JSON.stringify({
@@ -92,12 +115,19 @@ try {
 	const customState = "# Custom Task\n\nUser state must survive updates.\n";
 	const customProfile = "# Real App\n\nUser profile must survive updates.\n";
 
-	writeFileSync(join(harnessRoot, "workspace", "index.json"), `${customIndex}\n`);
-	writeFileSync(join(harnessRoot, "workspace", "target.json"), `${customTarget}\n`);
-	writeFileSync(join(harnessRoot, "policies", "engineering.md"), customPolicy);
-	writeFileSync(join(harnessRoot, "safety", "command-rules.json"), `${customSafety}\n`);
-	writeFileSync(join(harnessRoot, "state", "current-task.md"), customState);
-	writeFileSync(join(harnessRoot, "profiles", "real-app.md"), customProfile);
+	write(join(harnessRoot, "workspace", "index.json"), `${customIndex}\n`);
+	write(join(harnessRoot, "workspace", "target.json"), `${customTarget}\n`);
+	write(join(harnessRoot, "policies", "engineering.md"), customPolicy);
+	write(join(harnessRoot, "safety", "command-rules.json"), `${customSafety}\n`);
+	write(join(harnessRoot, "state", "current-task.md"), customState);
+	write(join(harnessRoot, "profiles", "real-app.md"), customProfile);
+
+	assert.ok(existsSync(join(harnessRoot, "workspace", "index.json")), "workspace/index.json should exist before update");
+	assert.ok(existsSync(join(harnessRoot, "workspace", "target.json")), "workspace/target.json should exist before update");
+	assert.ok(existsSync(join(harnessRoot, "policies", "engineering.md")), "policies/engineering.md should exist before update");
+	assert.ok(existsSync(join(harnessRoot, "safety", "command-rules.json")), "safety/command-rules.json should exist before update");
+	assert.ok(existsSync(join(harnessRoot, "state", "current-task.md")), "state/current-task.md should exist before update");
+	assert.ok(existsSync(join(harnessRoot, "profiles", "real-app.md")), "profiles/real-app.md should exist before update");
 
 	// Run update
 	if (platform() === "win32") {
