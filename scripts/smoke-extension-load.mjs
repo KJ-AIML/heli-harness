@@ -8,7 +8,7 @@ const tempDir = mkdtempSync(join(tmpdir(), "heli-extension-"));
 mkdirSync(join(tempDir, "extensions"), { recursive: true });
 mkdirSync(join(tempDir, ".heli-harness"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "HARNESS.md"), "# Harness\n");
-writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.5.3" }));
+writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.5.4" }));
 mkdirSync(join(tempDir, ".heli-harness", "profiles"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "profiles", "demo.md"), `# Demo
 
@@ -184,6 +184,9 @@ writeFileSync(join(tempDir, ".heli-harness", "safety", "command-rules.json"), JS
 		{ id: "git-push", match: "git push", tier: "T5", reason: "Remote git writes need explicit approval" },
 		{ id: "git-tag", match: "git tag", tier: "T5", reason: "Version tags are release actions" },
 		{ id: "npm-publish", match: "npm publish", tier: "T5", reason: "Publish actions are release operations" },
+		{ id: "pnpm-publish", match: "pnpm publish", tier: "T5", reason: "Publish actions are release operations" },
+		{ id: "yarn-publish", match: "yarn publish", tier: "T5", reason: "Publish actions are release operations" },
+		{ id: "npm-run-publish", match: "npm run publish", tier: "T5", reason: "Publish actions are release operations" },
 		{ id: "destructive-delete", match: "rm -rf", tier: "T6", reason: "Recursive delete is destructive" },
 		{ id: "custom-smoke-rule", match: "custom-block-me", tier: "T5", reason: "Custom smoke command needs approval" },
 	],
@@ -400,17 +403,69 @@ assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git push"
 	block: true,
 	reason: "Blocked: Remote git writes need explicit approval. Target repo: demo. Run operation explicitly to override.",
 });
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git   push" } }, {}), {
+	block: true,
+	reason: "Blocked: Remote git writes need explicit approval. Target repo: demo. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "GIT PUSH" } }, {}), {
+	block: true,
+	reason: "Blocked: Remote git writes need explicit approval. Target repo: demo. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "bash -c \"git push\"" } }, {}), {
+	block: true,
+	reason: "Blocked: Remote git writes need explicit approval. Target repo: demo. Run operation explicitly to override.",
+});
 assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "npm publish" } }, {}), {
 	block: true,
 	reason: "Blocked: Publish actions are release operations. Target repo: demo. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "pnpm publish" } }, {}), {
+	block: true,
+	reason: "Blocked: Publish actions are release operations. Target repo: demo. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "yarn publish" } }, {}), {
+	block: true,
+	reason: "Blocked: Publish actions are release operations. Target repo: demo. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "npm run publish" } }, {}), {
+	block: true,
+	reason: "Blocked: Publish actions are release operations. Target repo: demo. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "rm -r -f build" } }, {}), {
+	block: true,
+	reason: "Blocked: Recursive delete is destructive. Target repo: demo. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "rm --recursive --force build" } }, {}), {
+	block: true,
+	reason: "Blocked: Recursive delete is destructive. Target repo: demo. Run operation explicitly to override.",
 });
 assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "custom-block-me --flag" } }, {}), {
 	block: true,
 	reason: "Blocked: Custom smoke command needs approval. Target repo: demo. Run operation explicitly to override.",
 });
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "echo hi > ../outside.txt" } }, {}), {
+	block: true,
+	reason: "Blocked: shell redirection writes outside writesAllowedUnder for demo",
+});
 assert.deepEqual(await toolCall({ toolName: "write", input: { path: ".env" } }, {}), {
 	block: true,
 	reason: "Blocked: .env files contain secrets. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "write", input: { path: ".env.local" } }, {}), {
+	block: true,
+	reason: "Blocked: env files contain secrets. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "write", input: { path: "secrets.json" } }, {}), {
+	block: true,
+	reason: "Blocked: secret files contain secrets. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "write", input: { path: "notes.txt", content: "OPENAI_API_KEY=sk-test" } }, {}), {
+	block: true,
+	reason: "Blocked: secret-like content detected. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "cat .env" } }, {}), {
+	block: true,
+	reason: "Blocked: sensitive file read detected. Target repo: demo. Run operation explicitly to override.",
 });
 
 const sessionStart = events.find((event) => event.name === "session_start").handler;
@@ -420,7 +475,7 @@ const baselinePrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
 assert(!baselinePrompt.systemPrompt.includes("HELI_HOOK_OK"));
 
 await commands.find((command) => command.name === "hh-status").options.handler({}, ctx);
-assert(notifications.some((item) => item.message === "Version: 0.5.3"));
+assert(notifications.some((item) => item.message === "Version: 0.5.4"));
 assert(notifications.some((item) => item.message === "Mode: package + workspace"));
 assert(notifications.some((item) => item.message === "Target repo: demo"));
 assert(notifications.some((item) => item.message === "Policy directory: detected"));

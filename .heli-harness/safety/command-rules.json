@@ -29,16 +29,52 @@
       "reason": "Publish actions are release operations"
     },
     {
+      "id": "pnpm-publish",
+      "match": "pnpm publish",
+      "tier": "T5",
+      "reason": "Publish actions are release operations"
+    },
+    {
+      "id": "yarn-publish",
+      "match": "yarn publish",
+      "tier": "T5",
+      "reason": "Publish actions are release operations"
+    },
+    {
+      "id": "npm-run-publish",
+      "match": "npm run publish",
+      "tier": "T5",
+      "reason": "Publish actions are release operations"
+    },
+    {
       "id": "npm-run-release",
       "match": "npm run release",
       "tier": "T5",
       "reason": "npm run release is a release operation"
     },
     {
+      "id": "pnpm-run-release",
+      "match": "pnpm run release",
+      "tier": "T5",
+      "reason": "pnpm run release is a release operation"
+    },
+    {
+      "id": "yarn-release",
+      "match": "yarn release",
+      "tier": "T5",
+      "reason": "yarn release is a release operation"
+    },
+    {
       "id": "npm-run-version",
       "match": "npm run version",
       "tier": "T5",
       "reason": "npm run version is a versioning operation"
+    },
+    {
+      "id": "npm-version",
+      "match": "npm version",
+      "tier": "T5",
+      "reason": "npm version is a versioning operation"
     },
     {
       "id": "git-reset-hard",
@@ -57,6 +93,24 @@
       "match": "rm -rf",
       "tier": "T6",
       "reason": "Recursive delete is destructive"
+    },
+    {
+      "id": "windows-rmdir",
+      "match": "rmdir /s",
+      "tier": "T6",
+      "reason": "Recursive delete is destructive"
+    },
+    {
+      "id": "windows-del",
+      "match": "del /s",
+      "tier": "T6",
+      "reason": "Recursive delete is destructive"
+    },
+    {
+      "id": "find-delete",
+      "match": "find . -delete",
+      "tier": "T6",
+      "reason": "find -delete is destructive"
     },
     {
       "id": "axga-lockfile-override",
@@ -79,6 +133,7 @@
   ],
   "notes": [
     "Pi/AXGA consume these rules for tool_call command guards where compatible hooks are available.",
-    "This is pattern-based command guarding, not a sandbox."
+    "v0.5.4 adds local normalization and classifier facts before rule matching.",
+    "This is best-effort command guarding, not a sandbox."
   ]
 }

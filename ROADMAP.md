@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.3
+## Current Baseline: v0.5.4
 
-Latest stable release: `v0.5.3`
+Latest stable release: `v0.5.4`
 
-Release commit: see tag `v0.5.3`
+Release commit: see tag `v0.5.4`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.3>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.4>
 
 Stable behavior in this baseline:
 
@@ -68,6 +68,10 @@ Stable behavior in this baseline:
   - Pi/AXGA command guards consume `.heli-harness/safety/command-rules.json`
   - release validation checks command-rule schema
   - invalid or missing command-rule config falls back to conservative built-in defaults
+- Safety Classifier Hardening:
+  - command normalization handles repeated whitespace, case variants, simple chains, and common shell wrappers
+  - classifier facts improve matching for publish/release variants and destructive delete variants
+  - shell redirection writes outside `writesAllowedUnder`, sensitive reads, expanded secret paths, and obvious secret-like write content are guarded where host hooks expose inputs
 
 ## Product Positioning
 
@@ -136,6 +140,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.2 | Dogfood lint hotfix | Remove Pi/AXGA profile lint noise from profile docs while preserving active-profile checks. |
 | v0.5.3 | Rules-as-Enforcement | Make safety command rules executable in Pi/AXGA command guards. |
 | v0.5.4 | Safety Classifier Hardening | Harden command classification beyond simple pattern matching. |
+| v0.5.5 | Adapter Wiring Coverage | Extend adapter wiring coverage without starting benchmark matrix runs. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -544,10 +549,35 @@ Acceptance criteria:
 - Invalid `command-rules.json` is detected by smoke/release validation.
 - Missing or invalid command-rule config does not silently disable safety.
 
-## v0.5.4 - Safety Classifier Hardening (Planned)
+## v0.5.4 - Safety Classifier Hardening (Implemented)
 
 Goal:
 Harden command classification beyond simple configured pattern matching.
+
+Scope:
+
+- Normalize commands before rule matching.
+- Preserve `.heli-harness/safety/command-rules.json` as the policy source of truth.
+- Detect common publish/release variants, destructive delete variants, shell wrappers, simple chains, shell redirection writes outside the selected target, secret-path writes, secret-like write content, and obvious sensitive reads.
+- Keep the classifier local, dependency-free, and best-effort.
+
+Non-goals:
+
+- No sandbox.
+- No full shell parser.
+- No Claude/Codex/OpenCode adapter implementation.
+- No benchmark runner or benchmark matrix runs.
+
+Acceptance criteria:
+
+- `npm run check` passes.
+- Smoke tests cover normalized command bypass forms and secret/redirection guards.
+- Docs state enforcement depends on host-compatible `tool_call` hooks.
+
+## v0.5.5 - Adapter Wiring Coverage (Planned)
+
+Goal:
+Move on to adapter wiring coverage unless another dogfood hotfix is needed.
 
 ## Post-v0.5 Stabilization
 

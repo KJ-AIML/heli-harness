@@ -108,11 +108,20 @@ const FALLBACK_COMMAND_RULES = [
 	{ id: "git-push", match: "git push", tier: "T5", reason: "Remote git writes need explicit approval" },
 	{ id: "git-tag", match: "git tag", tier: "T5", reason: "Version tags are release actions" },
 	{ id: "npm-publish", match: "npm publish", tier: "T5", reason: "Publish actions are release operations" },
+	{ id: "pnpm-publish", match: "pnpm publish", tier: "T5", reason: "Publish actions are release operations" },
+	{ id: "yarn-publish", match: "yarn publish", tier: "T5", reason: "Publish actions are release operations" },
+	{ id: "npm-run-publish", match: "npm run publish", tier: "T5", reason: "Publish actions are release operations" },
 	{ id: "npm-run-release", match: "npm run release", tier: "T5", reason: "npm run release is a release operation" },
+	{ id: "pnpm-run-release", match: "pnpm run release", tier: "T5", reason: "pnpm run release is a release operation" },
+	{ id: "yarn-release", match: "yarn release", tier: "T5", reason: "yarn release is a release operation" },
 	{ id: "npm-run-version", match: "npm run version", tier: "T5", reason: "npm run version is a versioning operation" },
+	{ id: "npm-version", match: "npm version", tier: "T5", reason: "npm version is a versioning operation" },
 	{ id: "git-reset-hard", match: "git reset --hard", tier: "T6", reason: "git reset --hard is destructive" },
 	{ id: "git-clean-force", match: "git clean -fd", tier: "T6", reason: "git clean -fd is destructive" },
 	{ id: "destructive-delete", match: "rm -rf", tier: "T6", reason: "Recursive delete is destructive" },
+	{ id: "windows-rmdir", match: "rmdir /s", tier: "T6", reason: "Recursive delete is destructive" },
+	{ id: "windows-del", match: "del /s", tier: "T6", reason: "Recursive delete is destructive" },
+	{ id: "find-delete", match: "find . -delete", tier: "T6", reason: "find -delete is destructive" },
 	{ id: "axga-lockfile-override", match: "AXGA_ALLOW_LOCKFILE_CHANGE=1", tier: "T4", reason: "AXGA lockfile change override" },
 	{ id: "axga-test-script", match: "./axga-test.sh", tier: "T4", reason: "axga-test.sh may consume API credits" },
 	{ id: "npm-e2e-swarm", match: "npm run e2e:swarm", tier: "T4", reason: "e2e:swarm may consume API credits" },
@@ -122,9 +131,22 @@ const COMMAND_RULE_TIERS = new Set(["T0", "T1", "T2", "T3", "T4", "T5", "T6"]);
 
 const DANGEROUS_FILE_PATTERNS = [
 	{ pattern: /\.env$/, reason: ".env files contain secrets" },
+	{ pattern: /(^|\/)\.env\.(local|production|development|test)$/, reason: "env files contain secrets" },
 	{ pattern: /\.pem$/, reason: "PEM files are private keys" },
 	{ pattern: /\.key$/, reason: "Key files are credentials" },
-	{ pattern: /credentials/, reason: "Credential files contain secrets" },
+	{ pattern: /(^|\/)credentials(\.json)?$/, reason: "Credential files contain secrets" },
+	{ pattern: /(^|\/)secrets\.json$/, reason: "secret files contain secrets" },
+	{ pattern: /(^|\/)\.(npmrc|pypirc)$/, reason: "package registry config may contain secrets" },
+	{ pattern: /(^|\/)\.ssh\/id_[^/]+$/, reason: "SSH private keys contain secrets" },
+];
+
+const SECRET_CONTENT_PATTERNS = [
+	/sk-[A-Za-z0-9_-]{8,}/,
+	/ghp_[A-Za-z0-9_]{8,}/,
+	/xoxb-[A-Za-z0-9-]{8,}/,
+	/AKIA[0-9A-Z]{12,}/,
+	/-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+	/\b(OPENAI_API_KEY|ANTHROPIC_API_KEY|DASHSCOPE_API_KEY)\s*=\s*\S+/,
 ];
 
 function getUi(ctx) {
@@ -339,7 +361,115 @@ function escapeRegExp(value) {
 
 function compileCommandMatch(match) {
 	const pattern = escapeRegExp(match.trim()).replace(/\s+/g, "\\s+");
-	return new RegExp(pattern);
+	return new RegExp(pattern, "i");
+}
+
+function normalizeSafetyPath(value) {
+	return String(value || "").trim().replace(/^['"]|['"]$/g, "").replace(/\\/g, "/").toLowerCase();
+}
+
+function collapseCommand(value) {
+	return String(value || "").replace(/\\/g, "/").replace(/\s+/g, " ").trim();
+}
+
+function stripOuterQuotes(value) {
+	const text = String(value || "").trim();
+	if ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("'") && text.endsWith("'"))) {
+		return text.slice(1, -1);
+	}
+	return text;
+}
+
+function splitCommandChain(command) {
+	return collapseCommand(command).split(/\s*(?:&&|\|\||;)\s*/).filter(Boolean);
+}
+
+function unwrapShellCommand(command) {
+	const text = collapseCommand(command);
+	const match =
+		text.match(/^(?:bash|sh)\s+-c\s+([\s\S]+)$/i) ||
+		text.match(/^cmd(?:\.exe)?\s+\/c\s+([\s\S]+)$/i) ||
+		text.match(/^(?:powershell|pwsh)(?:\.exe)?\s+(?:-command|-c)\s+([\s\S]+)$/i);
+	return match ? stripOuterQuotes(match[1]) : "";
+}
+
+function commandTokens(command) {
+	return collapseCommand(command).toLowerCase().split(" ").filter(Boolean);
+}
+
+function classifyCommandAliases(command) {
+	const tokens = commandTokens(command);
+	const variants = [];
+	if (tokens[0] === "rm" && (tokens.some((token) => token === "-rf" || token === "-fr") || (tokens.includes("-r") && tokens.includes("-f")))) variants.push("rm -rf");
+	if (tokens[0] === "rm" && tokens.includes("--recursive") && tokens.includes("--force")) variants.push("rm -rf");
+	if (tokens[0] === "git" && tokens[1] === "clean" && (tokens.includes("-fd") || tokens.includes("-df") || (tokens.includes("-f") && tokens.includes("-d")))) variants.push("git clean -fd");
+	if (tokens[0] === "git" && tokens[1] === "reset" && tokens.includes("--hard")) variants.push("git reset --hard");
+	if (tokens[0] === "rmdir" && tokens.includes("/s")) variants.push("rmdir /s");
+	if (tokens[0] === "del" && tokens.includes("/s")) variants.push("del /s");
+	if (tokens[0] === "find" && tokens.includes("-delete")) variants.push("find . -delete");
+	return variants;
+}
+
+function commandVariants(command) {
+	const seen = new Set();
+	const variants = [];
+	const visit = (value) => {
+		const normalized = collapseCommand(value);
+		if (!normalized || seen.has(normalized.toLowerCase())) return;
+		seen.add(normalized.toLowerCase());
+		variants.push(normalized);
+		for (const part of splitCommandChain(normalized)) visit(part);
+		const unwrapped = unwrapShellCommand(normalized);
+		if (unwrapped) visit(unwrapped);
+		for (const alias of classifyCommandAliases(normalized)) visit(alias);
+	};
+	visit(command);
+	return variants;
+}
+
+function getSensitivePathReason(filePath) {
+	const normalized = normalizeSafetyPath(filePath);
+	for (const { pattern, reason } of DANGEROUS_FILE_PATTERNS) {
+		if (pattern.test(normalized)) return reason;
+	}
+	return "";
+}
+
+function getWriteContent(input) {
+	return String(
+		input && (
+			input.content ||
+			input.text ||
+			input.newText ||
+			input.value ||
+			input.replacement ||
+			input.data ||
+			""
+		)
+	);
+}
+
+function hasSecretLikeContent(input) {
+	const content = getWriteContent(input);
+	return !!content && SECRET_CONTENT_PATTERNS.some((pattern) => pattern.test(content));
+}
+
+function findShellRedirectionWrite(command) {
+	for (const variant of commandVariants(command)) {
+		const match = variant.match(/\b(?:echo|cat|printf)\b[\s\S]*?(?:^|[^>])>{1,2}\s*("[^"]+"|'[^']+'|[^\s;&|]+)/i);
+		if (match) return stripOuterQuotes(match[1]);
+		const psMatch = variant.match(/\b(?:out-file|set-content|add-content)\b[\s\S]*?(?:-filepath|-path)?\s*("[^"]+"|'[^']+'|[^\s;&|]+)/i);
+		if (psMatch) return stripOuterQuotes(psMatch[1]);
+	}
+	return "";
+}
+
+function isSensitiveReadCommand(command) {
+	for (const variant of commandVariants(command)) {
+		const match = collapseCommand(variant).match(/^(?:cat|type|get-content)\s+(.+)$/i);
+		if (match && getSensitivePathReason(match[1].split(/\s+/)[0])) return true;
+	}
+	return false;
 }
 
 function validateCommandRules(config) {
@@ -1225,14 +1355,34 @@ HELI_HOOK_OK`
 			if (commandRules.warnings.length > 0) {
 				for (const warning of commandRules.warnings) notify(ctx, `Command rules warning: ${warning}`, "warning");
 			}
-			for (const { pattern, reason } of commandRules.rules) {
-				if (!pattern.test(command)) continue;
+			const redirectionPath = findShellRedirectionWrite(command);
+			if (redirectionPath && hasTargetSelection && targetState.writesAllowedUnder) {
+				const allowedRoot = resolve(cwd, targetState.writesAllowedUnder);
+				const resolvedPath = resolve(cwd, redirectionPath);
+				if (!pathIsInside(allowedRoot, resolvedPath)) {
+					lastToolGuardAt = new Date().toISOString();
+					return { block: true, reason: `Blocked: shell redirection writes outside writesAllowedUnder for ${targetState.targetRepo}` };
+				}
+			}
+			if (isSensitiveReadCommand(command)) {
+				const reason = "sensitive file read detected";
 				lastToolGuardAt = new Date().toISOString();
 				if (hookProbeGuardPending) {
 					hookProbeGuardPending = false;
 					return { block: true, reason: `HELI_GUARD_OK: intercepted ${reason}` };
 				}
 				return confirmDangerous(ctx, "Dangerous command detected", `${reason}\n${targetContext}\n\nCommand: ${command}\n\nAllow?`, `${reason}. ${targetContext}`);
+			}
+			for (const variant of commandVariants(command)) {
+				for (const { pattern, reason } of commandRules.rules) {
+					if (!pattern.test(variant)) continue;
+					lastToolGuardAt = new Date().toISOString();
+					if (hookProbeGuardPending) {
+						hookProbeGuardPending = false;
+						return { block: true, reason: `HELI_GUARD_OK: intercepted ${reason}` };
+					}
+					return confirmDangerous(ctx, "Dangerous command detected", `${reason}\n${targetContext}\n\nCommand: ${command}\n\nAllow?`, `${reason}. ${targetContext}`);
+				}
 			}
 		}
 
@@ -1261,15 +1411,23 @@ HELI_HOOK_OK`
 				return confirmDangerous(ctx, "Dangerous file operation", `${reason}\n\nPath: ${path}\n\nAllow?`, reason);
 			}
 
-			for (const { pattern, reason } of DANGEROUS_FILE_PATTERNS) {
-				if (pattern.test(path)) {
-					lastToolGuardAt = new Date().toISOString();
-					if (hookProbeGuardPending) {
-						hookProbeGuardPending = false;
-						return { block: true, reason: `HELI_GUARD_OK: intercepted ${reason}` };
-					}
-					return confirmDangerous(ctx, "Dangerous file operation", `${reason}\n\nPath: ${path}\n\nAllow?`, reason);
+			const sensitivePathReason = getSensitivePathReason(path);
+			if (sensitivePathReason) {
+				lastToolGuardAt = new Date().toISOString();
+				if (hookProbeGuardPending) {
+					hookProbeGuardPending = false;
+					return { block: true, reason: `HELI_GUARD_OK: intercepted ${sensitivePathReason}` };
 				}
+				return confirmDangerous(ctx, "Dangerous file operation", `${sensitivePathReason}\n\nPath: ${path}\n\nAllow?`, sensitivePathReason);
+			}
+			if (hasSecretLikeContent(input)) {
+				const reason = "secret-like content detected";
+				lastToolGuardAt = new Date().toISOString();
+				if (hookProbeGuardPending) {
+					hookProbeGuardPending = false;
+					return { block: true, reason: `HELI_GUARD_OK: intercepted ${reason}` };
+				}
+				return confirmDangerous(ctx, "Dangerous file operation", `${reason}\n\nPath: ${path}\n\nAllow?`, reason);
 			}
 		}
 

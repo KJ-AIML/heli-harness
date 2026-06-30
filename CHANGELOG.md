@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.5.4 - Safety Classifier Hardening
+
+### Added
+
+- Added a local Pi/AXGA safety classifier before command-rule matching.
+- Added normalization for repeated whitespace, case variants, simple command chains, and shell wrappers such as `bash -c`, `sh -c`, `cmd /c`, and PowerShell command wrappers.
+- Added classifier coverage for publish/release variants, destructive delete variants, shell redirection writes outside `writesAllowedUnder`, sensitive reads, expanded secret paths, and obvious secret-like write content.
+- Added smoke coverage for bypass forms including `git   push`, `GIT PUSH`, `bash -c "git push"`, package-manager publish variants, `rm -r -f`, `rm --recursive --force`, out-of-target redirection, secret-path writes, secret-content writes, and `cat .env`.
+
+### Changed
+
+- Kept `.heli-harness/safety/command-rules.json` as the policy source of truth while using classifier-normalized command variants to match rules more reliably.
+- Expanded default command rules for common package-manager, release, and destructive command variants.
+- Updated docs to clarify v0.5.4 is best-effort local classification, not a sandbox.
+
+### Notes
+
+- Enforcement still depends on compatible host `tool_call` hooks.
+- Does not add Claude/Codex/OpenCode adapter implementation.
+- Does not start benchmark matrix runs.
+
 ## v0.5.3 - Rules-as-Enforcement
 
 ### Added

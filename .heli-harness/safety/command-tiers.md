@@ -1,6 +1,6 @@
 # Command Tiers
 
-`command-rules.json` is the source of truth for Pi/AXGA bash command guard patterns where compatible `tool_call` hooks are available. Rules are simple pattern matches for v0.5.3; v0.5.4 will harden command classification beyond simple strings. This is not a sandbox and does not replace host permissions.
+`command-rules.json` is the source of truth for Pi/AXGA command guard policy where compatible `tool_call` hooks are available. v0.5.4 adds a small local classifier before rule matching: it normalizes whitespace, case, simple chains, shell wrappers, destructive command variants, shell redirection writes, sensitive paths, and obvious secret-like write content. This is not a sandbox and does not replace host permissions.
 
 ## T0 - Read-only inspection
 
