@@ -44,4 +44,4 @@ jobs:
           }
 
       - name: Git whitespace check
-        run: git diff --check HEAD~1 HEAD || true
+        run: git diff-tree --check --no-commit-id --root -r HEAD

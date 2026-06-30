@@ -8,7 +8,7 @@ const tempDir = mkdtempSync(join(tmpdir(), "heli-extension-"));
 mkdirSync(join(tempDir, "extensions"), { recursive: true });
 mkdirSync(join(tempDir, ".heli-harness"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "HARNESS.md"), "# Harness\n");
-writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.4.3" }));
+writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.4.3", type: "module" }));
 mkdirSync(join(tempDir, ".heli-harness", "profiles"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "profiles", "demo.md"), `# Demo
 
@@ -327,7 +327,7 @@ None.
 None.
 `);
 
-const tempExtension = join(tempDir, "extensions", "pi-extension.mjs");
+const tempExtension = join(tempDir, "extensions", "pi-extension.js");
 copyFileSync(join(root, "extensions", "pi-extension.js"), tempExtension);
 process.chdir(tempDir);
 
@@ -386,9 +386,41 @@ assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git push"
 	block: true,
 	reason: "Blocked: git push is a remote operation. Target repo: demo. Run operation explicitly to override.",
 });
+assert.deepEqual(await toolCall({ toolName: "shell", input: { command: "git push" } }, {}), {
+	block: true,
+	reason: "Blocked: git push is a remote operation. Target repo: demo. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git -C repo push" } }, {}), {
+	block: true,
+	reason: "Blocked: git push is a remote operation. Target repo: demo. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "Git push" } }, {}), {
+	block: true,
+	reason: "Blocked: git push is a remote operation. Target repo: demo. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git clean -xdf" } }, {}), {
+	block: true,
+	reason: "Blocked: git clean is destructive. Target repo: demo. Run operation explicitly to override.",
+});
 assert.deepEqual(await toolCall({ toolName: "write", input: { path: ".env" } }, {}), {
 	block: true,
 	reason: "Blocked: .env files contain secrets. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "write", input: { path: ".env.local" } }, {}), {
+	block: true,
+	reason: "Blocked: .env files contain secrets. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "write", input: { path: ".ENV" } }, {}), {
+	block: true,
+	reason: "Blocked: .env files contain secrets. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "write", input: { path: "Credentials.json" } }, {}), {
+	block: true,
+	reason: "Blocked: Credential files contain secrets. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "write", input: { path: "secrets.pem.bak" } }, {}), {
+	block: true,
+	reason: "Blocked: PEM files are private keys. Run operation explicitly to override.",
 });
 
 const sessionStart = events.find((event) => event.name === "session_start").handler;
@@ -412,6 +444,10 @@ await commands.find((command) => command.name === "heli-target").options.handler
 await commands.find((command) => command.name === "heli-target").options.handler("list", ctx);
 await commands.find((command) => command.name === "heli-target").options.handler("clear", ctx);
 assert.deepEqual(await toolCall({ toolName: "write", input: { path: "notes.txt" } }, {}), {
+	block: true,
+	reason: "Blocked: target repo not selected in multi-repo workspace",
+});
+assert.deepEqual(await toolCall({ toolName: "multi_edit", input: { path: "notes.txt" } }, {}), {
 	block: true,
 	reason: "Blocked: target repo not selected in multi-repo workspace",
 });

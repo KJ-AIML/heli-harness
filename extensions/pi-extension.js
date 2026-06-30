@@ -104,26 +104,53 @@ function isSuspiciousHarnessRuntimePath(filePath) {
 	return hasHiddenHarnessFolder && !isCurrentRuntime;
 }
 
-const DANGEROUS_BASH_PATTERNS = [
-	{ pattern: /npm\s+publish/, reason: "npm publish is a release operation" },
-	{ pattern: /npm\s+run\s+release/, reason: "npm run release is a release operation" },
-	{ pattern: /npm\s+run\s+version/, reason: "npm run version is a versioning operation" },
-	{ pattern: /git\s+push/, reason: "git push is a remote operation" },
-	{ pattern: /git\s+tag/, reason: "git tag is a versioning operation" },
-	{ pattern: /git\s+reset\s+--hard/, reason: "git reset --hard is destructive" },
-	{ pattern: /git\s+clean\s+-fd/, reason: "git clean -fd is destructive" },
-	{ pattern: /rm\s+-rf/, reason: "rm -rf is destructive" },
-	{ pattern: /AXGA_ALLOW_LOCKFILE_CHANGE=1/, reason: "AXGA lockfile change override" },
-	{ pattern: /\.\/axga-test\.sh/, reason: "axga-test.sh may consume API credits" },
-	{ pattern: /npm\s+run\s+e2e:swarm/, reason: "e2e:swarm may consume API credits" },
+const DANGEROUS_COMMAND_PATTERNS = [
+	{ pattern: /\bnpm\b[\s\S]*\bpublish\b/i, reason: "npm publish is a release operation" },
+	{ pattern: /\bnpm\b[\s\S]*\brun\s+release\b/i, reason: "npm run release is a release operation" },
+	{ pattern: /\bnpm\b[\s\S]*\brun\s+version\b/i, reason: "npm run version is a versioning operation" },
+	{ pattern: /\bgit\b[\s\S]*\bpush\b/i, reason: "git push is a remote operation" },
+	{ pattern: /\bgit\b[\s\S]*\btag\b/i, reason: "git tag is a versioning operation" },
+	{ pattern: /\bgit\b[\s\S]*\breset\b[\s\S]*--hard\b/i, reason: "git reset --hard is destructive" },
+	{ pattern: /\bgit\b[\s\S]*\bclean\b[\s\S]*-[A-Za-z]*f[A-Za-z]*/i, reason: "git clean is destructive" },
+	{ pattern: /\brm\s+-[^\s]*r[^\s]*f|\brm\s+-[^\s]*f[^\s]*r/i, reason: "rm -rf is destructive" },
+	{ pattern: /\bRemove-Item\b[\s\S]*-(?:Recurse|Force)\b[\s\S]*-(?:Recurse|Force)\b/i, reason: "Remove-Item recursive force is destructive" },
+	{ pattern: /\bAXGA_ALLOW_LOCKFILE_CHANGE\s*=\s*1\b/i, reason: "AXGA lockfile change override" },
+	{ pattern: /(?:^|\s)(?:\.\/)?axga-test\.sh\b/i, reason: "axga-test.sh may consume API credits" },
+	{ pattern: /\bnpm\b[\s\S]*\brun\s+e2e:swarm\b/i, reason: "e2e:swarm may consume API credits" },
 ];
 
 const DANGEROUS_FILE_PATTERNS = [
-	{ pattern: /\.env$/, reason: ".env files contain secrets" },
-	{ pattern: /\.pem$/, reason: "PEM files are private keys" },
-	{ pattern: /\.key$/, reason: "Key files are credentials" },
-	{ pattern: /credentials/, reason: "Credential files contain secrets" },
+	{ pattern: /(^|[\\/])\.env(?:$|\.)/i, reason: ".env files contain secrets" },
+	{ pattern: /\.pem(?:$|\.)/i, reason: "PEM files are private keys" },
+	{ pattern: /\.key(?:$|\.)/i, reason: "Key files are credentials" },
+	{ pattern: /credentials/i, reason: "Credential files contain secrets" },
 ];
+
+const FILE_WRITE_TOOL_NAMES = new Set([
+	"write",
+	"edit",
+	"multi_edit",
+	"file_write",
+	"file_edit",
+	"fs.write",
+	"filesystem.write",
+]);
+
+function findDangerousCommand(command) {
+	const normalized = String(command || "").replace(/\s+/g, " ").trim();
+	return DANGEROUS_COMMAND_PATTERNS.find(({ pattern }) => pattern.test(normalized));
+}
+
+function getInputPaths(input) {
+	const paths = [];
+	for (const key of ["path", "filePath", "file_path"]) {
+		if (input && input[key]) paths.push(String(input[key]));
+	}
+	if (input && Array.isArray(input.paths)) {
+		paths.push(...input.paths.map((path) => String(path)));
+	}
+	return paths;
+}
 
 function getUi(ctx) {
 	if (!ctx || !ctx.ui) return null;
@@ -1123,21 +1150,21 @@ HELI_HOOK_OK`
 				? "No target repo selected in multi-repo workspace"
 				: "No target context";
 
-		if (toolName === "bash" && input.command) {
+		if (input.command) {
 			const command = String(input.command);
-			for (const { pattern, reason } of DANGEROUS_BASH_PATTERNS) {
-				if (!pattern.test(command)) continue;
+			const match = findDangerousCommand(command);
+			if (match) {
 				lastToolGuardAt = new Date().toISOString();
 				if (hookProbeGuardPending) {
 					hookProbeGuardPending = false;
-					return { block: true, reason: `HELI_GUARD_OK: intercepted ${reason}` };
+					return { block: true, reason: `HELI_GUARD_OK: intercepted ${match.reason}` };
 				}
-				return confirmDangerous(ctx, "Dangerous command detected", `${reason}\n${targetContext}\n\nCommand: ${command}\n\nAllow?`, `${reason}. ${targetContext}`);
+				return confirmDangerous(ctx, "Dangerous command detected", `${match.reason}\n${targetContext}\n\nCommand: ${command}\n\nAllow?`, `${match.reason}. ${targetContext}`);
 			}
 		}
 
-		if ((toolName === "write" || toolName === "edit") && input.path) {
-			const path = String(input.path);
+		const paths = FILE_WRITE_TOOL_NAMES.has(String(toolName || "")) ? getInputPaths(input) : [];
+		for (const path of paths) {
 			const resolvedPath = resolve(cwd, path);
 			const targetStatePath = resolve(getWorkspacePaths(cwd).targetPath);
 			if (hasMultiRepoIndex && !hasTargetSelection && resolvedPath !== targetStatePath) {

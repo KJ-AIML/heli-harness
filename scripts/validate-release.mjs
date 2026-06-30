@@ -207,27 +207,29 @@ const LEGACY_PATTERNS = [
 ];
 
 let legacyFound = false;
-try {
-	for (const pattern of LEGACY_PATTERNS) {
-		const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-		const output = execSync(`rg -n --glob "!.git" --glob "!scripts/validate-release.mjs" "${escaped}" .`, {
+for (const pattern of LEGACY_PATTERNS) {
+	const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	let output = "";
+	try {
+		output = execSync(`rg -n --glob "!.git" --glob "!scripts/validate-release.mjs" "${escaped}" .`, {
 			cwd: root,
 			encoding: "utf8",
 			stdio: ["pipe", "pipe", "pipe"],
 		}).trim();
-		if (output) {
-			legacyFound = true;
-			fail(
-				`legacy reference: ${pattern}`,
-				output.split("\n").slice(0, 3).join("; "),
-			);
-		}
+	} catch (error) {
+		// rg exits 1 when this specific pattern has no matches.
+		if (error && error.status === 1) continue;
+		throw error;
 	}
-	if (!legacyFound) {
-		pass("zero legacy references found");
+	if (output) {
+		legacyFound = true;
+		fail(
+			`legacy reference: ${pattern}`,
+			output.split("\n").slice(0, 3).join("; "),
+		);
 	}
-} catch {
-	// rg returns exit 1 when no matches — that's the success case
+}
+if (!legacyFound) {
 	pass("zero legacy references found");
 }
 
