@@ -123,6 +123,14 @@ Safe:
 
 - none
 `);
+writeFileSync(join(tempDir, ".heli-harness", "profiles", "README.md"), `# Repo Profiles
+
+Documentation for profile authors. This is not an active repo profile.
+`);
+writeFileSync(join(tempDir, ".heli-harness", "profiles", "sample.example.md"), `# Example Profile
+
+Example/reference content. This is not an active repo profile.
+`);
 mkdirSync(join(tempDir, ".heli-harness", "policies"), { recursive: true });
 for (const name of ["engineering", "release", "security", "testing"]) {
 	writeFileSync(join(tempDir, ".heli-harness", "policies", `${name}.md`), `# ${name}
@@ -474,7 +482,11 @@ assert(notifications.some((item) => item.message === "Heli workspace lint"));
 assert(notifications.some((item) => item.message === "Heli target lint"));
 assert(notifications.some((item) => item.message === "Heli lock lint"));
 assert(notifications.some((item) => item.message === "Heli report lint"));
+assert(notifications.some((item) => item.message === "Checked: 2"));
+assert(!notifications.some((item) => item.message.includes("README.md: missing section")));
+assert(!notifications.some((item) => item.message.includes("sample.example.md: missing section")));
 assert(notifications.some((item) => item.message.includes('bad.md: missing section "Known tech debt"')));
+assert(!notifications.some((item) => item.message.includes('demo.md: missing section "Known tech debt"')));
 assert(notifications.some((item) => item.message.includes("bad.md: existing patterns section has no evidence paths")));
 assert(notifications.some((item) => item.message.includes("bad.md: references existing patterns without classifying possible tech debt")));
 assert(notifications.some((item) => item.message.includes("ghost: path does not exist")));

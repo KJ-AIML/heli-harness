@@ -285,6 +285,15 @@ function getTargetRepo(cwd) {
 	return match[1].trim();
 }
 
+function isActiveProfileFile(path) {
+	const name = path.split(/[\\/]/).pop().toLowerCase();
+	return (
+		name.endsWith(".md") &&
+		name !== "readme.md" &&
+		!name.endsWith(".example.md")
+	);
+}
+
 function getActiveProfile(cwd, targetRepo) {
 	const profilesDir = join(cwd, ".heli-harness", "profiles");
 	if (!isDirectory(profilesDir)) return "not installed in this workspace";
@@ -292,7 +301,7 @@ function getActiveProfile(cwd, targetRepo) {
 		const direct = join(profilesDir, `${targetRepo}.md`);
 		if (existsSync(direct)) return direct;
 	}
-	const profiles = safeListFiles(profilesDir).filter((path) => path.endsWith(".md") && isFile(path) && path.split(/[\\/]/).pop() !== "README.md");
+	const profiles = safeListFiles(profilesDir).filter((path) => isActiveProfileFile(path) && isFile(path));
 	if (profiles.length === 0) return "not configured";
 	if (profiles.length === 1) return profiles[0];
 	return `${profiles.length} profiles found; target repo not resolved`;
@@ -398,7 +407,7 @@ function lintProfiles(cwd) {
 	const profilesDir = join(cwd, ".heli-harness", "profiles");
 	const policyFiles = getOverlayFiles(join(cwd, ".heli-harness", "policies"), [".md"]);
 	if (!isDirectory(profilesDir)) return { checked: 0, warnings: ["No profile directory found."] };
-	const profiles = safeListFiles(profilesDir).filter((path) => path.endsWith(".md") && isFile(path));
+	const profiles = safeListFiles(profilesDir).filter((path) => isActiveProfileFile(path) && isFile(path));
 	if (profiles.length === 0) return { checked: 0, warnings: ["No repo profiles found."] };
 	const warnings = [];
 	for (const profile of profiles) {
