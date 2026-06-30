@@ -416,6 +416,31 @@ function unwrapShellCommand(command) {
 	return match ? stripOuterQuotes(match[1]) : "";
 }
 
+function stripGitGlobalFlags(command) {
+	const text = collapseCommand(command);
+	if (!text.match(/^git\s/i)) return "";
+	const tokens = text.split(/\s+/);
+	const result = [tokens[0]];
+	let i = 1;
+	while (i < tokens.length) {
+		if (tokens[i] === "-C" && i + 1 < tokens.length) {
+			i += 2;
+			continue;
+		}
+		if (tokens[i] === "-c" && i + 1 < tokens.length) {
+			i += 2;
+			continue;
+		}
+		if (tokens[i].startsWith("-c") && tokens[i].includes("=")) {
+			i += 1;
+			continue;
+		}
+		result.push(tokens[i]);
+		i += 1;
+	}
+	return result.join(" ");
+}
+
 function commandTokens(command) {
 	return collapseCommand(command).toLowerCase().split(" ").filter(Boolean);
 }
@@ -448,6 +473,8 @@ function commandVariants(command) {
 		for (const part of splitCommandChain(normalized)) visit(part);
 		const unwrapped = unwrapShellCommand(normalized);
 		if (unwrapped) visit(unwrapped);
+		const stripped = stripGitGlobalFlags(normalized);
+		if (stripped && stripped !== normalized) visit(stripped);
 		for (const alias of classifyCommandAliases(normalized)) visit(alias);
 	};
 	visit(command);

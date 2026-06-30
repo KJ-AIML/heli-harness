@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.5
+## Current Baseline: v0.5.6
 
-Latest stable release: `v0.5.5`
+Latest stable release: `v0.5.6`
 
-Release commit: see tag `v0.5.5`
+Release commit: see tag `v0.5.6`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.5>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.6>
 
 Stable behavior in this baseline:
 
@@ -141,6 +141,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.3 | Rules-as-Enforcement | Make safety command rules executable in Pi/AXGA command guards. |
 | v0.5.4 | Safety Classifier Hardening | Harden command classification beyond simple pattern matching. |
 | v0.5.5 | Update Preservation & Tool Coverage | Preserve local overlays during update, broaden tool and path guard coverage. |
+| v0.5.6 | Adapter Wiring Coverage | Improve classifier coverage for git global flags and adapter robustness. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -601,6 +602,30 @@ Acceptance criteria:
 - `npm run smoke:update` passes.
 - Smoke tests cover tool-agnostic command guard, multi-tool file guard, backup suffix paths, and update preservation.
 - Docs explain update overlay preservation behavior.
+
+## v0.5.6 - Adapter Wiring Coverage (Implemented)
+
+Goal:
+Improve classifier coverage for git global flags and adapter robustness without breaking v0.5.3 command-rules.json source-of-truth or v0.5.4 classifier architecture.
+
+Scope:
+
+- Add git global flags normalization (`-C`, `-c`) in the command classifier.
+- Ensure commands like `git -C repo push` are correctly identified as `git push` for rule matching.
+- Improve adapter wiring robustness for command-bearing tool calls.
+- Add smoke coverage for git global flags normalization.
+
+Non-goals:
+
+- No Claude/Codex/OpenCode adapter implementation.
+- No benchmark matrix runs.
+- No changes to command-rules.json source-of-truth.
+
+Acceptance criteria:
+
+- `npm run check` passes.
+- Smoke tests cover git global flags normalization (`-C`, `-c`, combined forms).
+- Commands with git global flags are correctly matched against command rules.
 
 ## Post-v0.5 Stabilization
 

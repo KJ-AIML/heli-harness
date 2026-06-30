@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.5.6 - Adapter Wiring Coverage
+
+### Added
+
+- Added git global flags normalization in the command classifier. Commands like `git -C repo push`, `git -c user.name=test push`, and `git -C /tmp -c core.autocrlf=false push` are now correctly identified as `git push` for rule matching.
+- Added smoke coverage for git global flags normalization (`-C`, `-c`, combined forms).
+
+### Changed
+
+- Improved command classifier to strip git global flags before rule matching, closing the gap where `git -C repo push` could bypass push detection.
+- Enhanced adapter wiring robustness for command-bearing tool calls.
+
+### Notes
+
+- Does not add Claude/Codex/OpenCode adapter implementation.
+- Does not start benchmark matrix runs.
+- Preserves v0.5.3 command-rules.json source-of-truth and v0.5.4 classifier architecture.
+
 ## v0.5.5 - Update Preservation & Tool Coverage
 
 ### Added

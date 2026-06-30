@@ -133,7 +133,7 @@
   ],
   "notes": [
     "Pi/AXGA consume these rules for tool_call command guards where compatible hooks are available.",
-    "v0.5.5 adds tool-agnostic command guard, multi-tool file guard, and combined short-flag handling.",
+    "v0.5.6 adds git global flags normalization (-C, -c) before rule matching.",
     "This is best-effort command guarding, not a sandbox."
   ]
 }
