@@ -311,6 +311,8 @@ Adapters should not:
 - hide behavior in unreadable configuration
 - require a hosted service
 
+See [Adapter Support Matrix](../ADAPTER_SUPPORT_MATRIX.md) for evidence-based adapter status assessment. Adapter claims require evidence: no adapter is claimed as "enforced" without smoke tests proving runtime enforcement.
+
 ## Machine-Readable Sidecars
 
 Markdown should remain the primary authoring format. Sidecars should exist only where validation or enforcement needs structure.

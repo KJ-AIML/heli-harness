@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.5.7 - Adapter Wiring Coverage
+
+### Added
+
+- Added adapter status taxonomy: `enforced`, `wired`, `documented`, `planned`, `unsupported`.
+- Added `docs/ADAPTER_SUPPORT_MATRIX.md` with honest, evidence-based adapter status assessment.
+- Added `.heli-harness/adapters/adapters.json` as machine-readable adapter manifest with evidence paths.
+- Added `scripts/verify-adapters.mjs` to validate adapter claims against evidence.
+- Added `verify:adapters` npm script for standalone adapter verification.
+- Added adapter wiring verification to `scripts/validate-release.mjs`.
+
+### Changed
+
+- Integrated adapter verification into release validation pipeline.
+- Updated docs to reference adapter support matrix.
+- Classified Pi adapter as `enforced` (has extension, smoke tests, hook guards).
+- Classified Codex/Claude/Cursor adapters as `wired` (adapter files exist, install creates pointers, but no runtime enforcement).
+- Classified AXGA/Generic adapters as `documented` (docs exist, but no dedicated verification).
+- Classified OpenCode/Windsurf/Cline/Gemini/OpenClaw adapters as `planned` (no implementation yet).
+
+### Notes
+
+- Does not add Claude/Codex/OpenCode runtime adapter implementation.
+- Does not start benchmark matrix runs.
+- Preserves v0.5.3 command-rules.json source-of-truth and v0.5.4 classifier architecture.
+- Claims require evidence: no adapter is claimed as "enforced" without smoke tests proving runtime enforcement.
+
 ## v0.5.6 - Classifier Git Global Flags Hotfix
 
 ### Added

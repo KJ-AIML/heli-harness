@@ -1,0 +1,200 @@
+{
+  "version": "0.5.7",
+  "taxonomy": {
+    "enforced": "Runtime hook/tool-call guard is verified and tested. Smoke test or interactive test exists.",
+    "wired": "Files/config/install paths exist and are validated. Runtime enforcement may not be proven yet.",
+    "documented": "Documentation exists, but no verified wiring or runtime enforcement.",
+    "planned": "Roadmap item exists, but no shipped adapter wiring yet.",
+    "unsupported": "Explicitly not supported."
+  },
+  "adapters": [
+    {
+      "id": "pi",
+      "name": "Pi",
+      "status": "enforced",
+      "evidence": [
+        "extensions/pi-extension.js",
+        "scripts/smoke-extension-load.mjs",
+        ".heli-harness/adapters/pi/README.md"
+      ],
+      "verification": [
+        "node scripts/smoke-extension-load.mjs"
+      ],
+      "enforcementSurfaces": [
+        "tool_call hook (command blocking, file path blocking)",
+        "before_agent_start hook (safety context injection)",
+        "session_start hook (workspace detection)"
+      ],
+      "limitations": [
+        "Requires host-compatible tool_call hooks",
+        "Not a sandbox; best-effort local classification",
+        "Does not replace host permissions or sandboxing"
+      ]
+    },
+    {
+      "id": "axga",
+      "name": "AXGA",
+      "status": "documented",
+      "evidence": [
+        ".heli-harness/adapters/pi/README.md"
+      ],
+      "verification": [],
+      "enforcementSurfaces": [
+        "Shares Pi extension; enforcement depends on host-compatible hooks"
+      ],
+      "limitations": [
+        "No dedicated AXGA smoke test",
+        "Relies on Pi extension compatibility",
+        "No proof of runtime enforcement in AXGA specifically"
+      ]
+    },
+    {
+      "id": "codex",
+      "name": "Codex",
+      "status": "wired",
+      "evidence": [
+        ".heli-harness/adapters/codex/AGENTS.md",
+        ".heli-harness/adapters/codex/README.md",
+        ".heli-harness/adapters/codex/install.md",
+        "install.sh",
+        "install.ps1"
+      ],
+      "verification": [
+        "node scripts/verify-adapters.mjs"
+      ],
+      "enforcementSurfaces": [
+        "Workspace AGENTS.md pointer file created by installer"
+      ],
+      "limitations": [
+        "No runtime hook enforcement",
+        "Relies on Codex reading AGENTS.md voluntarily",
+        "No smoke test proving agents read the pointer file"
+      ]
+    },
+    {
+      "id": "claude",
+      "name": "Claude Code",
+      "status": "wired",
+      "evidence": [
+        ".heli-harness/adapters/claude/CLAUDE.md",
+        ".heli-harness/adapters/claude/README.md",
+        ".heli-harness/adapters/claude/install.md",
+        ".heli-harness/adapters/claude/settings.local.json.example",
+        "install.sh",
+        "install.ps1"
+      ],
+      "verification": [
+        "node scripts/verify-adapters.mjs"
+      ],
+      "enforcementSurfaces": [
+        "Workspace CLAUDE.md pointer file created by installer"
+      ],
+      "limitations": [
+        "No runtime hook enforcement",
+        "Relies on Claude reading CLAUDE.md voluntarily",
+        "No smoke test proving agents read the pointer file"
+      ]
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "status": "wired",
+      "evidence": [
+        ".heli-harness/adapters/cursor/CURSOR.md",
+        ".heli-harness/adapters/cursor/README.md",
+        ".heli-harness/adapters/cursor/install.md",
+        "install.sh",
+        "install.ps1"
+      ],
+      "verification": [
+        "node scripts/verify-adapters.mjs"
+      ],
+      "enforcementSurfaces": [
+        "Workspace .cursorrules or .cursor/rules/ pointer created by installer"
+      ],
+      "limitations": [
+        "No runtime hook enforcement",
+        "Relies on Cursor reading adapter file voluntarily",
+        "No smoke test proving agents read the pointer file"
+      ]
+    },
+    {
+      "id": "generic",
+      "name": "Generic",
+      "status": "documented",
+      "evidence": [
+        ".heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md",
+        ".heli-harness/adapters/generic/README.md"
+      ],
+      "verification": [
+        "node scripts/verify-adapters.mjs"
+      ],
+      "enforcementSurfaces": [],
+      "limitations": [
+        "No install automation",
+        "No runtime enforcement",
+        "Manual setup required"
+      ]
+    },
+    {
+      "id": "opencode",
+      "name": "OpenCode",
+      "status": "planned",
+      "evidence": [],
+      "verification": [],
+      "enforcementSurfaces": [],
+      "limitations": [
+        "No implementation yet",
+        "Mentioned in ROADMAP.md as planned"
+      ]
+    },
+    {
+      "id": "windsurf",
+      "name": "Windsurf",
+      "status": "planned",
+      "evidence": [],
+      "verification": [],
+      "enforcementSurfaces": [],
+      "limitations": [
+        "No implementation yet",
+        "Mentioned in ROADMAP.md as planned"
+      ]
+    },
+    {
+      "id": "cline",
+      "name": "Cline",
+      "status": "planned",
+      "evidence": [],
+      "verification": [],
+      "enforcementSurfaces": [],
+      "limitations": [
+        "No implementation yet",
+        "Mentioned in ROADMAP.md as planned"
+      ]
+    },
+    {
+      "id": "gemini",
+      "name": "Gemini",
+      "status": "planned",
+      "evidence": [],
+      "verification": [],
+      "enforcementSurfaces": [],
+      "limitations": [
+        "No implementation yet",
+        "Mentioned in ROADMAP.md as planned"
+      ]
+    },
+    {
+      "id": "openclaw",
+      "name": "OpenClaw",
+      "status": "planned",
+      "evidence": [],
+      "verification": [],
+      "enforcementSurfaces": [],
+      "limitations": [
+        "No implementation yet",
+        "Mentioned in ROADMAP.md as planned"
+      ]
+    }
+  ]
+}

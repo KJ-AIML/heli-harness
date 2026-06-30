@@ -12,6 +12,8 @@
  *   - no exact legacy references
  *   - docs current-baseline / install examples use current package version
  *   - no obvious conflict markers
+ *   - benchmark pack presence
+ *   - adapter wiring verification
  *
  * Dependency-free. Runnable with Node.
  * Exit 0 on pass, 1 on any failure.
@@ -657,6 +659,21 @@ for (const file of requiredBenchmarkFiles) {
 	} else {
 		fail(`${file.replace(root + "/", "")}`, "file not found");
 	}
+}
+
+// ── 7. Adapter wiring verification ──────────────────────────────────────────
+
+section("Adapter wiring verification");
+
+try {
+	execSync("node scripts/verify-adapters.mjs", {
+		cwd: root,
+		encoding: "utf8",
+		stdio: "inherit",
+	});
+	pass("adapter verification passed");
+} catch (error) {
+	fail("adapter verification failed", error.message);
 }
 
 // ── Summary ──────────────────────────────────────────────────────────────────

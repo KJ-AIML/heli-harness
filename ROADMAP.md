@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.6
+## Current Baseline: v0.5.7
 
-Latest stable release: `v0.5.6`
+Latest stable release: `v0.5.7`
 
-Release commit: see tag `v0.5.6`
+Release commit: see tag `v0.5.7`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.6>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.7>
 
 Stable behavior in this baseline:
 
@@ -628,31 +628,40 @@ Acceptance criteria:
 - Smoke tests cover git global flags normalization (`-C`, `-c`, combined forms).
 - Commands with git global flags are correctly matched against command rules.
 
-## v0.5.7 - Adapter Wiring Coverage (Planned)
+## v0.5.7 - Adapter Wiring Coverage (Implemented)
 
 Goal:
-Verify that adapter files are present, correctly wired, and documented in the support matrix. Move from "adapter instructions exist" to "adapter wiring is validated."
+Create verifiable adapter support infrastructure. Answer which adapters exist, which are wired, which are enforced, and which are planned. Ensure claims require evidence.
 
 Scope:
 
-- Add adapter file presence checks to release validation.
-- Verify Pi adapter status documentation is current.
-- Update Cursor/Claude/Codex/OpenCode support matrix with evidence.
-- Add smoke tests for adapter file presence and expected config output.
-- Document which adapters are supported vs. documented vs. planned.
+- Add adapter status taxonomy (enforced, wired, documented, planned, unsupported).
+- Create `docs/ADAPTER_SUPPORT_MATRIX.md` with honest, evidence-based adapter status.
+- Create `.heli-harness/adapters/adapters.json` as machine-readable adapter manifest.
+- Add `scripts/verify-adapters.mjs` to validate adapter claims against evidence.
+- Integrate adapter verification into `scripts/validate-release.mjs`.
+- Add `verify:adapters` npm script.
+- Update docs to reference adapter support matrix.
+- Classify Pi as `enforced` (has extension, smoke tests, hook guards).
+- Classify Codex/Claude/Cursor as `wired` (adapter files exist, install creates pointers, but no runtime enforcement).
+- Classify AXGA/Generic as `documented` (docs exist, but no dedicated verification).
+- Classify OpenCode/Windsurf/Cline/Gemini/OpenClaw as `planned` (no implementation yet).
 
 Non-goals:
 
 - No Claude/Codex/OpenCode runtime implementation.
 - No benchmark matrix runs.
 - No changes to command-rules.json source-of-truth.
+- No adapter runtime hook implementation.
 
 Acceptance criteria:
 
 - `npm run check` includes adapter wiring validation.
+- `npm run verify:adapters` passes.
 - Adapter support matrix has evidence for each claimed support level.
-- Smoke tests verify adapter file presence.
+- `verify-adapters.mjs` validates adapter manifest schema, evidence file presence, and docs consistency.
 - Docs distinguish supported vs. documented vs. planned adapters.
+- No overclaims (e.g., claiming "enforced" without smoke tests).
 
 ## Post-v0.5 Stabilization
 
