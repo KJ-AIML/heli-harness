@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.2
+## Current Baseline: v0.5.3
 
-Latest stable release: `v0.5.2`
+Latest stable release: `v0.5.3`
 
-Release commit: see tag `v0.5.2`
+Release commit: see tag `v0.5.3`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.2>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.3>
 
 Stable behavior in this baseline:
 
@@ -64,6 +64,10 @@ Stable behavior in this baseline:
 - Dogfood lint hotfix:
   - profile lint ignores documentation and example markdown in `.heli-harness/profiles/`
   - active profiles remain linted, including invalid active profiles in smoke fixtures
+- Rules-as-Enforcement:
+  - Pi/AXGA command guards consume `.heli-harness/safety/command-rules.json`
+  - release validation checks command-rule schema
+  - invalid or missing command-rule config falls back to conservative built-in defaults
 
 ## Product Positioning
 
@@ -130,7 +134,8 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.0 | Governance benchmark pack | Measure Heli as a governance layer with repeatable experiments. |
 | v0.5.1 | Self-consistency and dogfood cleanup | Make current claims, shipped defaults, and release validation align before adapter/benchmark expansion. |
 | v0.5.2 | Dogfood lint hotfix | Remove Pi/AXGA profile lint noise from profile docs while preserving active-profile checks. |
-| v0.5.3 | Rules-as-Enforcement | Harden command-rule classification and enforcement behavior. |
+| v0.5.3 | Rules-as-Enforcement | Make safety command rules executable in Pi/AXGA command guards. |
+| v0.5.4 | Safety Classifier Hardening | Harden command classification beyond simple pattern matching. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -512,10 +517,37 @@ Acceptance criteria:
 - Pi/AXGA `/heli-validate lint` profile lint checks one active shipped profile and reports no profile warnings for `profiles/README.md`.
 - Report absence warnings may remain non-blocking until report semantics are revisited.
 
-## v0.5.3 - Rules-as-Enforcement (Planned)
+## v0.5.3 - Rules-as-Enforcement (Implemented)
 
 Goal:
-Turn command-rule classification into stronger enforcement behavior without expanding Heli into a full runtime.
+Make `.heli-harness/safety/command-rules.json` the source of truth for Pi/AXGA command guard behavior without expanding Heli into a full runtime.
+
+Scope:
+
+- Load command rules from workspace or package safety configuration.
+- Validate rule schema before runtime use.
+- Compile configured `match` strings into runtime matchers.
+- Preserve conservative fallback rules when configuration is missing or invalid.
+- Add smoke coverage for default rules, custom rules, invalid configs, and fallback blocking.
+
+Non-goals:
+
+- No full command classifier.
+- No sandbox.
+- No Claude/Codex/OpenCode adapter implementation.
+- No benchmark matrix runs.
+
+Acceptance criteria:
+
+- Existing default dangerous commands remain guarded.
+- Adding a custom command rule changes runtime guard behavior.
+- Invalid `command-rules.json` is detected by smoke/release validation.
+- Missing or invalid command-rule config does not silently disable safety.
+
+## v0.5.4 - Safety Classifier Hardening (Planned)
+
+Goal:
+Harden command classification beyond simple configured pattern matching.
 
 ## Post-v0.5 Stabilization
 

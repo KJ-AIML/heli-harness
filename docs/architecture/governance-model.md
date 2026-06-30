@@ -198,6 +198,8 @@ Safety overlays should cover:
 
 Safety rules should be enforced by hooks or host permissions where possible. Markdown can explain the rule, but enforcement needs an executable guard or host setting.
 
+In v0.5.3, Pi/AXGA command guards consume `.heli-harness/safety/command-rules.json` as the runtime source of truth for configured bash command patterns where compatible `tool_call` hooks are available. Invalid or missing command-rule configuration does not silently disable the guard; the adapter falls back to built-in conservative defaults. This is still not a sandbox.
+
 ## Task State
 
 Task state records the current task and its governance context.

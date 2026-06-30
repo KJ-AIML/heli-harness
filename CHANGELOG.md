@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.5.3 - Rules-as-Enforcement
+
+### Added
+
+- Pi/AXGA command guards now load `.heli-harness/safety/command-rules.json` as the runtime source of truth for configured bash command patterns.
+- Added command-rule schema validation for release checks and safety lint.
+- Added smoke coverage for default dangerous commands, custom command rules, invalid command-rule configs, and fallback blocking behavior.
+
+### Changed
+
+- Expanded default `command-rules.json` to include the full set of previously hardcoded bash guard patterns.
+- Updated docs to clarify that command-rule enforcement depends on compatible host `tool_call` hooks and is not a sandbox.
+
+### Notes
+
+- Keeps v0.5.4 safety classifier hardening separate.
+- Does not add Claude/Codex/OpenCode adapter implementation.
+- Does not start benchmark matrix runs.
+
 ## v0.5.2 - Dogfood Lint Hotfix
 
 ### Fixed

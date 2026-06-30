@@ -132,6 +132,45 @@ function isExplicitNoExceptions(body) {
 	return /\bnone currently approved\b|\bno exceptions\b/i.test(body);
 }
 
+const COMMAND_RULE_TIERS = new Set(["T0", "T1", "T2", "T3", "T4", "T5", "T6"]);
+
+function validateCommandRules(config) {
+	const warnings = [];
+	if (!config || typeof config !== "object" || Array.isArray(config)) {
+		return { valid: false, warnings: ["command-rules.json must be an object"] };
+	}
+	if (config.version !== 1) warnings.push("version must be 1");
+	if (!Array.isArray(config.rules)) {
+		warnings.push("rules must be an array");
+	} else {
+		const ids = new Set();
+		for (const [index, rule] of config.rules.entries()) {
+			const label = `rules[${index}]`;
+			if (!rule || typeof rule !== "object" || Array.isArray(rule)) {
+				warnings.push(`${label} must be an object`);
+				continue;
+			}
+			if (typeof rule.id !== "string" || !rule.id.trim()) {
+				warnings.push(`${label}.id must be a non-empty string`);
+			} else if (ids.has(rule.id)) {
+				warnings.push(`${label}.id duplicates "${rule.id}"`);
+			} else {
+				ids.add(rule.id);
+			}
+			if (typeof rule.match !== "string" || !rule.match.trim()) {
+				warnings.push(`${label}.match must be a non-empty string`);
+			}
+			if (typeof rule.tier !== "string" || !COMMAND_RULE_TIERS.has(rule.tier)) {
+				warnings.push(`${label}.tier must be T0-T6`);
+			}
+			if (typeof rule.reason !== "string" || !rule.reason.trim()) {
+				warnings.push(`${label}.reason must be a non-empty string`);
+			}
+		}
+	}
+	return { valid: warnings.length === 0, warnings };
+}
+
 // ── 1. JSON / version checks ────────────────────────────────────────────────
 
 section("JSON and version checks");
@@ -178,6 +217,12 @@ if (!commandRules) {
 	fail(".heli-harness/safety/command-rules.json", "failed to parse");
 } else {
 	pass(".heli-harness/safety/command-rules.json parses");
+	const commandRuleValidation = validateCommandRules(commandRules);
+	if (commandRuleValidation.valid) {
+		pass(".heli-harness/safety/command-rules.json schema valid");
+	} else {
+		fail(".heli-harness/safety/command-rules.json schema", commandRuleValidation.warnings.join("; "));
+	}
 }
 
 const indexPath = join(root, ".heli-harness", "workspace", "index.json");

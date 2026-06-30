@@ -29,14 +29,56 @@
       "reason": "Publish actions are release operations"
     },
     {
+      "id": "npm-run-release",
+      "match": "npm run release",
+      "tier": "T5",
+      "reason": "npm run release is a release operation"
+    },
+    {
+      "id": "npm-run-version",
+      "match": "npm run version",
+      "tier": "T5",
+      "reason": "npm run version is a versioning operation"
+    },
+    {
+      "id": "git-reset-hard",
+      "match": "git reset --hard",
+      "tier": "T6",
+      "reason": "git reset --hard is destructive"
+    },
+    {
+      "id": "git-clean-force",
+      "match": "git clean -fd",
+      "tier": "T6",
+      "reason": "git clean -fd is destructive"
+    },
+    {
       "id": "destructive-delete",
       "match": "rm -rf",
       "tier": "T6",
       "reason": "Recursive delete is destructive"
+    },
+    {
+      "id": "axga-lockfile-override",
+      "match": "AXGA_ALLOW_LOCKFILE_CHANGE=1",
+      "tier": "T4",
+      "reason": "AXGA lockfile change override"
+    },
+    {
+      "id": "axga-test-script",
+      "match": "./axga-test.sh",
+      "tier": "T4",
+      "reason": "axga-test.sh may consume API credits"
+    },
+    {
+      "id": "npm-e2e-swarm",
+      "match": "npm run e2e:swarm",
+      "tier": "T4",
+      "reason": "e2e:swarm may consume API credits"
     }
   ],
   "notes": [
-    "This file is intentionally lightweight and future-facing.",
-    "Adapters may enforce only a subset of these rules."
+    "Pi/AXGA consume these rules for tool_call command guards where compatible hooks are available.",
+    "This is pattern-based command guarding, not a sandbox."
   ]
 }

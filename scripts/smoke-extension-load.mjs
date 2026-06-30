@@ -8,7 +8,7 @@ const tempDir = mkdtempSync(join(tmpdir(), "heli-extension-"));
 mkdirSync(join(tempDir, "extensions"), { recursive: true });
 mkdirSync(join(tempDir, ".heli-harness"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "HARNESS.md"), "# Harness\n");
-writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.5.1" }));
+writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.5.3" }));
 mkdirSync(join(tempDir, ".heli-harness", "profiles"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "profiles", "demo.md"), `# Demo
 
@@ -180,7 +180,13 @@ writeFileSync(join(tempDir, ".heli-harness", "safety", "command-rules.json"), JS
 		T5: "explicit-approval",
 		T6: "block",
 	},
-	rules: [{ id: "git-push", match: "git push", tier: "T5", reason: "Remote git writes need explicit approval" }],
+	rules: [
+		{ id: "git-push", match: "git push", tier: "T5", reason: "Remote git writes need explicit approval" },
+		{ id: "git-tag", match: "git tag", tier: "T5", reason: "Version tags are release actions" },
+		{ id: "npm-publish", match: "npm publish", tier: "T5", reason: "Publish actions are release operations" },
+		{ id: "destructive-delete", match: "rm -rf", tier: "T6", reason: "Recursive delete is destructive" },
+		{ id: "custom-smoke-rule", match: "custom-block-me", tier: "T5", reason: "Custom smoke command needs approval" },
+	],
 }));
 writeFileSync(join(tempDir, ".heli-harness", "safety", "secrets.md"), `# Secret Handling
 
@@ -392,7 +398,15 @@ const toolCall = events.find((event) => event.name === "tool_call").handler;
 assert.equal(await toolCall({ toolName: "bash", input: { command: "echo ok" } }, {}), undefined);
 assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git push" } }, {}), {
 	block: true,
-	reason: "Blocked: git push is a remote operation. Target repo: demo. Run operation explicitly to override.",
+	reason: "Blocked: Remote git writes need explicit approval. Target repo: demo. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "npm publish" } }, {}), {
+	block: true,
+	reason: "Blocked: Publish actions are release operations. Target repo: demo. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "custom-block-me --flag" } }, {}), {
+	block: true,
+	reason: "Blocked: Custom smoke command needs approval. Target repo: demo. Run operation explicitly to override.",
 });
 assert.deepEqual(await toolCall({ toolName: "write", input: { path: ".env" } }, {}), {
 	block: true,
@@ -406,12 +420,12 @@ const baselinePrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
 assert(!baselinePrompt.systemPrompt.includes("HELI_HOOK_OK"));
 
 await commands.find((command) => command.name === "hh-status").options.handler({}, ctx);
-assert(notifications.some((item) => item.message === "Version: 0.5.1"));
+assert(notifications.some((item) => item.message === "Version: 0.5.3"));
 assert(notifications.some((item) => item.message === "Mode: package + workspace"));
 assert(notifications.some((item) => item.message === "Target repo: demo"));
 assert(notifications.some((item) => item.message === "Policy directory: detected"));
 assert(notifications.some((item) => item.message === "Safety directory: detected"));
-assert(notifications.some((item) => item.message === "command-rules.json: parseable"));
+assert(notifications.some((item) => item.message === "command-rules.json: valid"));
 assert(notifications.some((item) => item.message === "Workspace index: detected"));
 assert(notifications.some((item) => item.message === "Known repos: 2"));
 assert(notifications.some((item) => item.message === "Writes allowed under: ."));
@@ -449,12 +463,24 @@ assert(notifications.some((item) => item.message.includes("HELI_HOOK_OK")));
 await commands.find((command) => command.name === "heli-hooks").options.handler("test-guard", ctx);
 assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git push" } }, ctx), {
 	block: true,
-	reason: "HELI_GUARD_OK: intercepted git push is a remote operation",
+	reason: "HELI_GUARD_OK: intercepted Remote git writes need explicit approval",
 });
 assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git push" } }, ctx), {
 	block: true,
-	reason: "Blocked: git push is a remote operation. Target repo: demo. Run operation explicitly to override.",
+	reason: "Blocked: Remote git writes need explicit approval. Target repo: demo. Run operation explicitly to override.",
 });
+
+writeFileSync(join(tempDir, ".heli-harness", "safety", "command-rules.json"), JSON.stringify({
+	version: 1,
+	rules: [{ id: "invalid-missing-fields" }],
+}));
+await commands.find((command) => command.name === "heli-validate").options.handler("safety", ctx);
+assert(notifications.some((item) => item.message.includes("command-rules.json: invalid schema")));
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git tag v-test" } }, ctx), {
+	block: true,
+	reason: "Blocked: Version tags are release actions. Target repo: demo. Run operation explicitly to override.",
+});
+assert(notifications.some((item) => item.message.includes("Command rules warning:")));
 
 await commands.find((command) => command.name === "heli-hooks").options.handler("probe-off", ctx);
 await commands.find((command) => command.name === "heli-hooks").options.handler({}, ctx);

@@ -104,19 +104,21 @@ function isSuspiciousHarnessRuntimePath(filePath) {
 	return hasHiddenHarnessFolder && !isCurrentRuntime;
 }
 
-const DANGEROUS_BASH_PATTERNS = [
-	{ pattern: /npm\s+publish/, reason: "npm publish is a release operation" },
-	{ pattern: /npm\s+run\s+release/, reason: "npm run release is a release operation" },
-	{ pattern: /npm\s+run\s+version/, reason: "npm run version is a versioning operation" },
-	{ pattern: /git\s+push/, reason: "git push is a remote operation" },
-	{ pattern: /git\s+tag/, reason: "git tag is a versioning operation" },
-	{ pattern: /git\s+reset\s+--hard/, reason: "git reset --hard is destructive" },
-	{ pattern: /git\s+clean\s+-fd/, reason: "git clean -fd is destructive" },
-	{ pattern: /rm\s+-rf/, reason: "rm -rf is destructive" },
-	{ pattern: /AXGA_ALLOW_LOCKFILE_CHANGE=1/, reason: "AXGA lockfile change override" },
-	{ pattern: /\.\/axga-test\.sh/, reason: "axga-test.sh may consume API credits" },
-	{ pattern: /npm\s+run\s+e2e:swarm/, reason: "e2e:swarm may consume API credits" },
+const FALLBACK_COMMAND_RULES = [
+	{ id: "git-push", match: "git push", tier: "T5", reason: "Remote git writes need explicit approval" },
+	{ id: "git-tag", match: "git tag", tier: "T5", reason: "Version tags are release actions" },
+	{ id: "npm-publish", match: "npm publish", tier: "T5", reason: "Publish actions are release operations" },
+	{ id: "npm-run-release", match: "npm run release", tier: "T5", reason: "npm run release is a release operation" },
+	{ id: "npm-run-version", match: "npm run version", tier: "T5", reason: "npm run version is a versioning operation" },
+	{ id: "git-reset-hard", match: "git reset --hard", tier: "T6", reason: "git reset --hard is destructive" },
+	{ id: "git-clean-force", match: "git clean -fd", tier: "T6", reason: "git clean -fd is destructive" },
+	{ id: "destructive-delete", match: "rm -rf", tier: "T6", reason: "Recursive delete is destructive" },
+	{ id: "axga-lockfile-override", match: "AXGA_ALLOW_LOCKFILE_CHANGE=1", tier: "T4", reason: "AXGA lockfile change override" },
+	{ id: "axga-test-script", match: "./axga-test.sh", tier: "T4", reason: "axga-test.sh may consume API credits" },
+	{ id: "npm-e2e-swarm", match: "npm run e2e:swarm", tier: "T4", reason: "e2e:swarm may consume API credits" },
 ];
+
+const COMMAND_RULE_TIERS = new Set(["T0", "T1", "T2", "T3", "T4", "T5", "T6"]);
 
 const DANGEROUS_FILE_PATTERNS = [
 	{ pattern: /\.env$/, reason: ".env files contain secrets" },
@@ -325,7 +327,90 @@ function getOverlayFiles(dir, extensions) {
 function getCommandRulesStatus(cwd) {
 	const rulesPath = join(cwd, ".heli-harness", "safety", "command-rules.json");
 	if (!isFile(rulesPath)) return "not configured";
-	return safeReadJson(rulesPath) ? "parseable" : "invalid JSON";
+	const config = safeReadJson(rulesPath);
+	if (!config) return "invalid JSON";
+	const validation = validateCommandRules(config);
+	return validation.valid ? "valid" : `invalid schema: ${validation.warnings[0]}`;
+}
+
+function escapeRegExp(value) {
+	return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function compileCommandMatch(match) {
+	const pattern = escapeRegExp(match.trim()).replace(/\s+/g, "\\s+");
+	return new RegExp(pattern);
+}
+
+function validateCommandRules(config) {
+	const warnings = [];
+	if (!config || typeof config !== "object" || Array.isArray(config)) {
+		return { valid: false, warnings: ["command-rules.json must be an object"] };
+	}
+	if (config.version !== 1) warnings.push("version must be 1");
+	if (!Array.isArray(config.rules)) {
+		warnings.push("rules must be an array");
+	} else {
+		const ids = new Set();
+		for (const [index, rule] of config.rules.entries()) {
+			const label = `rules[${index}]`;
+			if (!rule || typeof rule !== "object" || Array.isArray(rule)) {
+				warnings.push(`${label} must be an object`);
+				continue;
+			}
+			if (typeof rule.id !== "string" || !rule.id.trim()) {
+				warnings.push(`${label}.id must be a non-empty string`);
+			} else if (ids.has(rule.id)) {
+				warnings.push(`${label}.id duplicates "${rule.id}"`);
+			} else {
+				ids.add(rule.id);
+			}
+			if (typeof rule.match !== "string" || !rule.match.trim()) {
+				warnings.push(`${label}.match must be a non-empty string`);
+			}
+			if (typeof rule.tier !== "string" || !COMMAND_RULE_TIERS.has(rule.tier)) {
+				warnings.push(`${label}.tier must be T0-T6`);
+			}
+			if (typeof rule.reason !== "string" || !rule.reason.trim()) {
+				warnings.push(`${label}.reason must be a non-empty string`);
+			}
+		}
+	}
+	return { valid: warnings.length === 0, warnings };
+}
+
+function compileCommandRules(rules) {
+	return rules.map((rule) => ({
+		id: rule.id,
+		tier: rule.tier,
+		reason: rule.reason,
+		pattern: compileCommandMatch(rule.match),
+	}));
+}
+
+function loadCommandGuardRules(cwd) {
+	const candidatePaths = [
+		join(cwd, ".heli-harness", "safety", "command-rules.json"),
+		join(getPackageRoot(), ".heli-harness", "safety", "command-rules.json"),
+	];
+	for (const path of candidatePaths) {
+		if (!isFile(path)) continue;
+		const config = safeReadJson(path);
+		const validation = validateCommandRules(config);
+		if (validation.valid) {
+			return { rules: compileCommandRules(config.rules), source: path, warnings: [] };
+		}
+		return {
+			rules: compileCommandRules(FALLBACK_COMMAND_RULES),
+			source: "built-in fallback",
+			warnings: [`${path}: ${validation.warnings.join("; ")}`],
+		};
+	}
+	return {
+		rules: compileCommandRules(FALLBACK_COMMAND_RULES),
+		source: "built-in fallback",
+		warnings: ["command-rules.json missing; using built-in fallback rules"],
+	};
 }
 
 function normalizeText(text) {
@@ -506,6 +591,7 @@ function lintSafety(cwd) {
 	}
 	const rulesStatus = getCommandRulesStatus(cwd);
 	if (rulesStatus === "invalid JSON") warnings.push("command-rules.json: invalid JSON");
+	if (rulesStatus.startsWith("invalid schema")) warnings.push(`command-rules.json: ${rulesStatus}`);
 	if (rulesStatus === "not configured") warnings.push("command-rules.json: missing");
 	return { checked: files.length, warnings };
 }
@@ -830,7 +916,7 @@ export default function heliHarnessExtension(pi) {
 		notify(ctx, `Policy files: ${policyFiles.length > 0 ? policyFiles.join(", ") : "none"}`, policyFiles.length > 0 ? "info" : "warning");
 		notify(ctx, `Safety directory: ${isDirectory(safetyDir) ? "detected" : "missing"}`, isDirectory(safetyDir) ? "success" : "warning");
 		notify(ctx, `Safety files: ${safetyFiles.length > 0 ? safetyFiles.join(", ") : "none"}`, safetyFiles.length > 0 ? "info" : "warning");
-		notify(ctx, `command-rules.json: ${commandRulesStatus}`, commandRulesStatus === "parseable" ? "success" : commandRulesStatus === "invalid JSON" ? "warning" : "info");
+		notify(ctx, `command-rules.json: ${commandRulesStatus}`, commandRulesStatus === "valid" ? "success" : commandRulesStatus === "invalid JSON" || commandRulesStatus.startsWith("invalid schema") ? "warning" : "info");
 		notify(ctx, `Workspace index: ${isFile(workspacePaths.indexPath) ? "detected" : "not configured"}`, isFile(workspacePaths.indexPath) ? "success" : "warning");
 		notify(ctx, `Known repos: ${workspaceIndex && Array.isArray(workspaceIndex.repos) ? workspaceRepos.length : 0}`, "info");
 		notify(ctx, `Target repo: ${targetState && targetState.targetRepo ? targetState.targetRepo : "not selected"}`, targetState && targetState.targetRepo ? "success" : "warning");
@@ -1135,7 +1221,11 @@ HELI_HOOK_OK`
 
 		if (toolName === "bash" && input.command) {
 			const command = String(input.command);
-			for (const { pattern, reason } of DANGEROUS_BASH_PATTERNS) {
+			const commandRules = loadCommandGuardRules(cwd);
+			if (commandRules.warnings.length > 0) {
+				for (const warning of commandRules.warnings) notify(ctx, `Command rules warning: ${warning}`, "warning");
+			}
+			for (const { pattern, reason } of commandRules.rules) {
 				if (!pattern.test(command)) continue;
 				lastToolGuardAt = new Date().toISOString();
 				if (hookProbeGuardPending) {
