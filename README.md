@@ -35,7 +35,7 @@ See [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) for detailed status
 **Current adapter status:**
 - **Pi**: `enforced` — Extension file, smoke tests, hook guards verified
 - **Claude Code**: `verified-wired` — Adapter files, settings example, installer-created `CLAUDE.md`, and update preservation are smoke-tested; no runtime enforcement proven
-- **Codex**: `wired` — Adapter files exist, install creates pointer, no runtime enforcement
+- **Codex**: `verified-wired` — Adapter files, installer-created `AGENTS.md`, and update preservation are smoke-tested; no runtime enforcement proven
 - **Cursor**: `wired` — Adapter files exist, install creates pointer, no runtime enforcement
 - **AXGA**: `documented` — Shares Pi adapter docs, no dedicated verification
 - **Generic**: `documented` — Adapter instructions exist, manual setup
@@ -73,7 +73,7 @@ Install this repo into the current folder as a parent-workspace harness:
 
 https://github.com/KJ-AIML/heli-harness
 
-Use the latest stable tag (v0.5.8). Do not install globally. Treat the current
+Use the latest stable tag (v0.5.9). Do not install globally. Treat the current
 directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
@@ -85,7 +85,7 @@ and CLAUDE.md exist after install.
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.8
+git checkout v0.5.9
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install
@@ -97,7 +97,7 @@ Remove-Item -Recurse -Force hh-source
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.8
+git checkout v0.5.9
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -109,8 +109,8 @@ rm -rf hh-source
 Pi and AXGA can load Heli-Harness as a package to get skills and a lightweight extension:
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.8
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.8
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.9
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.9
 ```
 
 This installs the agent package, which does two things:
@@ -162,7 +162,7 @@ Hook observability is opt-in and one-shot:
 - `pi install ...` does **not** automatically create `.heli-harness/` in every folder. Use `/heli-install` to set up the workspace harness in a specific folder.
 - Workspace install remains the source of truth for parent-workspace behavior.
 - Agent packages may run with broad local access. Inspect source code before installing.
-- **Status: supported** - use the v0.5.8 tag after release.
+- **Status: supported** - use the v0.5.9 tag after release.
 
 ### Multi-repo targeting
 
@@ -183,7 +183,7 @@ Current supported path:
 2. Codex reads the workspace `AGENTS.md`, which points to `.heli-harness/adapters/codex/AGENTS.md`.
 3. Codex follows the adapter instructions.
 
-No marketplace plugin. No global install.
+Status: `verified-wired`. v0.5.9 smoke-tests the adapter entrypoint, installer-created `AGENTS.md`, update preservation of user-owned workspace `AGENTS.md`, manifest evidence, and support matrix claims. No Codex runtime hook enforcement is claimed. No marketplace plugin. No global install.
 
 ### Claude Code
 
@@ -220,7 +220,7 @@ If you want to inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.5.8
+git checkout v0.5.9
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```

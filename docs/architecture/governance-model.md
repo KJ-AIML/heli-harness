@@ -319,7 +319,7 @@ Adapter status is evidence-based:
 - `documented`: instructions exist without verified wiring.
 - `planned`: roadmap only.
 
-See [Adapter Support Matrix](../ADAPTER_SUPPORT_MATRIX.md) for evidence-based adapter status assessment. Adapter claims require evidence: no adapter is claimed as "enforced" without smoke tests proving runtime enforcement. In v0.5.8, Claude Code is `verified-wired` because local smoke tests validate the adapter entrypoint, settings JSON, installer-created `CLAUDE.md`, and update preservation, but no Claude runtime hook enforcement is proven.
+See [Adapter Support Matrix](../ADAPTER_SUPPORT_MATRIX.md) for evidence-based adapter status assessment. Adapter claims require evidence: no adapter is claimed as "enforced" without smoke tests proving runtime enforcement. Claude Code and Codex are `verified-wired` because local smoke tests validate their adapter entrypoints, installer-created pointer files, update preservation, manifest evidence, and support matrix claims, but no Claude or Codex runtime hook enforcement is proven.
 
 ## Machine-Readable Sidecars
 

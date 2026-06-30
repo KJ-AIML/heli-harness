@@ -1,6 +1,6 @@
 {
   "name": "heli-harness",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "description": "Parent-workspace AI development harness for multi-repo, multi-agent engineering work.",
   "keywords": [
     "pi-package",
@@ -31,10 +31,11 @@
     "README.md"
   ],
   "scripts": {
-    "check": "node --check extensions/pi-extension.js && node scripts/smoke-extension-load.mjs && node scripts/smoke-update-preserves-local-state.mjs && node scripts/smoke-claude-adapter.mjs && node scripts/verify-adapters.mjs && node scripts/validate-release.mjs",
+    "check": "node --check extensions/pi-extension.js && node scripts/smoke-extension-load.mjs && node scripts/smoke-update-preserves-local-state.mjs && node scripts/smoke-claude-adapter.mjs && node scripts/smoke-codex-adapter.mjs && node scripts/verify-adapters.mjs && node scripts/validate-release.mjs",
     "smoke": "node scripts/smoke-extension-load.mjs",
     "smoke:update": "node scripts/smoke-update-preserves-local-state.mjs",
     "smoke:claude": "node scripts/smoke-claude-adapter.mjs",
+    "smoke:codex": "node scripts/smoke-codex-adapter.mjs",
     "verify:adapters": "node scripts/verify-adapters.mjs",
     "validate:release": "node scripts/validate-release.mjs"
   },

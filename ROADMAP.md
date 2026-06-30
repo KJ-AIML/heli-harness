@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.8
+## Current Baseline: v0.5.9
 
-Latest stable release: `v0.5.8`
+Latest stable release: `v0.5.9`
 
-Release commit: see tag `v0.5.8`
+Release commit: see tag `v0.5.9`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.8>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.9>
 
 Stable behavior in this baseline:
 
@@ -76,7 +76,8 @@ Stable behavior in this baseline:
   - adapter manifest and support matrix validate evidence-backed claims
   - Pi remains `enforced`
   - Claude Code is `verified-wired`: adapter entrypoint, settings example, installer pointer, and update preservation are smoke-tested
-  - Codex and Cursor remain `wired`
+  - Codex is `verified-wired`: adapter entrypoint, installer pointer, and update preservation are smoke-tested
+  - Cursor remains `wired`
   - runtime enforcement is not claimed without tested hook evidence
 
 ## Product Positioning
@@ -150,6 +151,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.6 | Classifier Git Global Flags Hotfix | Normalize git global flags (-C, -c) before rule matching. |
 | v0.5.7 | Adapter Wiring Coverage | Verify adapter file presence, update support matrix, add adapter validation. |
 | v0.5.8 | Claude Code Adapter Verification | Smoke-test Claude adapter files, settings JSON, installer pointer, and update preservation without claiming runtime enforcement. |
+| v0.5.9 | Codex Governance Workflow | Smoke-test Codex adapter files, installer pointer, and update preservation without claiming runtime enforcement. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -709,6 +711,45 @@ Risks:
 
 - Claude Code hook support may change; runtime blocking must be validated in a later milestone before any enforcement claim.
 - Instruction/pointer wiring still relies on Claude Code loading and following workspace instructions.
+
+## v0.5.9 - Codex Governance Workflow (Implemented)
+
+Goal:
+Promote Codex from basic `wired` documentation to `verified-wired` adapter support with local smoke evidence, without claiming runtime enforcement.
+
+Rationale:
+Codex had adapter files and installer pointers, but no dedicated smoke test proving the generated workspace `AGENTS.md`, Codex governance instructions, manifest evidence, support matrix claims, or update-preservation behavior. Claims require evidence, so Codex needed the same verified middle tier as Claude Code.
+
+Scope:
+
+- Reuse the `verified-wired` adapter status from v0.5.8.
+- Improve `.heli-harness/adapters/codex/AGENTS.md` as the Codex-facing governance entrypoint.
+- Improve `.heli-harness/adapters/codex/README.md` with workflow and limitation guidance.
+- Add `scripts/smoke-codex-adapter.mjs`.
+- Verify install creates workspace `AGENTS.md` when absent.
+- Verify update preserves user-owned workspace `AGENTS.md`.
+- Add Codex smoke to `npm run check` and release validation.
+- Update adapter manifest and support matrix with Codex evidence.
+
+Non-goals:
+
+- No Codex runtime hook enforcement claim.
+- No OpenCode/Cursor real adapter implementation.
+- No benchmark matrix runs.
+- No roadmap scope reduction.
+
+Acceptance criteria:
+
+- `npm run check` passes.
+- `node scripts/smoke-codex-adapter.mjs` passes.
+- Codex status is `verified-wired`, not `enforced`.
+- Pi remains the only `enforced` adapter.
+- Support matrix and manifest explain that Codex runtime enforcement is not proven.
+
+Risks:
+
+- Codex host enforcement capabilities may change; runtime blocking must be validated in a later milestone before any enforcement claim.
+- Instruction/pointer wiring still relies on Codex loading and following workspace `AGENTS.md`.
 
 ## Post-v0.5 Stabilization
 

@@ -18,8 +18,8 @@ These expose harness rules/skills to a specific agent host. They do not replace 
 
 | Host | Command | Status | What it installs | Notes |
 |------|---------|--------|------------------|-------|
-| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.8` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.8` | **supported** | 23 skills + lightweight extension (startup status, `/heli-install`, `/hh-install`, `/hh-status`, `/heli-target`, `/heli-lock`, `/heli-hooks`, `/heli-validate lint`, command-rule guard, safety classifier) | Does not auto-create `.heli-harness/`. Use `/heli-install` or `/hh-install` to set up workspace. Use the v0.5.8 tag after release |
-| Codex | Workspace `AGENTS.md` → `.heli-harness/adapters/codex/AGENTS.md` | **supported** | Adapter pointer file created by workspace installer | No marketplace plugin. Requires workspace install first |
+| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.9` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.9` | **supported** | 23 skills + lightweight extension (startup status, `/heli-install`, `/hh-install`, `/hh-status`, `/heli-target`, `/heli-lock`, `/heli-hooks`, `/heli-validate lint`, command-rule guard, safety classifier) | Does not auto-create `.heli-harness/`. Use `/heli-install` or `/hh-install` to set up workspace. Use the v0.5.9 tag after release |
+| Codex | Workspace `AGENTS.md` → `.heli-harness/adapters/codex/AGENTS.md` | **verified-wired** | Adapter pointer file created by workspace installer; update preserves user-owned workspace `AGENTS.md` | No runtime hook enforcement proven. No marketplace plugin. Requires workspace install first |
 | Claude Code | Workspace `CLAUDE.md` → `.heli-harness/adapters/claude/CLAUDE.md` | **verified-wired** | Adapter pointer file created by workspace installer; settings JSON example; update preserves user-owned workspace `CLAUDE.md` | No runtime hook enforcement proven. No marketplace plugin. Requires workspace install first |
 | Cursor | Workspace `.cursor/rules/` → `.heli-harness/adapters/cursor/CURSOR.md` | **supported** | Adapter created by workspace installer | Requires workspace install first |
 | Generic agents | `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md` | **supported** | Adapter instructions for any local coding agent | Requires workspace install first |
@@ -51,7 +51,7 @@ To inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.5.8
+git checkout v0.5.9
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```

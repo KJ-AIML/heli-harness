@@ -676,6 +676,19 @@ try {
 	fail("Claude adapter smoke failed", error.message);
 }
 
+section("Codex adapter smoke verification");
+
+try {
+	execSync("node scripts/smoke-codex-adapter.mjs", {
+		cwd: root,
+		encoding: "utf8",
+		stdio: "inherit",
+	});
+	pass("Codex adapter smoke passed");
+} catch (error) {
+	fail("Codex adapter smoke failed", error.message);
+}
+
 section("Adapter wiring verification");
 
 try {

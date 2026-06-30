@@ -1,10 +1,25 @@
 # Codex Install
 
-From the parent workspace:
+Use the workspace installer from the repo checkout:
 
 ```powershell
-Set-Content -Path .\AGENTS.md -Value "Read .heli-harness/adapters/codex/AGENTS.md first."
+.\install.ps1 -Parent "C:\your\workspace"
 ```
+
+or:
+
+```bash
+./install.sh /path/to/workspace
+```
+
+The installer creates `AGENTS.md` in the parent workspace only when that file does not already exist:
+
+```text
+Read .heli-harness/adapters/codex/AGENTS.md first.
+```
+
+Updates do not modify the parent workspace `AGENTS.md`; keep local Codex notes there if needed.
 
 Do not copy Heli-Harness into `%USERPROFILE%\.codex\skills` by default. This harness is intended to live with the parent workspace.
 
+v0.5.9 verifies Codex adapter wiring with `node scripts/smoke-codex-adapter.mjs`, but it does not claim Codex runtime enforcement.

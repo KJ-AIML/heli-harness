@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.5.9 - Codex Governance Workflow
+
+### Added
+
+- Added `scripts/smoke-codex-adapter.mjs` to verify Codex adapter files, required `AGENTS.md` sections, installer-created workspace `AGENTS.md`, update preservation of user-owned workspace `AGENTS.md`, manifest evidence, and support matrix claims.
+- Added `smoke:codex` npm script and included Codex smoke in `npm run check`.
+
+### Changed
+
+- Promoted Codex from `wired` to `verified-wired`.
+- Improved `.heli-harness/adapters/codex/AGENTS.md` as the Codex-facing governance entrypoint with target discipline, write boundaries, safety guidance, evidence rules, validation expectations, final report expectations, and explicit limitations.
+- Updated `.heli-harness/adapters/codex/README.md` with the recommended Codex workflow and non-enforcement limitations.
+- Updated adapter manifest, support matrix, install docs, README, and governance model for the new status.
+- Integrated Codex smoke into release validation.
+
+### Notes
+
+- Does not claim Codex runtime hook enforcement.
+- Pi remains the only `enforced` adapter.
+- Claude Code and Codex are `verified-wired`.
+- Does not implement OpenCode/Cursor real adapters.
+- Does not start benchmark matrix runs.
+
 ## v0.5.8 - Claude Code Adapter Verification
 
 ### Added

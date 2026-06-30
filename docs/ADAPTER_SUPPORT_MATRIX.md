@@ -18,12 +18,12 @@ This document provides an honest, evidence-based assessment of Heli-Harness adap
 | Adapter | Status | Evidence | Enforcement Surface | Files Checked | Verification Command | Limitations | Next Milestone |
 |---------|--------|----------|---------------------|---------------|---------------------|-------------|----------------|
 | **Pi** | enforced | Extension file, smoke tests, hook guards | `tool_call` hook, `before_agent_start` hook | `extensions/pi-extension.js`, `scripts/smoke-extension-load.mjs` | `node scripts/smoke-extension-load.mjs` | Requires host-compatible `tool_call` hooks; not a sandbox | N/A (baseline) |
-| **AXGA** | documented | README exists, shares Pi extension | Same as Pi if hooks available | `.heli-harness/adapters/pi/README.md` | Manual verification | No dedicated AXGA smoke test; relies on Pi extension compatibility | v0.5.9+ |
-| **Codex** | wired | Adapter files exist, install creates pointer | Workspace `AGENTS.md` pointer | `.heli-harness/adapters/codex/AGENTS.md`, `install.sh`/`install.ps1` | `node scripts/verify-adapters.mjs` | No runtime hook enforcement; relies on Codex reading `AGENTS.md` | v0.5.9+ |
-| **Claude Code** | verified-wired | Adapter files, settings example, installer-created pointer, update preservation smoke | Workspace `CLAUDE.md` pointer; optional SessionStart context example | `.heli-harness/adapters/claude/CLAUDE.md`, `.heli-harness/adapters/claude/settings.local.json.example`, `scripts/smoke-claude-adapter.mjs`, `install.sh`/`install.ps1`, `update.sh`/`update.ps1` | `node scripts/smoke-claude-adapter.mjs` | No runtime hook enforcement proven; adapter is instruction/config/pointer based | v0.5.9+ runtime hook investigation |
-| **Cursor** | wired | Adapter files exist, install creates pointer | Workspace `.cursorrules` or `.cursor/rules/` | `.heli-harness/adapters/cursor/CURSOR.md`, `install.sh`/`install.ps1` | `node scripts/verify-adapters.mjs` | No runtime hook enforcement; relies on Cursor reading adapter file | v0.5.9+ |
+| **AXGA** | documented | README exists, shares Pi extension | Same as Pi if hooks available | `.heli-harness/adapters/pi/README.md` | Manual verification | No dedicated AXGA smoke test; relies on Pi extension compatibility | v0.5.10+ |
+| **Codex** | verified-wired | Adapter files, installer-created pointer, update preservation smoke | Workspace `AGENTS.md` pointer | `.heli-harness/adapters/codex/AGENTS.md`, `.heli-harness/adapters/codex/README.md`, `scripts/smoke-codex-adapter.mjs`, `install.sh`/`install.ps1`, `update.sh`/`update.ps1` | `node scripts/smoke-codex-adapter.mjs` | No runtime hook enforcement proven; adapter is instruction/pointer based, not a sandbox | v0.5.10+ runtime hook investigation |
+| **Claude Code** | verified-wired | Adapter files, settings example, installer-created pointer, update preservation smoke | Workspace `CLAUDE.md` pointer; optional SessionStart context example | `.heli-harness/adapters/claude/CLAUDE.md`, `.heli-harness/adapters/claude/settings.local.json.example`, `scripts/smoke-claude-adapter.mjs`, `install.sh`/`install.ps1`, `update.sh`/`update.ps1` | `node scripts/smoke-claude-adapter.mjs` | No runtime hook enforcement proven; adapter is instruction/config/pointer based | v0.5.10+ runtime hook investigation |
+| **Cursor** | wired | Adapter files exist, install creates pointer | Workspace `.cursorrules` or `.cursor/rules/` | `.heli-harness/adapters/cursor/CURSOR.md`, `install.sh`/`install.ps1` | `node scripts/verify-adapters.mjs` | No runtime hook enforcement; relies on Cursor reading adapter file | v0.5.10+ |
 | **Generic** | documented | Adapter instructions exist | None (manual setup) | `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md` | `node scripts/verify-adapters.mjs` | No install automation; no runtime enforcement | N/A |
-| **OpenCode** | planned | Mentioned in ROADMAP.md | None | None | N/A | No implementation | v0.5.9+ |
+| **OpenCode** | planned | Mentioned in ROADMAP.md | None | None | N/A | No implementation | v0.5.10+ |
 | **Windsurf** | planned | Mentioned in ROADMAP.md | None | None | N/A | No implementation | Post-v0.5 |
 | **Cline** | planned | Mentioned in ROADMAP.md | None | None | N/A | No implementation | Post-v0.5 |
 | **Gemini** | planned | Mentioned in ROADMAP.md | None | None | N/A | No implementation | Post-v0.5 |
@@ -74,12 +74,29 @@ This document provides an honest, evidence-based assessment of Heli-Harness adap
 - No tested Claude Code tool-call blocking hook is shipped.
 - Enforcement depends on Claude Code hook support and future tested blocking hooks.
 
-### Codex/Cursor Adapters (wired)
+### Codex Adapter (verified-wired)
+
+**Evidence:**
+- `.heli-harness/adapters/codex/AGENTS.md` is the Codex-facing entrypoint.
+- `install.sh` and `install.ps1` create workspace `AGENTS.md` when absent.
+- `update.sh` and `update.ps1` leave user-owned workspace `AGENTS.md` untouched.
+- `scripts/smoke-codex-adapter.mjs` verifies these artifacts locally.
+
+**Enforcement surfaces:**
+- Workspace `AGENTS.md` pointer directs Codex to `.heli-harness/adapters/codex/AGENTS.md`.
+- No runtime hook enforcement proven.
+
+**Limitations:**
+- Adapter is instruction/pointer based.
+- No tested Codex tool-call blocking hook is shipped.
+- Codex must voluntarily follow `AGENTS.md`.
+- Not a sandbox.
+
+### Cursor Adapter (wired)
 
 **Evidence:**
 - Adapter instruction files exist in `.heli-harness/adapters/<adapter>/`
 - Install scripts (`install.sh`, `install.ps1`) create workspace pointer files:
-  - Codex: `AGENTS.md` → `.heli-harness/adapters/codex/AGENTS.md`
   - Cursor: `.cursorrules` or `.cursor/rules/harness.mdc` → `.heli-harness/adapters/cursor/CURSOR.md`
 - `verify-adapters.mjs` validates file presence
 
@@ -128,7 +145,7 @@ Run `node scripts/verify-adapters.mjs` to validate:
 
 ## Future Work
 
-**v0.5.9+ — Real Adapter Implementation:**
+**v0.5.10+ — Real Adapter Implementation:**
 - Add runtime hook support for Claude Code if host support is confirmed and smoke-tested
 - Add runtime hook support for Codex (if host supports it)
 - Add runtime hook support for Cursor (if host supports it)
