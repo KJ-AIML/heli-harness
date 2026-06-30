@@ -133,7 +133,7 @@
   ],
   "notes": [
     "Pi/AXGA consume these rules for tool_call command guards where compatible hooks are available.",
-    "v0.5.4 adds local normalization and classifier facts before rule matching.",
+    "v0.5.5 adds tool-agnostic command guard, multi-tool file guard, and combined short-flag handling.",
     "This is best-effort command guarding, not a sandbox."
   ]
 }

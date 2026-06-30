@@ -35,12 +35,45 @@ if (-not (Test-Path $Target)) {
   throw "Target harness does not exist: $Target. Run install.ps1 first."
 }
 
-Get-ChildItem -LiteralPath $Source -Force | Where-Object { $_.Name -ne "state" -or $ResetState } | ForEach-Object {
+# v0.5.5: Preserve local overlays by default.
+# Packaged defaults update; user-owned overlays survive.
+$PreserveDirs = @("profiles", "workspace", "policies", "safety")
+if (-not $ResetState) {
+  $PreserveDirs += "state"
+}
+
+$TempPreserve = Join-Path ([System.IO.Path]::GetTempPath()) ("heli-update-preserve-" + [System.Guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $TempPreserve -Force | Out-Null
+
+foreach ($dir in $PreserveDirs) {
+  $from = Join-Path $Target $dir
+  if (Test-Path -LiteralPath $from -PathType Container) {
+    Copy-Item -LiteralPath $from -Destination (Join-Path $TempPreserve $dir) -Recurse -Force
+  }
+}
+
+Get-ChildItem -LiteralPath $Source -Force | ForEach-Object {
   Copy-Item -LiteralPath $_.FullName -Destination $Target -Recurse -Force
 }
 
+foreach ($dir in $PreserveDirs) {
+  $preserved = Join-Path $TempPreserve $dir
+  if (Test-Path -LiteralPath $preserved -PathType Container) {
+    $targetDir = Join-Path $Target $dir
+    if (Test-Path -LiteralPath $targetDir) {
+      Remove-Item -LiteralPath $targetDir -Recurse -Force
+    }
+    Copy-Item -LiteralPath $preserved -Destination $Target -Recurse -Force
+  }
+}
+Remove-Item -LiteralPath $TempPreserve -Recurse -Force
+
 Write-Host "Updated Heli-Harness at $Target"
 if (-not $ResetState) {
-  Write-Host "Preserved state/. Use -ResetState to replace state from the repo checkout."
+  Write-Host "Preserved local overlays: profiles/, workspace/, policies/, safety/, state/."
+  Write-Host "Use -ResetState to replace state/ from the repo checkout."
+} else {
+  Write-Host "Preserved local overlays: profiles/, workspace/, policies/, safety/."
+  Write-Host "state/ was replaced from the repo checkout (-ResetState)."
 }
 Write-Host "AGENTS.md and CLAUDE.md were not modified."

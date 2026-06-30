@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.4
+## Current Baseline: v0.5.5
 
-Latest stable release: `v0.5.4`
+Latest stable release: `v0.5.5`
 
-Release commit: see tag `v0.5.4`
+Release commit: see tag `v0.5.5`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.4>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.5>
 
 Stable behavior in this baseline:
 
@@ -140,7 +140,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.2 | Dogfood lint hotfix | Remove Pi/AXGA profile lint noise from profile docs while preserving active-profile checks. |
 | v0.5.3 | Rules-as-Enforcement | Make safety command rules executable in Pi/AXGA command guards. |
 | v0.5.4 | Safety Classifier Hardening | Harden command classification beyond simple pattern matching. |
-| v0.5.5 | Adapter Wiring Coverage | Extend adapter wiring coverage without starting benchmark matrix runs. |
+| v0.5.5 | Update Preservation & Tool Coverage | Preserve local overlays during update, broaden tool and path guard coverage. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -574,10 +574,33 @@ Acceptance criteria:
 - Smoke tests cover normalized command bypass forms and secret/redirection guards.
 - Docs state enforcement depends on host-compatible `tool_call` hooks.
 
-## v0.5.5 - Adapter Wiring Coverage (Planned)
+## v0.5.5 - Update Preservation & Tool Coverage (Implemented)
 
 Goal:
-Move on to adapter wiring coverage unless another dogfood hotfix is needed.
+Port non-overlapping fixes from PR #1 hard-review findings without breaking v0.5.3 command-rules.json source-of-truth or v0.5.4 classifier architecture.
+
+Scope:
+
+- Preserve local overlays (`profiles/`, `workspace/`, `policies/`, `safety/`) during update alongside existing `state/` preservation.
+- Broaden tool guard coverage to command-bearing tools beyond `bash` and file-write tools beyond `write`/`edit`.
+- Add backup suffix secret path detection.
+- Fix `validate-release.mjs` per-pattern `rg` error handling.
+- Make CI whitespace check enforcing.
+- Add `smoke:update` coverage.
+
+Non-goals:
+
+- No PR #1 inline command regex patterns (v0.5.4 classifier is superior).
+- No `"type": "module"` change (deferred).
+- No Claude/Codex/OpenCode adapter implementation.
+- No benchmark matrix runs.
+
+Acceptance criteria:
+
+- `npm run check` passes.
+- `npm run smoke:update` passes.
+- Smoke tests cover tool-agnostic command guard, multi-tool file guard, backup suffix paths, and update preservation.
+- Docs explain update overlay preservation behavior.
 
 ## Post-v0.5 Stabilization
 

@@ -130,15 +130,38 @@ const FALLBACK_COMMAND_RULES = [
 const COMMAND_RULE_TIERS = new Set(["T0", "T1", "T2", "T3", "T4", "T5", "T6"]);
 
 const DANGEROUS_FILE_PATTERNS = [
-	{ pattern: /\.env$/, reason: ".env files contain secrets" },
-	{ pattern: /(^|\/)\.env\.(local|production|development|test)$/, reason: "env files contain secrets" },
-	{ pattern: /\.pem$/, reason: "PEM files are private keys" },
-	{ pattern: /\.key$/, reason: "Key files are credentials" },
-	{ pattern: /(^|\/)credentials(\.json)?$/, reason: "Credential files contain secrets" },
-	{ pattern: /(^|\/)secrets\.json$/, reason: "secret files contain secrets" },
+	{ pattern: /\.env(?:\.bak)?$/, reason: ".env files contain secrets" },
+	{ pattern: /(^|\/)\.env\.(local|production|development|test)(?:\.bak)?$/, reason: "env files contain secrets" },
+	{ pattern: /\.pem(?:\.bak)?$/, reason: "PEM files are private keys" },
+	{ pattern: /\.key(?:\.bak)?$/, reason: "Key files are credentials" },
+	{ pattern: /(^|\/)credentials(\.json)?(?:\.bak)?$/, reason: "Credential files contain secrets" },
+	{ pattern: /(^|\/)secrets\.json(?:\.bak)?$/, reason: "secret files contain secrets" },
 	{ pattern: /(^|\/)\.(npmrc|pypirc)$/, reason: "package registry config may contain secrets" },
 	{ pattern: /(^|\/)\.ssh\/id_[^/]+$/, reason: "SSH private keys contain secrets" },
 ];
+
+const FILE_WRITE_TOOL_NAMES = new Set([
+	"write",
+	"edit",
+	"multi_edit",
+	"file_write",
+	"file_edit",
+	"fs.write",
+	"filesystem.write",
+]);
+
+function getFileWritePaths(input) {
+	const paths = [];
+	if (input && typeof input.path === "string" && input.path) paths.push(input.path);
+	if (input && typeof input.filePath === "string" && input.filePath) paths.push(input.filePath);
+	if (input && typeof input.file_path === "string" && input.file_path) paths.push(input.file_path);
+	if (input && Array.isArray(input.paths)) {
+		for (const p of input.paths) {
+			if (typeof p === "string" && p) paths.push(p);
+		}
+	}
+	return paths;
+}
 
 const SECRET_CONTENT_PATTERNS = [
 	/sk-[A-Za-z0-9_-]{8,}/,
@@ -397,12 +420,16 @@ function commandTokens(command) {
 	return collapseCommand(command).toLowerCase().split(" ").filter(Boolean);
 }
 
+function hasCombinedFlags(tokens, ...flags) {
+	return tokens.some((token) => token.startsWith("-") && !token.startsWith("--") && flags.every((flag) => token.includes(flag)));
+}
+
 function classifyCommandAliases(command) {
 	const tokens = commandTokens(command);
 	const variants = [];
-	if (tokens[0] === "rm" && (tokens.some((token) => token === "-rf" || token === "-fr") || (tokens.includes("-r") && tokens.includes("-f")))) variants.push("rm -rf");
+	if (tokens[0] === "rm" && (tokens.some((token) => token === "-rf" || token === "-fr") || (tokens.includes("-r") && tokens.includes("-f")) || hasCombinedFlags(tokens, "r", "f"))) variants.push("rm -rf");
 	if (tokens[0] === "rm" && tokens.includes("--recursive") && tokens.includes("--force")) variants.push("rm -rf");
-	if (tokens[0] === "git" && tokens[1] === "clean" && (tokens.includes("-fd") || tokens.includes("-df") || (tokens.includes("-f") && tokens.includes("-d")))) variants.push("git clean -fd");
+	if (tokens[0] === "git" && tokens[1] === "clean" && (tokens.includes("-fd") || tokens.includes("-df") || (tokens.includes("-f") && tokens.includes("-d")) || hasCombinedFlags(tokens, "f", "d"))) variants.push("git clean -fd");
 	if (tokens[0] === "git" && tokens[1] === "reset" && tokens.includes("--hard")) variants.push("git reset --hard");
 	if (tokens[0] === "rmdir" && tokens.includes("/s")) variants.push("rmdir /s");
 	if (tokens[0] === "del" && tokens.includes("/s")) variants.push("del /s");
@@ -1349,7 +1376,7 @@ HELI_HOOK_OK`
 				? "No target repo selected in multi-repo workspace"
 				: "No target context";
 
-		if (toolName === "bash" && input.command) {
+		if (input.command) {
 			const command = String(input.command);
 			const commandRules = loadCommandGuardRules(cwd);
 			if (commandRules.warnings.length > 0) {
@@ -1381,13 +1408,13 @@ HELI_HOOK_OK`
 						hookProbeGuardPending = false;
 						return { block: true, reason: `HELI_GUARD_OK: intercepted ${reason}` };
 					}
-					return confirmDangerous(ctx, "Dangerous command detected", `${reason}\n${targetContext}\n\nCommand: ${command}\n\nAllow?`, `${reason}. ${targetContext}`);
+					return await confirmDangerous(ctx, "Dangerous command detected", `${reason}\n${targetContext}\n\nCommand: ${command}\n\nAllow?`, `${reason}. ${targetContext}`);
 				}
 			}
 		}
 
-		if ((toolName === "write" || toolName === "edit") && input.path) {
-			const path = String(input.path);
+		const writePaths = FILE_WRITE_TOOL_NAMES.has(String(toolName || "")) ? getFileWritePaths(input) : [];
+		for (const path of writePaths) {
 			const resolvedPath = resolve(cwd, path);
 			const targetStatePath = resolve(getWorkspacePaths(cwd).targetPath);
 			if (hasMultiRepoIndex && !hasTargetSelection && resolvedPath !== targetStatePath) {

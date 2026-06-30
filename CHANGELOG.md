@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.5.5 - Update Preservation & Tool Coverage
+
+### Added
+
+- Added update overlay preservation for `profiles/`, `workspace/`, `policies/`, and `safety/` in `update.sh` and `update.ps1`. Local overlays now survive updates by default alongside the existing `state/` preservation.
+- Added `scripts/smoke-update-preserves-local-state.mjs` smoke test for update overlay preservation.
+- Added `npm run smoke:update` script for update preservation verification.
+- Added tool-agnostic command guard: `input.command` is now inspected for any command-bearing tool call, not just `bash`. This catches `shell` and other tool names that carry command input.
+- Added multi-tool file write guard: `multi_edit`, `file_write`, `file_edit`, `fs.write`, and `filesystem.write` tool calls are now path-guarded alongside `write` and `edit`.
+- Added backup suffix secret path detection for `.env.bak`, `.pem.bak`, `.key.bak`, `credentials.json.bak`, and `secrets.json.bak`.
+- Added combined short-flag handling in the command classifier (e.g., `git clean -xdf` is now recognized as `git clean -fd`).
+- Added smoke coverage for `shell` toolName command guarding, `multi_edit` path blocking, `file_write` secret path blocking, `git clean -xdf` classifier normalization, and backup suffix secret paths.
+
+### Changed
+
+- Update scripts now preserve local overlays (`profiles/`, `workspace/`, `policies/`, `safety/`) by default. `--reset-state` / `-ResetState` still resets only `state/`.
+- Moved `validate-release.mjs` legacy pattern `rg` error handling inside the per-pattern loop so that `rg` exit 1 for no matches on one pattern does not skip remaining patterns.
+- CI whitespace check now uses `git diff-tree --check --no-commit-id --root -r HEAD` instead of `git diff --check HEAD~1 HEAD || true`, making it enforcing.
+- `npm run check` now includes `smoke:update`.
+
+### Notes
+
+- Does not add Claude/Codex/OpenCode adapter implementation.
+- Does not start benchmark matrix runs.
+- Does not add `"type": "module"` to `package.json` (deferred for separate risk assessment).
+
 ## v0.5.4 - Safety Classifier Hardening
 
 ### Added

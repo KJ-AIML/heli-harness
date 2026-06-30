@@ -8,7 +8,7 @@ const tempDir = mkdtempSync(join(tmpdir(), "heli-extension-"));
 mkdirSync(join(tempDir, "extensions"), { recursive: true });
 mkdirSync(join(tempDir, ".heli-harness"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "HARNESS.md"), "# Harness\n");
-writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.5.4" }));
+writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.5.5" }));
 mkdirSync(join(tempDir, ".heli-harness", "profiles"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "profiles", "demo.md"), `# Demo
 
@@ -188,6 +188,7 @@ writeFileSync(join(tempDir, ".heli-harness", "safety", "command-rules.json"), JS
 		{ id: "yarn-publish", match: "yarn publish", tier: "T5", reason: "Publish actions are release operations" },
 		{ id: "npm-run-publish", match: "npm run publish", tier: "T5", reason: "Publish actions are release operations" },
 		{ id: "destructive-delete", match: "rm -rf", tier: "T6", reason: "Recursive delete is destructive" },
+		{ id: "git-clean-force", match: "git clean -fd", tier: "T6", reason: "git clean -fd is destructive" },
 		{ id: "custom-smoke-rule", match: "custom-block-me", tier: "T5", reason: "Custom smoke command needs approval" },
 	],
 }));
@@ -467,6 +468,29 @@ assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "cat .env"
 	block: true,
 	reason: "Blocked: sensitive file read detected. Target repo: demo. Run operation explicitly to override.",
 });
+// v0.5.5: tool-agnostic command guard — non-bash tool names with input.command
+assert.deepEqual(await toolCall({ toolName: "shell", input: { command: "git push" } }, {}), {
+	block: true,
+	reason: "Blocked: Remote git writes need explicit approval. Target repo: demo. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "bash", input: { command: "git clean -xdf" } }, {}), {
+	block: true,
+	reason: "Blocked: git clean -fd is destructive. Target repo: demo. Run operation explicitly to override.",
+});
+// v0.5.5: multi-tool file write guard
+assert.deepEqual(await toolCall({ toolName: "multi_edit", input: { path: "secrets.json" } }, {}), {
+	block: true,
+	reason: "Blocked: secret files contain secrets. Run operation explicitly to override.",
+});
+assert.deepEqual(await toolCall({ toolName: "file_write", input: { path: ".env.local" } }, {}), {
+	block: true,
+	reason: "Blocked: env files contain secrets. Run operation explicitly to override.",
+});
+// v0.5.5: backup suffix secret paths
+assert.deepEqual(await toolCall({ toolName: "write", input: { path: "secrets.pem.bak" } }, {}), {
+	block: true,
+	reason: "Blocked: PEM files are private keys. Run operation explicitly to override.",
+});
 
 const sessionStart = events.find((event) => event.name === "session_start").handler;
 const beforeAgentStart = events.find((event) => event.name === "before_agent_start").handler;
@@ -475,7 +499,7 @@ const baselinePrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
 assert(!baselinePrompt.systemPrompt.includes("HELI_HOOK_OK"));
 
 await commands.find((command) => command.name === "hh-status").options.handler({}, ctx);
-assert(notifications.some((item) => item.message === "Version: 0.5.4"));
+assert(notifications.some((item) => item.message === "Version: 0.5.5"));
 assert(notifications.some((item) => item.message === "Mode: package + workspace"));
 assert(notifications.some((item) => item.message === "Target repo: demo"));
 assert(notifications.some((item) => item.message === "Policy directory: detected"));
@@ -492,6 +516,10 @@ assert.deepEqual(await toolCall({ toolName: "write", input: { path: "notes.txt" 
 	block: true,
 	reason: "Blocked: target repo not selected in multi-repo workspace",
 });
+assert.deepEqual(await toolCall({ toolName: "multi_edit", input: { path: "notes.txt" } }, {}), {
+	block: true,
+	reason: "Blocked: target repo not selected in multi-repo workspace",
+});
 await commands.find((command) => command.name === "heli-target").options.handler("set demo", ctx);
 let targetState;
 try {
@@ -502,6 +530,10 @@ try {
 assert.equal(targetState.targetRepo, "demo");
 assert.equal(await toolCall({ toolName: "write", input: { path: "notes.txt" } }, {}), undefined);
 assert.deepEqual(await toolCall({ toolName: "write", input: { path: "..\\outside.txt" } }, {}), {
+	block: true,
+	reason: "Blocked: write path is outside writesAllowedUnder for demo",
+});
+assert.deepEqual(await toolCall({ toolName: "multi_edit", input: { path: "..\\outside.txt" } }, {}), {
 	block: true,
 	reason: "Blocked: write path is outside writesAllowedUnder for demo",
 });

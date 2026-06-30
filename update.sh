@@ -41,26 +41,36 @@ if [ ! -d "$TARGET" ]; then
 	exit 1
 fi
 
-TMP_STATE=""
-if [ "$RESET_STATE" -eq 0 ] && [ -d "$TARGET/state" ]; then
-	TMP_STATE="$(mktemp -d)"
-	cp -R "$TARGET/state" "$TMP_STATE/state"
+# v0.5.5: Preserve local overlays by default.
+# Packaged defaults update; user-owned overlays survive.
+PRESERVE_DIRS=(profiles workspace policies safety)
+if [ "$RESET_STATE" -eq 0 ]; then
+	PRESERVE_DIRS+=(state)
 fi
 
-if [ "$RESET_STATE" -eq 1 ]; then
-	cp -R "$SOURCE"/. "$TARGET"/
-else
-	find "$SOURCE" -mindepth 1 -maxdepth 1 ! -name state -exec cp -R {} "$TARGET"/ \;
-fi
+TMP_PRESERVE="$(mktemp -d)"
+for dir in "${PRESERVE_DIRS[@]}"; do
+	if [ -d "$TARGET/$dir" ]; then
+		cp -R "$TARGET/$dir" "$TMP_PRESERVE/$dir"
+	fi
+done
 
-if [ -n "$TMP_STATE" ]; then
-	rm -rf "$TARGET/state"
-	cp -R "$TMP_STATE/state" "$TARGET/state"
-	rm -rf "$TMP_STATE"
-fi
+cp -R "$SOURCE"/. "$TARGET"/
+
+for dir in "${PRESERVE_DIRS[@]}"; do
+	if [ -d "$TMP_PRESERVE/$dir" ]; then
+		rm -rf "$TARGET/$dir"
+		cp -R "$TMP_PRESERVE/$dir" "$TARGET/$dir"
+	fi
+done
+rm -rf "$TMP_PRESERVE"
 
 echo "Updated Heli-Harness at $TARGET"
 if [ "$RESET_STATE" -eq 0 ]; then
-	echo "Preserved state/. Use --reset-state to replace state from the repo checkout."
+	echo "Preserved local overlays: profiles/, workspace/, policies/, safety/, state/."
+	echo "Use --reset-state to replace state/ from the repo checkout."
+else
+	echo "Preserved local overlays: profiles/, workspace/, policies/, safety/."
+	echo "state/ was replaced from the repo checkout (--reset-state)."
 fi
 echo "AGENTS.md and CLAUDE.md were not modified."
