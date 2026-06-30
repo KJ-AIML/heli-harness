@@ -663,6 +663,19 @@ for (const file of requiredBenchmarkFiles) {
 
 // ── 7. Adapter wiring verification ──────────────────────────────────────────
 
+section("Claude adapter smoke verification");
+
+try {
+	execSync("node scripts/smoke-claude-adapter.mjs", {
+		cwd: root,
+		encoding: "utf8",
+		stdio: "inherit",
+	});
+	pass("Claude adapter smoke passed");
+} catch (error) {
+	fail("Claude adapter smoke failed", error.message);
+}
+
 section("Adapter wiring verification");
 
 try {

@@ -311,7 +311,15 @@ Adapters should not:
 - hide behavior in unreadable configuration
 - require a hosted service
 
-See [Adapter Support Matrix](../ADAPTER_SUPPORT_MATRIX.md) for evidence-based adapter status assessment. Adapter claims require evidence: no adapter is claimed as "enforced" without smoke tests proving runtime enforcement.
+Adapter status is evidence-based:
+
+- `enforced`: runtime hook/tool-call guard behavior is verified and tested.
+- `verified-wired`: adapter files, install/update wiring, generated pointer files, and config examples are smoke-tested, but runtime enforcement is not proven.
+- `wired`: adapter files and installer paths exist, but dedicated generated-artifact smoke coverage may be absent.
+- `documented`: instructions exist without verified wiring.
+- `planned`: roadmap only.
+
+See [Adapter Support Matrix](../ADAPTER_SUPPORT_MATRIX.md) for evidence-based adapter status assessment. Adapter claims require evidence: no adapter is claimed as "enforced" without smoke tests proving runtime enforcement. In v0.5.8, Claude Code is `verified-wired` because local smoke tests validate the adapter entrypoint, settings JSON, installer-created `CLAUDE.md`, and update preservation, but no Claude runtime hook enforcement is proven.
 
 ## Machine-Readable Sidecars
 

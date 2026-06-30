@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.5.8 - Claude Code Adapter Verification
+
+### Added
+
+- Added `verified-wired` adapter status for smoke-tested adapter wiring without runtime enforcement claims.
+- Added `scripts/smoke-claude-adapter.mjs` to verify Claude adapter files, required `CLAUDE.md` sections, settings JSON parsing, installer-created workspace `CLAUDE.md`, update preservation of user-owned workspace `CLAUDE.md`, manifest evidence, and support matrix claims.
+- Added `smoke:claude` npm script and included Claude smoke in `npm run check`.
+
+### Changed
+
+- Promoted Claude Code from `wired` to `verified-wired`.
+- Improved `.heli-harness/adapters/claude/CLAUDE.md` as the Claude-facing harness entrypoint with target discipline, write boundaries, safety guidance, evidence rules, validation expectations, final report expectations, and explicit limitations.
+- Updated adapter manifest, support matrix, install docs, README, and governance model for the new status.
+- Integrated Claude smoke into release validation.
+- Included local Windows portability hotfix `04443f2` for `scripts/smoke-update-preserves-local-state.mjs`.
+
+### Notes
+
+- Does not claim Claude Code runtime hook enforcement.
+- Pi remains the only `enforced` adapter.
+- Does not implement Codex/OpenCode/Cursor real adapters.
+- Does not start benchmark matrix runs.
+
 ## v0.5.7 - Adapter Wiring Coverage
 
 ### Added

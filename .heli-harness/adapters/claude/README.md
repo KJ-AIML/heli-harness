@@ -1,6 +1,16 @@
 # Claude Code Adapter
 
-Use this folder to connect Claude Code to Heli-Harness without making Claude the source of truth.
+This folder connects Claude Code to Heli-Harness without making Claude the source of truth.
+
+Status: `verified-wired`.
+
+Evidence:
+
+- `.heli-harness/adapters/claude/CLAUDE.md` is the Claude-facing entrypoint.
+- `.heli-harness/adapters/claude/settings.local.json.example` parses as JSON.
+- `install.sh` and `install.ps1` create a parent workspace `CLAUDE.md` pointer when one does not already exist.
+- `update.sh` and `update.ps1` leave user-owned parent workspace `CLAUDE.md` untouched.
+- `node scripts/smoke-claude-adapter.mjs` verifies those artifacts locally.
 
 Recommended parent `CLAUDE.md`:
 
@@ -8,5 +18,4 @@ Recommended parent `CLAUDE.md`:
 Read .heli-harness/adapters/claude/CLAUDE.md first.
 ```
 
-Optional hook examples are in `.heli-harness/hooks/examples/`.
-
+No runtime hook enforcement is proven for Claude Code in this release. Optional hook examples are context-injection examples only unless a future smoke test proves blocking behavior.

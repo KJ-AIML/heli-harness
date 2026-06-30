@@ -86,7 +86,7 @@ if (!adapters.taxonomy || typeof adapters.taxonomy !== "object") {
 	fail("adapters.json has taxonomy object");
 } else {
 	pass("adapters.json has taxonomy object");
-	const validStatuses = ["enforced", "wired", "documented", "planned", "unsupported"];
+	const validStatuses = ["enforced", "verified-wired", "wired", "documented", "planned", "unsupported"];
 	for (const status of validStatuses) {
 		if (!adapters.taxonomy[status]) {
 			fail(`taxonomy defines "${status}" status`);
@@ -107,7 +107,7 @@ pass("adapters.json has non-empty adapters array");
 
 section("Adapter schema validation");
 
-const validStatuses = ["enforced", "wired", "documented", "planned", "unsupported"];
+const validStatuses = ["enforced", "verified-wired", "wired", "documented", "planned", "unsupported"];
 const adapterIds = new Set();
 
 for (const adapter of adapters.adapters) {
@@ -196,6 +196,22 @@ for (const adapter of adapters.adapters) {
 		}
 	}
 
+	if (status === "verified-wired") {
+		if (evidence.length === 0) {
+			fail(`adapter "${id}" is "verified-wired" but has no evidence files`);
+		} else {
+			pass(`adapter "${id}" is "verified-wired" and has evidence files`);
+		}
+		if (verification.length === 0) {
+			fail(`adapter "${id}" is "verified-wired" but has no verification commands`);
+		} else {
+			pass(`adapter "${id}" is "verified-wired" and has verification commands`);
+		}
+		if (adapter.enforcementSurfaces?.some((surface) => /tool_call|block|guard/i.test(surface))) {
+			fail(`adapter "${id}" is "verified-wired" but claims runtime enforcement surface`);
+		}
+	}
+
 	if (status === "wired") {
 		if (evidence.length === 0) {
 			fail(`adapter "${id}" is "wired" but has no evidence files`);
@@ -261,10 +277,10 @@ const docsToCheck = [
 ];
 
 const riskyPatterns = [
-	{ pattern: /supports\s+claude(?!\s+code\s+adapter)/i, claim: "supports Claude", requiredStatus: ["enforced", "wired"] },
-	{ pattern: /supports\s+codex(?!\s+adapter)/i, claim: "supports Codex", requiredStatus: ["enforced", "wired"] },
-	{ pattern: /supports\s+cursor(?!\s+adapter)/i, claim: "supports Cursor", requiredStatus: ["enforced", "wired"] },
-	{ pattern: /(?<!no\s)(?<!not\s)opencode\s+adapter(?!\s+implementation)/i, claim: "OpenCode adapter (positive claim)", requiredStatus: ["enforced", "wired", "documented"] },
+	{ pattern: /supports\s+claude(?!\s+code\s+adapter)/i, claim: "supports Claude", requiredStatus: ["enforced", "verified-wired", "wired"] },
+	{ pattern: /supports\s+codex(?!\s+adapter)/i, claim: "supports Codex", requiredStatus: ["enforced", "verified-wired", "wired"] },
+	{ pattern: /supports\s+cursor(?!\s+adapter)/i, claim: "supports Cursor", requiredStatus: ["enforced", "verified-wired", "wired"] },
+	{ pattern: /(?<!no\s)(?<!not\s)opencode\s+adapter(?!\s+implementation)/i, claim: "OpenCode adapter (positive claim)", requiredStatus: ["enforced", "verified-wired", "wired", "documented"] },
 	{ pattern: /claude\s+enforced/i, claim: "Claude enforced", requiredStatus: ["enforced"] },
 	{ pattern: /codex\s+enforced/i, claim: "Codex enforced", requiredStatus: ["enforced"] },
 	{ pattern: /cursor\s+enforced/i, claim: "Cursor enforced", requiredStatus: ["enforced"] },

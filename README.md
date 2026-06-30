@@ -26,6 +26,7 @@ See [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) for detailed status
 
 **Adapter status taxonomy:**
 - **enforced** — Runtime hook/tool-call guard is verified and tested
+- **verified-wired** — Adapter files, install/update wiring, generated pointer files, and config examples are validated by smoke tests; runtime enforcement is not proven
 - **wired** — Files/config/install paths exist and are validated
 - **documented** — Documentation exists, but no verified wiring or runtime enforcement
 - **planned** — Roadmap item exists, but no shipped adapter wiring yet
@@ -33,8 +34,8 @@ See [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) for detailed status
 
 **Current adapter status:**
 - **Pi**: `enforced` — Extension file, smoke tests, hook guards verified
+- **Claude Code**: `verified-wired` — Adapter files, settings example, installer-created `CLAUDE.md`, and update preservation are smoke-tested; no runtime enforcement proven
 - **Codex**: `wired` — Adapter files exist, install creates pointer, no runtime enforcement
-- **Claude Code**: `wired` — Adapter files exist, install creates pointer, no runtime enforcement
 - **Cursor**: `wired` — Adapter files exist, install creates pointer, no runtime enforcement
 - **AXGA**: `documented` — Shares Pi adapter docs, no dedicated verification
 - **Generic**: `documented` — Adapter instructions exist, manual setup
@@ -72,7 +73,7 @@ Install this repo into the current folder as a parent-workspace harness:
 
 https://github.com/KJ-AIML/heli-harness
 
-Use the latest stable tag (v0.5.7). Do not install globally. Treat the current
+Use the latest stable tag (v0.5.8). Do not install globally. Treat the current
 directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
@@ -84,7 +85,7 @@ and CLAUDE.md exist after install.
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.7
+git checkout v0.5.8
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install
@@ -96,7 +97,7 @@ Remove-Item -Recurse -Force hh-source
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.7
+git checkout v0.5.8
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -108,8 +109,8 @@ rm -rf hh-source
 Pi and AXGA can load Heli-Harness as a package to get skills and a lightweight extension:
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.7
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.7
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.8
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.8
 ```
 
 This installs the agent package, which does two things:
@@ -148,7 +149,7 @@ All workflow commands (`/heli-init`, `/heli-review`, `/heli-audit`, `/heli-valid
 
 `/heli-validate lint` now runs lightweight local checks for repo profiles, policy overlays, safety overlays, workspace index, target state, advisory locks, and run report completeness. `/heli-validate workspace`, `/heli-validate target`, and `/heli-validate lock` provide focused checks.
 
-`command-rules.json` is consumed by the Pi/AXGA runtime guard where compatible `tool_call` hooks are available. These rules remain the policy source of truth, and v0.5.7 adds a local classifier that normalizes common shell forms before matching rules. The classifier improves detection for repeated whitespace, case variants, simple shell wrappers/chains, publish/release variants, destructive delete variants, shell redirection writes outside `writesAllowedUnder`, sensitive paths, and obvious secret-like write content. This is not a sandbox; it is an adapter-level guard that depends on host hook support.
+`command-rules.json` is consumed by the Pi/AXGA runtime guard where compatible `tool_call` hooks are available. These rules remain the policy source of truth, and the local classifier normalizes common shell forms before matching rules. The classifier improves detection for repeated whitespace, case variants, simple shell wrappers/chains, publish/release variants, destructive delete variants, shell redirection writes outside `writesAllowedUnder`, sensitive paths, and obvious secret-like write content. This is not a sandbox; it is an adapter-level guard that depends on host hook support.
 
 Hook observability is opt-in and one-shot:
 
@@ -161,7 +162,7 @@ Hook observability is opt-in and one-shot:
 - `pi install ...` does **not** automatically create `.heli-harness/` in every folder. Use `/heli-install` to set up the workspace harness in a specific folder.
 - Workspace install remains the source of truth for parent-workspace behavior.
 - Agent packages may run with broad local access. Inspect source code before installing.
-- **Status: supported** - verified with AXGA and Pi loading v0.5.7.
+- **Status: supported** - use the v0.5.8 tag after release.
 
 ### Multi-repo targeting
 
@@ -192,7 +193,7 @@ Current supported path:
 2. Claude Code reads the workspace `CLAUDE.md`, which points to `.heli-harness/adapters/claude/CLAUDE.md`.
 3. Claude Code follows the adapter instructions.
 
-Optional hooks require review/consent. No marketplace plugin. No global install.
+Status: `verified-wired`. v0.5.8 smoke-tests the adapter entrypoint, settings JSON, installer-created `CLAUDE.md`, and update preservation of user-owned workspace `CLAUDE.md`. No Claude runtime hook enforcement is claimed. No marketplace plugin. No global install.
 
 ### Cursor
 
@@ -219,7 +220,7 @@ If you want to inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.5.7
+git checkout v0.5.8
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```

@@ -5,8 +5,8 @@ Heli-Harness can be installed as a Pi package to expose skills and a lightweight
 ## Install
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.7
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.7
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.8
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.8
 ```
 
 This installs the Pi package, which does two things:
@@ -30,7 +30,7 @@ This installs the Pi package, which does two things:
 - Use `/heli-install` or `/hh-install` inside Pi to install the workspace harness into the current folder.
 - Workflow commands (`/heli-init`, `/heli-review`, etc.) require workspace harness to be installed first.
 
-**Status: supported.** Remote `git:` install verified for v0.5.7.
+**Status: supported.** Use the v0.5.8 tag after release.
 
 ### 2. Workspace harness install (recommended)
 
@@ -52,7 +52,7 @@ Or run the installer manually:
 # macOS/Linux
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.7
+git checkout v0.5.8
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -61,7 +61,7 @@ rm -rf hh-source
 # Windows PowerShell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.7
+git checkout v0.5.8
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install

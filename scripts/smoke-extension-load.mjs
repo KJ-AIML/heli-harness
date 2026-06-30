@@ -8,7 +8,7 @@ const tempDir = mkdtempSync(join(tmpdir(), "heli-extension-"));
 mkdirSync(join(tempDir, "extensions"), { recursive: true });
 mkdirSync(join(tempDir, ".heli-harness"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "HARNESS.md"), "# Harness\n");
-writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.5.7" }));
+writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.5.8" }));
 mkdirSync(join(tempDir, ".heli-harness", "profiles"), { recursive: true });
 writeFileSync(join(tempDir, ".heli-harness", "profiles", "demo.md"), `# Demo
 
@@ -512,7 +512,7 @@ const baselinePrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
 assert(!baselinePrompt.systemPrompt.includes("HELI_HOOK_OK"));
 
 await commands.find((command) => command.name === "hh-status").options.handler({}, ctx);
-assert(notifications.some((item) => item.message === "Version: 0.5.7"));
+assert(notifications.some((item) => item.message === "Version: 0.5.8"));
 assert(notifications.some((item) => item.message === "Mode: package + workspace"));
 assert(notifications.some((item) => item.message === "Target repo: demo"));
 assert(notifications.some((item) => item.message === "Policy directory: detected"));

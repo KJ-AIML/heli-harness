@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.7
+## Current Baseline: v0.5.8
 
-Latest stable release: `v0.5.7`
+Latest stable release: `v0.5.8`
 
-Release commit: see tag `v0.5.7`
+Release commit: see tag `v0.5.8`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.7>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.8>
 
 Stable behavior in this baseline:
 
@@ -72,6 +72,12 @@ Stable behavior in this baseline:
   - command normalization handles repeated whitespace, case variants, simple chains, and common shell wrappers
   - classifier facts improve matching for publish/release variants and destructive delete variants
   - shell redirection writes outside `writesAllowedUnder`, sensitive reads, expanded secret paths, and obvious secret-like write content are guarded where host hooks expose inputs
+- Adapter verification:
+  - adapter manifest and support matrix validate evidence-backed claims
+  - Pi remains `enforced`
+  - Claude Code is `verified-wired`: adapter entrypoint, settings example, installer pointer, and update preservation are smoke-tested
+  - Codex and Cursor remain `wired`
+  - runtime enforcement is not claimed without tested hook evidence
 
 ## Product Positioning
 
@@ -143,6 +149,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.5 | Update Preservation & Tool Coverage | Preserve local overlays during update, broaden tool and path guard coverage. |
 | v0.5.6 | Classifier Git Global Flags Hotfix | Normalize git global flags (-C, -c) before rule matching. |
 | v0.5.7 | Adapter Wiring Coverage | Verify adapter file presence, update support matrix, add adapter validation. |
+| v0.5.8 | Claude Code Adapter Verification | Smoke-test Claude adapter files, settings JSON, installer pointer, and update preservation without claiming runtime enforcement. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -662,6 +669,46 @@ Acceptance criteria:
 - `verify-adapters.mjs` validates adapter manifest schema, evidence file presence, and docs consistency.
 - Docs distinguish supported vs. documented vs. planned adapters.
 - No overclaims (e.g., claiming "enforced" without smoke tests).
+
+## v0.5.8 - Claude Code Adapter Verification (Implemented)
+
+Goal:
+Promote Claude Code from basic `wired` documentation to `verified-wired` adapter support with local smoke evidence, without claiming runtime enforcement.
+
+Rationale:
+Claude Code had adapter files and installer pointers, but no dedicated smoke test proving the generated workspace `CLAUDE.md`, settings example, or update-preservation behavior. Claims require evidence, so the adapter status needed a middle tier between file presence and runtime enforcement.
+
+Scope:
+
+- Add `verified-wired` adapter status.
+- Improve `.heli-harness/adapters/claude/CLAUDE.md` as the Claude-facing harness entrypoint.
+- Validate `.heli-harness/adapters/claude/settings.local.json.example` as JSON.
+- Add `scripts/smoke-claude-adapter.mjs`.
+- Verify install creates workspace `CLAUDE.md` when absent.
+- Verify update preserves user-owned workspace `CLAUDE.md`.
+- Add Claude smoke to `npm run check` and release validation.
+- Update adapter manifest and support matrix with Claude evidence.
+- Include the local Windows smoke portability hotfix commit in this release.
+
+Non-goals:
+
+- No Claude runtime hook enforcement claim.
+- No Codex/OpenCode/Cursor real adapter implementation.
+- No benchmark matrix runs.
+- No roadmap scope reduction.
+
+Acceptance criteria:
+
+- `npm run check` passes.
+- `node scripts/smoke-claude-adapter.mjs` passes.
+- Claude status is `verified-wired`, not `enforced`.
+- Pi remains the only `enforced` adapter.
+- Support matrix and manifest explain that Claude runtime enforcement is not proven.
+
+Risks:
+
+- Claude Code hook support may change; runtime blocking must be validated in a later milestone before any enforcement claim.
+- Instruction/pointer wiring still relies on Claude Code loading and following workspace instructions.
 
 ## Post-v0.5 Stabilization
 
