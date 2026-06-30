@@ -130,19 +130,30 @@ Strong for repository custom instructions and PR workflow, because these are off
 - Treating every observed repo pattern as a recommended convention.
 - Hiding important governance state outside reviewable files.
 
-## How the OpenMesh Experiment Maps to Research Findings
+## Evidence Classes for Heli
 
-The OpenMesh-style experiment compared agent behavior across governance conditions:
+This synthesis separates four evidence classes:
+
+- Hypothesis: expected governance outcomes that still need measured runs.
+- Design rationale: product decisions inferred from documented agent-system patterns.
+- Observed evidence: behavior visible in local smoke tests, docs, or repo artifacts.
+- Measured benchmark results: scored benchmark runs captured with run logs and scorecards.
+
+Heli does not yet ship measured benchmark matrix results. The benchmark pack defines methodology, rubrics, templates, and illustrative examples; measured runs are planned in v0.5.x Full Coverage work.
+
+## How the OpenMesh Benchmark Method Maps to Research Findings
+
+The OpenMesh-style example is an illustrative / hypothetical benchmark design, not a measured benchmark result. It shows how to compare agent behavior across governance conditions:
 
 - no harness
 - Heli with descriptive profile
 - Heli with stronger prescriptive policy overlay
 
-Findings:
+Hypotheses to test:
 
-- Heli improved workflow discipline, traceability, reports, and pre-work audit behavior.
-- Auto-generated descriptive profiles improved awareness but did not reliably stop agents from copying weak existing patterns.
-- Prescriptive engineering directives and policy overlays produced stronger implementation quality.
+- Heli should improve workflow discipline, traceability, reports, and pre-work audit behavior.
+- Auto-generated descriptive profiles should improve awareness but may not reliably stop agents from copying weak existing patterns.
+- Prescriptive engineering directives and policy overlays should produce stronger implementation quality.
 - Therefore, Heli needs policy overlays and tech-debt classification.
 
 Mapping to research:

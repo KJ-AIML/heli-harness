@@ -31,7 +31,4 @@ Scope:
 
 ## Exceptions
 
-- Scope:
-- Approval:
-- Justification:
-- Rollback plan:
+- None currently approved.

@@ -83,6 +83,55 @@ function isDir(p) {
 	}
 }
 
+function rel(p) {
+	return p.replace(root, "").replace(/^[/\\]/, "").split("\\").join("/");
+}
+
+function walkFiles(dir, predicate = () => true) {
+	const out = [];
+	if (!isDir(dir)) return out;
+	for (const name of readdirSync(dir).sort()) {
+		const path = join(dir, name);
+		if (isDir(path)) out.push(...walkFiles(path, predicate));
+		else if (isFile(path) && predicate(path)) out.push(path);
+	}
+	return out;
+}
+
+function normalizeText(text) {
+	return String(text || "").replace(/\r\n/g, "\n");
+}
+
+function escapeRegExp(value) {
+	return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hasHeading(text, heading) {
+	return new RegExp(`^#{1,6}\\s+${escapeRegExp(heading)}\\s*$`, "im").test(text);
+}
+
+function getSectionBody(text, heading) {
+	const normalized = normalizeText(text);
+	const match = new RegExp(`^#{1,6}\\s+${escapeRegExp(heading)}\\s*$`, "im").exec(normalized);
+	if (!match) return "";
+	const rest = normalized.slice(match.index + match[0].length);
+	const nextHeading = /\n#{1,6}\s+/m.exec(rest);
+	return (nextHeading ? rest.slice(0, nextHeading.index) : rest).trim();
+}
+
+function sectionHasContent(text, heading) {
+	return /[a-z0-9]/i.test(getSectionBody(text, heading));
+}
+
+function sectionHasEvidence(text, heading) {
+	const body = getSectionBody(text, heading);
+	return /`[^`]+`/.test(body) || /(evidence path|package\.json|readme|agents\.md|claude\.md|docs\/|\/|\\)/i.test(body);
+}
+
+function isExplicitNoExceptions(body) {
+	return /\bnone currently approved\b|\bno exceptions\b/i.test(body);
+}
+
 // ── 1. JSON / version checks ────────────────────────────────────────────────
 
 section("JSON and version checks");
@@ -358,6 +407,142 @@ if (!currentVersion) {
 }
 
 // ── 5. Conflict markers ─────────────────────────────────────────────────────
+
+section("Expanded current-doc audit");
+
+if (!currentVersion) {
+	fail("expanded current-doc audit", "cannot determine current version from package.json");
+} else {
+	const currentTag = `v${currentVersion}`;
+	const currentFiles = [
+		join(root, "README.md"),
+		join(root, "INSTALL.md"),
+		join(root, "docs", "INSTALL_MATRIX.md"),
+		join(root, "docs", "architecture", "governance-model.md"),
+		join(root, ".heli-harness", "README.md"),
+		join(root, ".heli-harness", "INSTALL.md"),
+		join(root, "extensions", "pi-extension.js"),
+		...walkFiles(join(root, ".heli-harness", "adapters"), (path) => path.endsWith(".md")),
+	];
+	const staleVersionPattern = /\bv(0\.(?:3|4)\.\d|0\.5\.0)\b/g;
+	let staleCurrentDocs = 0;
+	for (const file of currentFiles) {
+		const text = safeReadText(file);
+		if (!text) continue;
+		const stale = [...text.matchAll(staleVersionPattern)]
+			.map((match) => match[0])
+			.filter((tag) => tag !== currentTag);
+		const staleSkillCount = /\b17 skills\b/i.test(text);
+		if (stale.length || staleSkillCount) {
+			staleCurrentDocs++;
+			fail(rel(file), [
+				stale.length ? `stale tags: ${[...new Set(stale)].join(", ")}` : "",
+				staleSkillCount ? "stale skill count: 17 skills" : "",
+			].filter(Boolean).join("; "));
+		}
+	}
+	if (staleCurrentDocs === 0) {
+		pass("current docs, adapter docs, internal install docs, and extension strings are current");
+	}
+}
+
+section("Shipped defaults lint");
+
+const PROFILE_REQUIRED_SECTIONS = [
+	"Policy references",
+	"Observed stack",
+	"Existing patterns",
+	"Recommended conventions",
+	"Known tech debt",
+	"Forbidden patterns",
+	"Safer alternatives",
+	"Command tiers",
+	"Repo risks",
+	"Exceptions",
+	"Evidence paths",
+];
+
+const profilesDir = join(root, ".heli-harness", "profiles");
+const activeProfiles = walkFiles(profilesDir, (path) => path.endsWith(".md") && rel(path) !== ".heli-harness/profiles/README.md");
+if (activeProfiles.length === 0) {
+	fail("active repo profiles", "no active .md profiles found");
+} else {
+	let profileWarnings = 0;
+	for (const file of activeProfiles) {
+		const text = normalizeText(safeReadText(file));
+		for (const sectionName of PROFILE_REQUIRED_SECTIONS) {
+			if (!hasHeading(text, sectionName)) {
+				profileWarnings++;
+				fail(rel(file), `missing section "${sectionName}"`);
+			}
+		}
+		if (sectionHasContent(text, "Existing patterns") && !sectionHasEvidence(text, "Existing patterns") && !sectionHasContent(text, "Evidence paths")) {
+			profileWarnings++;
+			fail(rel(file), "existing patterns section has no evidence paths");
+		}
+		if (sectionHasContent(text, "Recommended conventions") && !sectionHasEvidence(text, "Recommended conventions") && !sectionHasContent(text, "Evidence paths")) {
+			profileWarnings++;
+			fail(rel(file), "recommended conventions section has no evidence paths");
+		}
+		if (sectionHasContent(text, "Known tech debt") && !sectionHasContent(text, "Safer alternatives")) {
+			profileWarnings++;
+			fail(rel(file), "known tech debt has no safer alternatives");
+		}
+	}
+	if (profileWarnings === 0) pass(`${activeProfiles.length} active profile(s) satisfy required taxonomy`);
+}
+
+const expectedProfile = join(root, ".heli-harness", "profiles", "heli-harness.md");
+if (isFile(expectedProfile)) pass("active heli-harness profile exists");
+else fail(".heli-harness/profiles/heli-harness.md", "missing active dogfood profile");
+
+const strayAgentProfile = join(root, ".heli-harness", "profiles", "agent-native-backend.md");
+if (isFile(strayAgentProfile)) fail(rel(strayAgentProfile), "unrelated active profile should be an example");
+else pass("unrelated agent-native-backend profile is not active");
+
+const policiesDir = join(root, ".heli-harness", "policies");
+const policyFiles = walkFiles(policiesDir, (path) => path.endsWith(".md"));
+let policyWarnings = 0;
+for (const file of policyFiles) {
+	const text = normalizeText(safeReadText(file));
+	const exceptions = getSectionBody(text, "Exceptions");
+	if (!sectionHasContent(text, "Exceptions")) {
+		policyWarnings++;
+		fail(rel(file), "Exceptions section is empty");
+	} else if (!isExplicitNoExceptions(exceptions) && !/(scope:|condition:|approval:|justification:)/i.test(exceptions)) {
+		policyWarnings++;
+		fail(rel(file), "Exceptions section must say none approved or record scope/approval/justification");
+	}
+}
+if (policyFiles.length > 0 && policyWarnings === 0) pass(`${policyFiles.length} policy exception section(s) are explicit`);
+
+const shippedIndex = safeReadJson(join(root, ".heli-harness", "workspace", "index.json"));
+if (!shippedIndex || shippedIndex.schemaVersion !== 1 || !shippedIndex.workspaceRoot || !Array.isArray(shippedIndex.repos)) {
+	fail(".heli-harness/workspace/index.json", "must have schemaVersion, workspaceRoot, and repos array");
+} else {
+	pass(".heli-harness/workspace/index.json has active schema fields");
+}
+
+const shippedTarget = safeReadJson(join(root, ".heli-harness", "workspace", "target.json"));
+if (!shippedTarget || shippedTarget.schemaVersion !== 1 || !shippedTarget.targetRepo || !shippedTarget.targetGitRoot || !shippedTarget.writesAllowedUnder || !shippedTarget.activeProfile) {
+	fail(".heli-harness/workspace/target.json", "must have active target fields for dogfood defaults");
+} else {
+	pass(".heli-harness/workspace/target.json has active target fields");
+}
+
+section("Benchmark evidence wording");
+
+const benchmarkExample = safeReadText(join(root, "benchmarks", "examples", "openmesh-style-ab.md")) || "";
+if (!/Illustrative \/ hypothetical example\s+.\s+not a measured benchmark result/i.test(benchmarkExample)) {
+	fail("benchmarks/examples/openmesh-style-ab.md", "missing illustrative/hypothetical label");
+} else {
+	pass("benchmark example is labeled as illustrative, not measured");
+}
+if (/(^|\n)## Expected Results\b/.test(benchmarkExample) || /\*\*Likely outcome:\*\*/.test(benchmarkExample)) {
+	fail("benchmarks/examples/openmesh-style-ab.md", "hypothetical outcomes should not read as measured expected results");
+} else {
+	pass("benchmark example outcome wording is hypothetical");
+}
 
 section("Conflict markers");
 

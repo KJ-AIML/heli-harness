@@ -287,7 +287,7 @@ Reports should include:
 
 Reports prove process discipline. They should be lintable before a task is considered complete.
 
-In v0.4.2, Heli extends report lint so reports can also record workspace root, target repo, target git root, writes allowed under, workspace index usage, target selection method, and out-of-target warnings. The linter still warns by default rather than acting as a hard rule engine.
+Heli report lint records workspace root, target repo, target git root, writes allowed under, workspace index usage, target selection method, and out-of-target warnings. The linter still warns by default rather than acting as a hard rule engine.
 
 ## Adapter Responsibilities
 

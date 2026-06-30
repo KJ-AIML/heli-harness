@@ -30,7 +30,4 @@ Scope:
 
 ## Exceptions
 
-- Scope:
-- Approval:
-- Justification:
-- Expiry or cleanup:
+- None currently approved.

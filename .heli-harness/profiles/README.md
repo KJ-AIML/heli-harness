@@ -1,16 +1,20 @@
 # Repo Profiles
 
-Repo profiles document repo-specific policy that the harness must not guess.
+Repo profiles document repo-specific facts, risks, and conventions that the harness must not guess. Team rules belong in policy overlays.
 
 Create one profile per repo using `templates/repo-profile.md`. If a field is unknown, write `Unknown` until the repo owner or repo docs clarify it.
 
-Profiles should cover:
+Active profiles should follow the current taxonomy:
 
-- repo purpose
-- branch and PR policy
-- build and test commands
-- generated-file policy
-- deployment and release policy
-- ownership and review expectations
-- known risks and fragile areas
+- Policy references
+- Observed stack
+- Existing patterns
+- Recommended conventions
+- Known tech debt
+- Forbidden patterns
+- Safer alternatives
+- Command tiers
+- Repo risks
+- Exceptions
+- Evidence paths
 

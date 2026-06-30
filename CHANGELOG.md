@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.5.1 - Self-Consistency and Dogfood Cleanup
+
+### Changed
+
+- Updated current install examples and user-facing Pi/AXGA adapter docs to v0.5.1.
+- Added an active `heli-harness` repo profile and self-dogfood workspace target defaults.
+- Moved the unrelated `agent-native-backend` profile to an example filename.
+- Made policy exception sections explicit when no exceptions are approved.
+- Clarified that OpenMesh-style benchmark content is illustrative and not measured evidence.
+- Updated research and ADR language to separate hypothesis, design rationale, observed evidence, and measured benchmark results.
+- Extended release validation to cover adapter docs, internal install docs, extension strings, shipped defaults, profile taxonomy, policy exceptions, and benchmark labeling.
+
+### Notes
+
+- Keeps the v0.5.x Full Coverage benchmark roadmap intact.
+- Does not add Claude/Codex/OpenCode adapter implementation.
+- Does not start benchmark matrix runs.
+
 ## v0.5.0 - Governance Benchmark Pack
 
 ### Added

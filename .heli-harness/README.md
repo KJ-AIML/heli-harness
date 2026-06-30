@@ -10,7 +10,7 @@ Heli-Harness gives local coding agents (Claude Code, Codex, Cursor, Pi, generic)
 
 - `HARNESS.md` — source of truth for agent behavior
 - `manifest.json` — harness metadata
-- `skills/` — 17 skills for agent workflows
+- `skills/` — 23 skills for agent workflows
 - `adapters/` — agent-specific instructions (Codex, Claude, Cursor, Pi, Generic)
 - `profiles/` — repo-specific profiles
 - `state/` — task tracking and decisions

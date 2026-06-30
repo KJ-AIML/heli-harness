@@ -30,7 +30,4 @@ Scope:
 
 ## Exceptions
 
-- Scope:
-- Approval:
-- Justification:
-- Compensating check:
+- None currently approved.

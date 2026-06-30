@@ -31,7 +31,4 @@ Scope:
 
 ## Exceptions
 
-- Scope:
-- Approval:
-- Justification:
-- Follow-up:
+- None currently approved.

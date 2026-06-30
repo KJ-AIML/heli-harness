@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.0
+## Current Baseline: v0.5.1
 
-Latest stable release: `v0.5.0`
+Latest stable release: `v0.5.1`
 
-Release commit: see tag `v0.5.0`
+Release commit: see tag `v0.5.1`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.0>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.1>
 
 Stable behavior in this baseline:
 
@@ -56,6 +56,11 @@ Stable behavior in this baseline:
   - experiment templates (experiment plan, run log, scorecard, comparison report)
   - example A/B/C/D benchmark (openmesh-style-ab.md)
   - optional local benchmark summary script
+- Self-consistency and dogfood cleanup:
+  - current install examples and adapter docs aligned to the latest stable tag
+  - active `heli-harness` repo profile and self-dogfood workspace target defaults
+  - release validation covers adapter docs, internal install docs, extension strings, shipped defaults, profile taxonomy, policy exceptions, and benchmark labeling
+  - benchmark examples clearly labeled as illustrative until measured runs exist
 
 ## Product Positioning
 
@@ -120,6 +125,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.4.2 | Multi-repo targeting and workspace index | Prevent wrong-repo and wrong-directory edits in parent workspaces. |
 | v0.4.3 | CI and state safety polish | Self-validate on GitHub, check docs/version consistency, advisory lock warnings for parallel agents. |
 | v0.5.0 | Governance benchmark pack | Measure Heli as a governance layer with repeatable experiments. |
+| v0.5.1 | Self-consistency and dogfood cleanup | Make current claims, shipped defaults, and release validation align before adapter/benchmark expansion. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -449,6 +455,33 @@ Risks:
 - Model behavior changes can make comparisons noisy.
 - Human reviewers may score reports inconsistently.
 - Token and time overhead may vary by host tool.
+
+## v0.5.1 - Self-Consistency and Dogfood Cleanup (Implemented)
+
+Goal:
+Make the current Heli-Harness repo self-consistent, lint-clean, and dogfood-ready before expanding adapter implementation or running the benchmark matrix.
+
+Scope:
+
+- Align current install docs, adapter docs, and user-facing extension strings with the latest stable version.
+- Add a valid active `heli-harness` repo profile.
+- Make shipped workspace defaults point at the repo itself for dogfood validation.
+- Move unrelated active profiles to example filenames.
+- Make policy exception sections explicit.
+- Label benchmark examples as illustrative unless backed by measured run logs.
+- Extend release validation for shipped defaults and current-doc coverage.
+
+Non-goals:
+
+- No Claude/Codex/OpenCode adapter implementation.
+- No benchmark matrix runs.
+- No roadmap reduction.
+
+Acceptance criteria:
+
+- `npm run check` passes.
+- `node scripts/validate-release.mjs` catches stale current install examples, stale adapter docs, stale internal install docs, stale extension support strings, invalid active profiles, invalid policy exception blocks, and unlabeled hypothetical benchmark examples.
+- Current baseline and latest stable references point to v0.5.1.
 
 ## Post-v0.5 Stabilization
 

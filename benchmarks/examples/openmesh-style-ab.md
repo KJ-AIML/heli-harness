@@ -2,6 +2,8 @@
 
 This is a generic example benchmark based on the kind of experiment Heli was designed for. It demonstrates how to compare modes A, B, C, and D using a realistic task.
 
+**Illustrative / hypothetical example — not a measured benchmark result.**
+
 ## Task Description
 
 **Task:** Add a new external task provider to a desktop app with existing weak API-client patterns.
@@ -57,11 +59,13 @@ export async function fetchTasks() {
 - Hooks/probes active (if supported by agent host)
 - Run report template enforced
 
-## Expected Results
+## Illustrative Expected Results
+
+These outcomes and scores are hypotheses for demonstrating the scoring method. They are not measured benchmark results.
 
 ### Mode A — No Harness
 
-**Likely outcome:**
+**Hypothetical outcome:**
 
 - Agent copies the existing pattern blindly
 - New API client uses hardcoded API key
@@ -86,7 +90,7 @@ export async function fetchTasks() {
 
 ### Mode B — Heli Profile Only
 
-**Likely outcome:**
+**Hypothetical outcome:**
 
 - Agent reads profile and recognizes the existing pattern as tech debt
 - Agent may or may not choose a safer alternative
@@ -111,7 +115,7 @@ export async function fetchTasks() {
 
 ### Mode C — Heli Policy + Profile
 
-**Likely outcome:**
+**Hypothetical outcome:**
 
 - Agent reads profile and policies
 - Agent recognizes the existing pattern as tech debt
@@ -137,7 +141,7 @@ export async function fetchTasks() {
 
 ### Mode D — Heli Full Governance
 
-**Likely outcome:**
+**Hypothetical outcome:**
 
 - Same as Mode C, plus:
 - Agent checks workspace index and target state
@@ -170,15 +174,15 @@ export async function fetchTasks() {
 | Mode C | PASS | Chose safer alternative, followed policies |
 | Mode D | PASS | Same as Mode C, plus comprehensive report and target discipline |
 
-## Key Observations
+## Hypotheses Demonstrated
 
-1. **Existing weak pattern should not automatically become recommendation:** Mode A copied the pattern blindly. Modes B, C, and D recognized it as tech debt.
+1. **Existing weak pattern should not automatically become recommendation:** Mode A is expected to copy the pattern blindly. Modes B, C, and D are expected to recognize it as tech debt.
 
-2. **Policy references matter:** Mode C and D followed explicit policies that forbade hardcoded secrets. Mode B had no policies to follow.
+2. **Policy references matter:** Mode C and D are expected to follow explicit policies that forbid hardcoded secrets. Mode B has no policies to follow.
 
 3. **Target repo selection matters:** Not applicable in this single-repo example, but would be critical in multi-repo workspaces.
 
-4. **Report evidence matters:** Mode C and D produced complete reports with tech debt decisions and policy compliance. Mode A produced a weak report. Mode B produced a partial report.
+4. **Report evidence matters:** Mode C and D are expected to produce complete reports with tech debt decisions and policy compliance. Mode A is expected to produce a weak report. Mode B is expected to produce a partial report.
 
 ## Recommendation
 

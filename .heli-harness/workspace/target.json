@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "targetRepo": "",
-  "targetGitRoot": "",
-  "writesAllowedUnder": "",
-  "activeProfile": "",
-  "selectedAt": "",
-  "selectedBy": "",
-  "reason": ""
+  "targetRepo": "heli-harness",
+  "targetGitRoot": ".",
+  "writesAllowedUnder": ".",
+  "activeProfile": ".heli-harness/profiles/heli-harness.md",
+  "selectedAt": "2026-06-30",
+  "selectedBy": "heli-harness-default",
+  "reason": "Self-dogfood default for this repository checkout."
 }

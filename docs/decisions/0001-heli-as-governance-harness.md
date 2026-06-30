@@ -19,9 +19,9 @@ Heli-Harness started as a parent-workspace harness for coding agents. By v0.3.2 
 - Safe auto hooks.
 - Hook observability probes for `before_agent_start` and `tool_call`.
 
-Research and experiments show that coding-agent quality improves when durable instructions, scoped procedures, executable guardrails, approval rules, optional memory, skills, and reports are separate layers. The strongest pattern is separation of concerns, not simply more context.
+Research and design rationale indicate that coding-agent quality should improve when durable instructions, scoped procedures, executable guardrails, approval rules, optional memory, skills, and reports are separate layers. The strongest pattern is separation of concerns, not simply more context.
 
-Experiments also show that descriptive profiles alone can make agents more aware without reliably stopping them from copying weak existing patterns. Prescriptive policy overlays and tech-debt classification are needed so agents know which patterns are facts, conventions, risks, or forbidden behavior.
+Illustrative benchmark examples hypothesize that descriptive profiles alone can make agents more aware without reliably stopping them from copying weak existing patterns. Prescriptive policy overlays and tech-debt classification are needed so agents know which patterns are facts, conventions, risks, or forbidden behavior. Measured benchmark runs are planned in v0.5.x Full Coverage work.
 
 ## Decision
 

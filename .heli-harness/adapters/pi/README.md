@@ -5,14 +5,15 @@ Heli-Harness can be installed as a Pi package to expose skills and a lightweight
 ## Install
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.3.0
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.1
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.1
 ```
 
 This installs the Pi package, which does two things:
 
 **What this does:**
 
-1. **Loads Heli-Harness skills** into Pi's skill system (audit, branch, debug, deps, design, engineering, feature, fix-loop, flow, gh-write, impact, incident, release, test-coverage, test-validation, verify-premise, workflow) via the `pi.skills` key in `package.json`.
+1. **Loads 23 Heli-Harness skills** into the host skill system via the `pi.skills` key in `package.json`.
 2. **Loads a lightweight Pi extension** (`extensions/pi-extension.js`) that:
    - Announces `Heli-Harness loaded` on session start
    - Detects whether workspace harness is installed in the current folder
@@ -29,7 +30,7 @@ This installs the Pi package, which does two things:
 - Use `/heli-install` or `/hh-install` inside Pi to install the workspace harness into the current folder.
 - Workflow commands (`/heli-init`, `/heli-review`, etc.) require workspace harness to be installed first.
 
-**Status: supported.** Verified with Pi v0.80.2 (local path install). Remote `git:` install verified for v0.3.0.
+**Status: supported.** Remote `git:` install verified for v0.5.1.
 
 ### 2. Workspace harness install (recommended)
 
@@ -51,7 +52,7 @@ Or run the installer manually:
 # macOS/Linux
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.3.0
+git checkout v0.5.1
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -60,7 +61,7 @@ rm -rf hh-source
 # Windows PowerShell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.3.0
+git checkout v0.5.1
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install

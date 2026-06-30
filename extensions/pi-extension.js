@@ -292,7 +292,7 @@ function getActiveProfile(cwd, targetRepo) {
 		const direct = join(profilesDir, `${targetRepo}.md`);
 		if (existsSync(direct)) return direct;
 	}
-	const profiles = safeListFiles(profilesDir).filter((path) => path.endsWith(".md") && isFile(path));
+	const profiles = safeListFiles(profilesDir).filter((path) => path.endsWith(".md") && isFile(path) && path.split(/[\\/]/).pop() !== "README.md");
 	if (profiles.length === 0) return "not configured";
 	if (profiles.length === 1) return profiles[0];
 	return `${profiles.length} profiles found; target repo not resolved`;
@@ -468,7 +468,8 @@ function lintPolicies(cwd) {
 			warnings.push(`${label}: required or forbidden rules are too vague to enforce consistently`);
 		}
 		const exceptionsBody = getSectionBody(text, "Exceptions");
-		if (/[a-z0-9]/i.test(exceptionsBody) && !/(scope:|condition:|approval:|justification:)/i.test(exceptionsBody)) {
+		const noExceptions = /\bnone currently approved\b|\bno exceptions\b/i.test(exceptionsBody);
+		if (/[a-z0-9]/i.test(exceptionsBody) && !noExceptions && !/(scope:|condition:|approval:|justification:)/i.test(exceptionsBody)) {
 			warnings.push(`${label}: exceptions should record scope, approval, and justification`);
 		}
 	}
@@ -848,10 +849,10 @@ export default function heliHarnessExtension(pi) {
 		if (harnessDetected) {
 			notify(ctx, `HARNESS.md: ${harnessMd}`, "info");
 			if (policyFiles.length === 0) {
-				notify(ctx, "No policy overlays found. v0.4.2 supports .heli-harness/policies/. Use templates to create team rules.", "info");
+				notify(ctx, "No policy overlays found. Current releases support .heli-harness/policies/. Use templates to create team rules.", "info");
 			}
 			if (safetyFiles.length === 0) {
-				notify(ctx, "No safety overlays found. v0.4.2 supports .heli-harness/safety/. Use templates to define command tiers and secret handling.", "info");
+				notify(ctx, "No safety overlays found. Current releases support .heli-harness/safety/. Use templates to define command tiers and secret handling.", "info");
 			}
 			if (!isFile(workspacePaths.indexPath)) {
 				notify(ctx, "Workspace index: not configured. Create .heli-harness/workspace/index.json to track repos.", "info");

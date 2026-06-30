@@ -20,7 +20,7 @@ This copies `.heli-harness/` to the target workspace and creates adapter pointer
 
 - `.heli-harness/HARNESS.md` — source of truth
 - `.heli-harness/manifest.json` — harness metadata
-- `.heli-harness/skills/` — 17 skills
+- `.heli-harness/skills/` — 23 skills
 - `.heli-harness/adapters/` — agent-specific instructions
 - `.heli-harness/profiles/` — repo profiles (empty, user adds)
 - `.heli-harness/state/` — task tracking
