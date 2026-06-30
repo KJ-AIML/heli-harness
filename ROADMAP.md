@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.9
+## Current Baseline: v0.5.10
 
-Latest stable release: `v0.5.9`
+Latest stable release: `v0.5.10`
 
-Release commit: see tag `v0.5.9`
+Release commit: pending tag `v0.5.10`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.9>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.10>
 
 Stable behavior in this baseline:
 
@@ -75,8 +75,8 @@ Stable behavior in this baseline:
 - Adapter verification:
   - adapter manifest and support matrix validate evidence-backed claims
   - Pi remains `enforced`
-  - Claude Code is `verified-wired`: adapter entrypoint, settings example, installer pointer, and update preservation are smoke-tested
-  - Codex is `verified-wired`: adapter entrypoint, installer pointer, and update preservation are smoke-tested
+  - Claude Code is `verified-plugin-wired`: pointer adapter plus native plugin manifest, hook config, skill, and synthetic hook smoke tests are validated
+  - Codex is `verified-plugin-wired`: pointer adapter plus native plugin manifest, hook config, skill, plugin AGENTS.md, and synthetic hook smoke tests are validated
   - Cursor remains `wired`
   - runtime enforcement is not claimed without tested hook evidence
 
@@ -152,6 +152,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.7 | Adapter Wiring Coverage | Verify adapter file presence, update support matrix, add adapter validation. |
 | v0.5.8 | Claude Code Adapter Verification | Smoke-test Claude adapter files, settings JSON, installer pointer, and update preservation without claiming runtime enforcement. |
 | v0.5.9 | Codex Governance Workflow | Smoke-test Codex adapter files, installer pointer, and update preservation without claiming runtime enforcement. |
+| v0.5.10 | Native Plugin Parity | Add Ponytail parity audit, Claude/Codex native plugin artifacts, plugin smoke tests, and verified-plugin-wired taxonomy without claiming live runtime enforcement. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -711,6 +712,28 @@ Risks:
 
 - Claude Code hook support may change; runtime blocking must be validated in a later milestone before any enforcement claim.
 - Instruction/pointer wiring still relies on Claude Code loading and following workspace instructions.
+
+## v0.5.10 - Native Plugin Parity (Implemented)
+
+Goal:
+Move beyond pointer-only Claude/Codex adapters by shipping native plugin artifacts where official/reference evidence supports them.
+
+Implemented:
+
+- Ponytail parity audit in `docs/PONYTAIL_PARITY_AUDIT.md`.
+- Claude Code plugin artifacts in `.heli-harness/adapters/claude-plugin/`.
+- Codex plugin artifacts in `.heli-harness/adapters/codex-plugin/`.
+- Plugin smoke tests for manifests, hook configs, hook script parsing, synthetic SessionStart context, and synthetic PreToolUse deny decisions.
+- Adapter taxonomy statuses `verified-plugin-wired` and `plugin-wired`.
+
+Status result:
+
+- Claude Code: `verified-plugin-wired`, not `enforced`.
+- Codex: `verified-plugin-wired`, not `enforced`.
+- Pi: still the only `enforced` adapter.
+
+Known limitation:
+No live Claude Code or Codex runtime hook execution/trust flow was completed in this release, so runtime enforcement remains unclaimed.
 
 ## v0.5.9 - Codex Governance Workflow (Implemented)
 

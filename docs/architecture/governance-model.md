@@ -314,12 +314,14 @@ Adapters should not:
 Adapter status is evidence-based:
 
 - `enforced`: runtime hook/tool-call guard behavior is verified and tested.
-- `verified-wired`: adapter files, install/update wiring, generated pointer files, and config examples are smoke-tested, but runtime enforcement is not proven.
+- `verified-plugin-wired`: native plugin artifacts are shipped and smoke-tested, but runtime enforcement is not proven.
+- `plugin-wired`: native plugin artifacts exist but lack smoke tests.
+- `verified-wired`: instruction/pointer adapter files, install/update wiring, generated pointer files, and config examples are smoke-tested, but runtime enforcement is not proven.
 - `wired`: adapter files and installer paths exist, but dedicated generated-artifact smoke coverage may be absent.
 - `documented`: instructions exist without verified wiring.
 - `planned`: roadmap only.
 
-See [Adapter Support Matrix](../ADAPTER_SUPPORT_MATRIX.md) for evidence-based adapter status assessment. Adapter claims require evidence: no adapter is claimed as "enforced" without smoke tests proving runtime enforcement. Claude Code and Codex are `verified-wired` because local smoke tests validate their adapter entrypoints, installer-created pointer files, update preservation, manifest evidence, and support matrix claims, but no Claude or Codex runtime hook enforcement is proven.
+See [Adapter Support Matrix](../ADAPTER_SUPPORT_MATRIX.md) for evidence-based adapter status assessment. Adapter claims require evidence: no adapter is claimed as `enforced` without smoke tests proving runtime enforcement. Claude Code and Codex are `verified-plugin-wired` because local smoke tests validate their pointer adapters, plugin manifests, hook configs, skills, synthetic SessionStart context hooks, and synthetic PreToolUse deny decisions. No live Claude or Codex runtime hook enforcement is proven.
 
 ## Machine-Readable Sidecars
 

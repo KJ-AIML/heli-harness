@@ -1,7 +1,7 @@
 # Heli-Harness
 
 <p align="center">
-  <img src="assets/heli-harness-hero.png" alt="Heli-Harness mascot hero banner — governance for coding agents" width="100%">
+  <img src="assets/heli-harness-hero.png" alt="Heli-Harness mascot hero banner â€” governance for coding agents" width="100%">
 </p>
 
 Heli-Harness gives local coding agents a shared governance layer: protocols, repo profiles, policy overlays, state tracking, optional hooks, and adapter instructions. It is designed for a parent workspace that contains many repos and may be touched by many agents.
@@ -25,21 +25,23 @@ Heli-Harness provides that shared layer without replacing repo-local docs.
 See [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) for detailed status assessment.
 
 **Adapter status taxonomy:**
-- **enforced** — Runtime hook/tool-call guard is verified and tested
-- **verified-wired** — Adapter files, install/update wiring, generated pointer files, and config examples are validated by smoke tests; runtime enforcement is not proven
-- **wired** — Files/config/install paths exist and are validated
-- **documented** — Documentation exists, but no verified wiring or runtime enforcement
-- **planned** — Roadmap item exists, but no shipped adapter wiring yet
-- **unsupported** — Explicitly not supported
+- **enforced** - Runtime hook/tool-call guard is verified and tested
+- **verified-plugin-wired** - Native plugin artifacts are shipped and smoke-tested; runtime enforcement is not proven
+- **plugin-wired** - Native plugin artifacts exist but lack smoke tests
+- **verified-wired** - Instruction/pointer adapter artifacts are smoke-tested; runtime enforcement is not proven
+- **wired** - Files/config/install paths exist and are validated
+- **documented** - Documentation exists, but no verified wiring or runtime enforcement
+- **planned** - Roadmap item exists, but no shipped adapter wiring yet
+- **unsupported** - Explicitly not supported
 
 **Current adapter status:**
-- **Pi**: `enforced` — Extension file, smoke tests, hook guards verified
-- **Claude Code**: `verified-wired` — Adapter files, settings example, installer-created `CLAUDE.md`, and update preservation are smoke-tested; no runtime enforcement proven
-- **Codex**: `verified-wired` — Adapter files, installer-created `AGENTS.md`, and update preservation are smoke-tested; no runtime enforcement proven
-- **Cursor**: `wired` — Adapter files exist, install creates pointer, no runtime enforcement
-- **AXGA**: `documented` — Shares Pi adapter docs, no dedicated verification
-- **Generic**: `documented` — Adapter instructions exist, manual setup
-- **OpenCode/Windsurf/Cline/Gemini/OpenClaw**: `planned` — No implementation yet
+- **Pi**: `enforced` â€” Extension file, smoke tests, hook guards verified
+- **Claude Code**: `verified-plugin-wired` - Pointer adapter plus native plugin files, hook config, skill, and synthetic hook smoke tests; no live runtime enforcement proven
+- **Codex**: `verified-plugin-wired` - Pointer adapter plus native plugin files, hook config, skill, `AGENTS.md`, and synthetic hook smoke tests; no live runtime enforcement proven
+- **Cursor**: `wired` â€” Adapter files exist, install creates pointer, no runtime enforcement
+- **AXGA**: `documented` â€” Shares Pi adapter docs, no dedicated verification
+- **Generic**: `documented` â€” Adapter instructions exist, manual setup
+- **OpenCode/Windsurf/Cline/Gemini/OpenClaw**: `planned` â€” No implementation yet
 
 ## Roadmap and Architecture
 
@@ -54,15 +56,15 @@ See [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) for detailed status
 `benchmarks/` contains repeatable governance benchmark templates for evaluating whether Heli improves coding-agent work quality, safety, target discipline, and report completeness.
 
 - Measures safety, target discipline, report completeness, validation, and implementation quality
-- No telemetry — all benchmark data stays local
-- Optional manual use — no automated runner required
+- No telemetry â€” all benchmark data stays local
+- Optional manual use â€” no automated runner required
 - Includes scenarios, scoring rubrics, experiment templates, and A/B/C/D comparison examples
 
 See [benchmarks/README.md](benchmarks/README.md) for details.
 
 ## Install
 
-Heli-Harness has two install modes. The **workspace harness** is the primary mode — it installs `.heli-harness/` into your parent workspace and is what most users want. The **agent package** mode exposes harness skills/rules to a specific agent host (Pi, etc.) without replacing the workspace model.
+Heli-Harness has two install modes. The **workspace harness** is the primary mode â€” it installs `.heli-harness/` into your parent workspace and is what most users want. The **agent package** mode exposes harness skills/rules to a specific agent host (Pi, etc.) without replacing the workspace model.
 
 ### Fast-path (prompt-based)
 
@@ -73,7 +75,7 @@ Install this repo into the current folder as a parent-workspace harness:
 
 https://github.com/KJ-AIML/heli-harness
 
-Use the latest stable tag (v0.5.9). Do not install globally. Treat the current
+Use the latest stable tag (v0.5.10). Do not install globally. Treat the current
 directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
@@ -85,7 +87,7 @@ and CLAUDE.md exist after install.
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.9
+git checkout v0.5.10
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install
@@ -97,7 +99,7 @@ Remove-Item -Recurse -Force hh-source
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.9
+git checkout v0.5.10
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -109,8 +111,8 @@ rm -rf hh-source
 Pi and AXGA can load Heli-Harness as a package to get skills and a lightweight extension:
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.9
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.9
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.10
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.10
 ```
 
 This installs the agent package, which does two things:
@@ -162,7 +164,7 @@ Hook observability is opt-in and one-shot:
 - `pi install ...` does **not** automatically create `.heli-harness/` in every folder. Use `/heli-install` to set up the workspace harness in a specific folder.
 - Workspace install remains the source of truth for parent-workspace behavior.
 - Agent packages may run with broad local access. Inspect source code before installing.
-- **Status: supported** - use the v0.5.9 tag after release.
+- **Status: supported** - use the v0.5.10 tag after release.
 
 ### Multi-repo targeting
 
@@ -177,23 +179,35 @@ This is explicit target identity, not orchestration, dependency solving, or mono
 
 ### Codex
 
-Current supported path:
+Pointer adapter path:
 
 1. Install the workspace harness into your parent folder (see above).
 2. Codex reads the workspace `AGENTS.md`, which points to `.heli-harness/adapters/codex/AGENTS.md`.
 3. Codex follows the adapter instructions.
 
-Status: `verified-wired`. v0.5.9 smoke-tests the adapter entrypoint, installer-created `AGENTS.md`, update preservation of user-owned workspace `AGENTS.md`, manifest evidence, and support matrix claims. No Codex runtime hook enforcement is claimed. No marketplace plugin. No global install.
+Native plugin artifact path:
+
+1. Inspect `.heli-harness/adapters/codex-plugin/`.
+2. The package includes `.codex-plugin/plugin.json`, `hooks/hooks.json`, `skills/heli-governance/SKILL.md`, and plugin `AGENTS.md`.
+3. Run `node scripts/smoke-codex-plugin.mjs` to verify local plugin artifacts and synthetic hook decisions.
+
+Status: `verified-plugin-wired`. v0.5.10 smoke-tests both the pointer adapter and native plugin artifacts. Synthetic PreToolUse hook inputs deny `git push` and `.env` writes, but no live Codex runtime hook enforcement is claimed.
 
 ### Claude Code
 
-Current supported path:
+Pointer adapter path:
 
 1. Install the workspace harness into your parent folder (see above).
 2. Claude Code reads the workspace `CLAUDE.md`, which points to `.heli-harness/adapters/claude/CLAUDE.md`.
 3. Claude Code follows the adapter instructions.
 
-Status: `verified-wired`. v0.5.8 smoke-tests the adapter entrypoint, settings JSON, installer-created `CLAUDE.md`, and update preservation of user-owned workspace `CLAUDE.md`. No Claude runtime hook enforcement is claimed. No marketplace plugin. No global install.
+Native plugin artifact path:
+
+1. Inspect `.heli-harness/adapters/claude-plugin/`.
+2. The package includes `.claude-plugin/plugin.json`, `hooks/hooks.json`, and `skills/heli-governance/SKILL.md`.
+3. Run `node scripts/smoke-claude-plugin.mjs` to verify local plugin artifacts and synthetic hook decisions. When the local Claude CLI is available, the smoke also runs `claude plugin validate`.
+
+Status: `verified-plugin-wired`. v0.5.10 smoke-tests both the pointer adapter and native plugin artifacts. Synthetic PreToolUse hook inputs deny `git push` and `.env` writes, but no live Claude Code runtime hook enforcement is claimed.
 
 ### Cursor
 
@@ -220,7 +234,7 @@ If you want to inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.5.9
+git checkout v0.5.10
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```
@@ -229,17 +243,17 @@ git checkout v0.5.9
 
 After a successful workspace install, you can delete the source checkout folder (e.g., `hh-source/` or `heli-harness/`). The installed `.heli-harness/` folder in your workspace is self-contained.
 
-**Do not delete `.heli-harness/` from your workspace** — that is the installed harness.
+**Do not delete `.heli-harness/` from your workspace** â€” that is the installed harness.
 
 ## What next after install?
 
 1. **Start your agent** (Codex, Claude Code, Cursor, Pi, or generic) from the parent workspace folder.
-2. **Read HARNESS.md** — the agent should read `.heli-harness/HARNESS.md` as the source of truth.
+2. **Read HARNESS.md** â€” the agent should read `.heli-harness/HARNESS.md` as the source of truth.
 3. **Clone or create target repos** inside the parent workspace.
 4. **Map repos in `.heli-harness/workspace/index.json`** so Heli can show known git roots and profile mappings.
 5. **Select the active target repo** with `/heli-target set <repo>` before write workflows in a multi-repo workspace.
-6. **Create a repo profile** — add a profile under `.heli-harness/profiles/<repo>.md` describing the repo's conventions, test commands, and risk areas. Use templates in `.heli-harness/templates/` as a starting point.
-7. **Run test-validation in audit-only mode** — validate that your repo profile's test commands are safe and non-mutating before relying on them.
+6. **Create a repo profile** â€” add a profile under `.heli-harness/profiles/<repo>.md` describing the repo's conventions, test commands, and risk areas. Use templates in `.heli-harness/templates/` as a starting point.
+7. **Run test-validation in audit-only mode** â€” validate that your repo profile's test commands are safe and non-mutating before relying on them.
 
 ## First-run prompt
 

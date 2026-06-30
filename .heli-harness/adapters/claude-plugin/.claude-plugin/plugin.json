@@ -1,0 +1,11 @@
+{
+  "name": "heli-harness",
+  "description": "Heli-Harness workspace governance for Claude Code.",
+  "version": "0.5.10",
+  "author": {
+    "name": "KJ-AIML"
+  },
+  "homepage": "https://github.com/KJ-AIML/heli-harness",
+  "repository": "https://github.com/KJ-AIML/heli-harness",
+  "license": "MIT"
+}

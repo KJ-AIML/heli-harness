@@ -22,4 +22,4 @@ Updates do not modify the parent workspace `AGENTS.md`; keep local Codex notes t
 
 Do not copy Heli-Harness into `%USERPROFILE%\.codex\skills` by default. This harness is intended to live with the parent workspace.
 
-v0.5.9 verifies Codex adapter wiring with `node scripts/smoke-codex-adapter.mjs`, but it does not claim Codex runtime enforcement.
+v0.5.10 verifies Codex adapter wiring with `node scripts/smoke-codex-adapter.mjs`, but it does not claim Codex runtime enforcement.

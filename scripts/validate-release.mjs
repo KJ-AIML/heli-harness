@@ -689,6 +689,32 @@ try {
 	fail("Codex adapter smoke failed", error.message);
 }
 
+section("Claude plugin smoke verification");
+
+try {
+	execSync("node scripts/smoke-claude-plugin.mjs", {
+		cwd: root,
+		encoding: "utf8",
+		stdio: "inherit",
+	});
+	pass("Claude plugin smoke passed");
+} catch (error) {
+	fail("Claude plugin smoke failed", error.message);
+}
+
+section("Codex plugin smoke verification");
+
+try {
+	execSync("node scripts/smoke-codex-plugin.mjs", {
+		cwd: root,
+		encoding: "utf8",
+		stdio: "inherit",
+	});
+	pass("Codex plugin smoke passed");
+} catch (error) {
+	fail("Codex plugin smoke failed", error.message);
+}
+
 section("Adapter wiring verification");
 
 try {

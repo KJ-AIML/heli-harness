@@ -1,0 +1,18 @@
+{
+  "name": "heli-harness",
+  "version": "0.5.10",
+  "description": "Heli-Harness workspace governance for Codex.",
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Heli-Harness",
+    "shortDescription": "Workspace governance for local coding agents.",
+    "longDescription": "Loads Heli-Harness governance instructions and bundles lifecycle hook guardrails for supported Codex hook events.",
+    "developerName": "KJ-AIML",
+    "category": "Productivity",
+    "capabilities": [
+      "Instructions",
+      "Lifecycle hooks"
+    ]
+  }
+}

@@ -86,7 +86,7 @@ if (!adapters.taxonomy || typeof adapters.taxonomy !== "object") {
 	fail("adapters.json has taxonomy object");
 } else {
 	pass("adapters.json has taxonomy object");
-	const validStatuses = ["enforced", "verified-wired", "wired", "documented", "planned", "unsupported"];
+	const validStatuses = ["enforced", "verified-plugin-wired", "plugin-wired", "verified-wired", "wired", "documented", "planned", "unsupported"];
 	for (const status of validStatuses) {
 		if (!adapters.taxonomy[status]) {
 			fail(`taxonomy defines "${status}" status`);
@@ -107,7 +107,7 @@ pass("adapters.json has non-empty adapters array");
 
 section("Adapter schema validation");
 
-const validStatuses = ["enforced", "verified-wired", "wired", "documented", "planned", "unsupported"];
+const validStatuses = ["enforced", "verified-plugin-wired", "plugin-wired", "verified-wired", "wired", "documented", "planned", "unsupported"];
 const adapterIds = new Set();
 
 for (const adapter of adapters.adapters) {
@@ -209,6 +209,35 @@ for (const adapter of adapters.adapters) {
 		}
 		if (adapter.enforcementSurfaces?.some((surface) => /tool_call|block|guard/i.test(surface))) {
 			fail(`adapter "${id}" is "verified-wired" but claims runtime enforcement surface`);
+		}
+	}
+
+	if (status === "verified-plugin-wired") {
+		if (!evidence.some((path) => /plugin\.json$/i.test(path))) {
+			fail(`adapter "${id}" is "verified-plugin-wired" but has no plugin manifest evidence`);
+		} else {
+			pass(`adapter "${id}" is "verified-plugin-wired" and has plugin manifest evidence`);
+		}
+		if (!evidence.some((path) => /hooks\/hooks\.json$/i.test(path))) {
+			fail(`adapter "${id}" is "verified-plugin-wired" but has no hook config evidence`);
+		} else {
+			pass(`adapter "${id}" is "verified-plugin-wired" and has hook config evidence`);
+		}
+		if (!verification.some((command) => /smoke-.*plugin/i.test(command))) {
+			fail(`adapter "${id}" is "verified-plugin-wired" but has no plugin smoke command`);
+		} else {
+			pass(`adapter "${id}" is "verified-plugin-wired" and has plugin smoke command`);
+		}
+		if (adapter.limitations?.some((item) => /runtime hook enforcement is proven/i.test(item))) {
+			fail(`adapter "${id}" is "verified-plugin-wired" but claims runtime hook enforcement is proven`);
+		}
+	}
+
+	if (status === "plugin-wired") {
+		if (!evidence.some((path) => /plugin\.json$/i.test(path))) {
+			fail(`adapter "${id}" is "plugin-wired" but has no plugin manifest evidence`);
+		} else {
+			pass(`adapter "${id}" is "plugin-wired" and has plugin manifest evidence`);
 		}
 	}
 

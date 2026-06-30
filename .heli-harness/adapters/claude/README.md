@@ -2,7 +2,7 @@
 
 This folder connects Claude Code to Heli-Harness without making Claude the source of truth.
 
-Status: `verified-wired`.
+Status: pointer adapter `verified-wired`; native plugin artifacts `verified-plugin-wired`.
 
 Evidence:
 
@@ -18,4 +18,4 @@ Recommended parent `CLAUDE.md`:
 Read .heli-harness/adapters/claude/CLAUDE.md first.
 ```
 
-No runtime hook enforcement is proven for Claude Code in this release. Optional hook examples are context-injection examples only unless a future smoke test proves blocking behavior.
+No live runtime hook enforcement is proven for Claude Code in this release. Optional hook examples are context-injection examples only unless a future smoke test proves blocking behavior.

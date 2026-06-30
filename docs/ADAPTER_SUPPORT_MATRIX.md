@@ -1,168 +1,58 @@
 # Adapter Support Matrix
 
-This document provides an honest, evidence-based assessment of Heli-Harness adapter support.
+This document provides an evidence-based assessment of Heli-Harness adapter support.
 
 ## Adapter Status Taxonomy
 
 | Status | Meaning | Evidence Required |
 |--------|---------|-------------------|
-| **enforced** | Runtime hook/tool-call guard is verified and tested | Smoke test or interactive test exists, runtime enforcement proven |
-| **verified-wired** | Adapter files, install/update wiring, generated pointer files, and config examples are validated by smoke tests, but runtime enforcement is not proven | Adapter smoke test exists and validates generated artifacts |
-| **wired** | Files/config/install paths exist and are validated | Adapter files present, install/update wires them, but runtime enforcement may not be proven |
-| **documented** | Documentation exists, but no verified wiring or runtime enforcement | README/docs exist, but no smoke tests or runtime verification |
-| **planned** | Roadmap item exists, but no shipped adapter wiring yet | Mentioned in ROADMAP.md, no implementation |
-| **unsupported** | Explicitly not supported | Clear statement of non-support |
+| **enforced** | Runtime hook/tool-call guard is verified and tested | Runtime hook proof and smoke or interactive test |
+| **verified-plugin-wired** | Native plugin artifacts are shipped and smoke-tested | Plugin manifest, hook config, plugin smoke test |
+| **plugin-wired** | Native plugin artifacts exist but lack smoke tests | Plugin manifest or host-native package files |
+| **verified-wired** | Instruction/pointer adapter artifacts are smoke-tested | Adapter smoke test validates generated artifacts |
+| **wired** | Instruction/pointer files and install paths exist | Adapter files and install wiring |
+| **documented** | Documentation exists only | README/docs |
+| **planned** | Roadmap only | Roadmap entry |
+| **unsupported** | Explicitly unsupported | Clear non-support statement |
 
 ## Current Adapter Status
 
-| Adapter | Status | Evidence | Enforcement Surface | Files Checked | Verification Command | Limitations | Next Milestone |
-|---------|--------|----------|---------------------|---------------|---------------------|-------------|----------------|
-| **Pi** | enforced | Extension file, smoke tests, hook guards | `tool_call` hook, `before_agent_start` hook | `extensions/pi-extension.js`, `scripts/smoke-extension-load.mjs` | `node scripts/smoke-extension-load.mjs` | Requires host-compatible `tool_call` hooks; not a sandbox | N/A (baseline) |
-| **AXGA** | documented | README exists, shares Pi extension | Same as Pi if hooks available | `.heli-harness/adapters/pi/README.md` | Manual verification | No dedicated AXGA smoke test; relies on Pi extension compatibility | v0.5.10+ |
-| **Codex** | verified-wired | Adapter files, installer-created pointer, update preservation smoke | Workspace `AGENTS.md` pointer | `.heli-harness/adapters/codex/AGENTS.md`, `.heli-harness/adapters/codex/README.md`, `scripts/smoke-codex-adapter.mjs`, `install.sh`/`install.ps1`, `update.sh`/`update.ps1` | `node scripts/smoke-codex-adapter.mjs` | No runtime hook enforcement proven; adapter is instruction/pointer based, not a sandbox | v0.5.10+ runtime hook investigation |
-| **Claude Code** | verified-wired | Adapter files, settings example, installer-created pointer, update preservation smoke | Workspace `CLAUDE.md` pointer; optional SessionStart context example | `.heli-harness/adapters/claude/CLAUDE.md`, `.heli-harness/adapters/claude/settings.local.json.example`, `scripts/smoke-claude-adapter.mjs`, `install.sh`/`install.ps1`, `update.sh`/`update.ps1` | `node scripts/smoke-claude-adapter.mjs` | No runtime hook enforcement proven; adapter is instruction/config/pointer based | v0.5.10+ runtime hook investigation |
-| **Cursor** | wired | Adapter files exist, install creates pointer | Workspace `.cursorrules` or `.cursor/rules/` | `.heli-harness/adapters/cursor/CURSOR.md`, `install.sh`/`install.ps1` | `node scripts/verify-adapters.mjs` | No runtime hook enforcement; relies on Cursor reading adapter file | v0.5.10+ |
-| **Generic** | documented | Adapter instructions exist | None (manual setup) | `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md` | `node scripts/verify-adapters.mjs` | No install automation; no runtime enforcement | N/A |
-| **OpenCode** | planned | Mentioned in ROADMAP.md | None | None | N/A | No implementation | v0.5.10+ |
-| **Windsurf** | planned | Mentioned in ROADMAP.md | None | None | N/A | No implementation | Post-v0.5 |
-| **Cline** | planned | Mentioned in ROADMAP.md | None | None | N/A | No implementation | Post-v0.5 |
-| **Gemini** | planned | Mentioned in ROADMAP.md | None | None | N/A | No implementation | Post-v0.5 |
-| **OpenClaw** | planned | Mentioned in ROADMAP.md | None | None | N/A | No implementation | Post-v0.5 |
+| Adapter | Status | Evidence | Enforcement Surface | Verification Command | Limitations |
+|---------|--------|----------|---------------------|----------------------|-------------|
+| **Pi** | enforced | `extensions/pi-extension.js`, `scripts/smoke-extension-load.mjs` | `tool_call`, `before_agent_start`, `session_start` hooks | `node scripts/smoke-extension-load.mjs` | Host hook support required; not a sandbox |
+| **Claude Code** | verified-plugin-wired | `.heli-harness/adapters/claude/CLAUDE.md`, `.heli-harness/adapters/claude-plugin/.claude-plugin/plugin.json`, `.heli-harness/adapters/claude-plugin/hooks/hooks.json`, `scripts/smoke-claude-plugin.mjs` | Workspace `CLAUDE.md` pointer; native plugin manifest; synthetic SessionStart and PreToolUse hook smokes | `node scripts/smoke-claude-adapter.mjs`; `node scripts/smoke-claude-plugin.mjs` | No live Claude Code runtime hook enforcement has been proven; plugin hooks require host install/trust |
+| **Codex** | verified-plugin-wired | `.heli-harness/adapters/codex/AGENTS.md`, `.heli-harness/adapters/codex-plugin/.codex-plugin/plugin.json`, `.heli-harness/adapters/codex-plugin/hooks/hooks.json`, `scripts/smoke-codex-plugin.mjs` | Workspace `AGENTS.md` pointer; native plugin manifest; synthetic SessionStart and PreToolUse hook smokes | `node scripts/smoke-codex-adapter.mjs`; `node scripts/smoke-codex-plugin.mjs` | No live Codex runtime hook enforcement has been proven; plugin hooks require host install/trust |
+| **Cursor** | wired | `.heli-harness/adapters/cursor/CURSOR.md`, `install.sh`, `install.ps1` | Workspace `.cursorrules` or `.cursor/rules/` pointer | `node scripts/verify-adapters.mjs` | No runtime hook enforcement |
+| **AXGA** | documented | `.heli-harness/adapters/pi/README.md` | Shares Pi extension if compatible | Manual verification | No dedicated AXGA smoke test |
+| **Generic** | documented | `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md` | Manual instructions | `node scripts/verify-adapters.mjs` | No install automation or runtime enforcement |
+| **OpenCode** | planned | Roadmap entry | None | N/A | Analysis only in v0.5.10 |
+| **Windsurf** | planned | Roadmap entry | None | N/A | No implementation |
+| **Cline** | planned | Roadmap entry | None | N/A | No implementation |
+| **Gemini** | planned | Roadmap entry | None | N/A | Analysis only in v0.5.10 |
+| **OpenClaw** | planned | Roadmap entry | None | N/A | No implementation |
 
-## Evidence Definitions
+## Plugin Evidence
 
-### Pi Adapter (enforced)
+### Claude Code
 
-**Evidence:**
-- `extensions/pi-extension.js` — 1500+ line extension with hooks, guards, commands
-- `scripts/smoke-extension-load.mjs` — Comprehensive smoke test covering:
-  - Session start hook
-  - Before-agent-start hook
-  - Tool-call guard (command blocking, file path blocking)
-  - Command registration
-  - Hook observability probes
-  - Multi-repo targeting
-- Remote install verified: `pi install git:github.com/KJ-AIML/heli-harness@v0.5.6`
+Heli ships `.heli-harness/adapters/claude-plugin/.claude-plugin/plugin.json`, root-level `hooks/hooks.json`, a `skills/heli-governance/SKILL.md`, and a plugin README. The smoke test parses those files, runs `node --check` on hook scripts, invokes synthetic SessionStart input, invokes synthetic PreToolUse input for `git push` and `.env` writes, and runs `claude plugin validate` when the local CLI is available.
 
-**Enforcement surfaces:**
-- `tool_call` hook blocks dangerous commands (`git push`, `npm publish`, `rm -rf`, etc.)
-- `tool_call` hook blocks writes to secret paths (`.env`, `.pem`, `.key`, etc.)
-- `before_agent_start` hook injects safety context
-- `session_start` hook detects workspace harness
+This proves plugin artifacts are present and locally valid. It does not prove a live Claude Code session installed, trusted, or executed the hook.
 
-**Limitations:**
-- Enforcement depends on host-compatible `tool_call` hooks
-- Not a sandbox; best-effort local classification
-- Does not replace host permissions or sandboxing
+### Codex
 
-### Claude Code Adapter (verified-wired)
+Heli ships `.heli-harness/adapters/codex-plugin/.codex-plugin/plugin.json`, root-level `hooks/hooks.json`, `skills/heli-governance/SKILL.md`, `AGENTS.md`, and a plugin README. The smoke test parses those files, runs `node --check` on hook scripts, invokes synthetic SessionStart input, and invokes synthetic PreToolUse input for `git push` and `.env` writes.
 
-**Evidence:**
-- `.heli-harness/adapters/claude/CLAUDE.md` is the Claude-facing entrypoint.
-- `.heli-harness/adapters/claude/settings.local.json.example` parses as JSON.
-- `install.sh` and `install.ps1` create workspace `CLAUDE.md` when absent.
-- `update.sh` and `update.ps1` leave user-owned workspace `CLAUDE.md` untouched.
-- `scripts/smoke-claude-adapter.mjs` verifies these artifacts locally.
-
-**Enforcement surfaces:**
-- Workspace `CLAUDE.md` pointer directs Claude Code to `.heli-harness/adapters/claude/CLAUDE.md`.
-- Optional SessionStart example can inject context if the user enables it.
-- No runtime hook enforcement proven.
-
-**Limitations:**
-- Adapter is instruction/config/pointer based.
-- No tested Claude Code tool-call blocking hook is shipped.
-- Enforcement depends on Claude Code hook support and future tested blocking hooks.
-
-### Codex Adapter (verified-wired)
-
-**Evidence:**
-- `.heli-harness/adapters/codex/AGENTS.md` is the Codex-facing entrypoint.
-- `install.sh` and `install.ps1` create workspace `AGENTS.md` when absent.
-- `update.sh` and `update.ps1` leave user-owned workspace `AGENTS.md` untouched.
-- `scripts/smoke-codex-adapter.mjs` verifies these artifacts locally.
-
-**Enforcement surfaces:**
-- Workspace `AGENTS.md` pointer directs Codex to `.heli-harness/adapters/codex/AGENTS.md`.
-- No runtime hook enforcement proven.
-
-**Limitations:**
-- Adapter is instruction/pointer based.
-- No tested Codex tool-call blocking hook is shipped.
-- Codex must voluntarily follow `AGENTS.md`.
-- Not a sandbox.
-
-### Cursor Adapter (wired)
-
-**Evidence:**
-- Adapter instruction files exist in `.heli-harness/adapters/<adapter>/`
-- Install scripts (`install.sh`, `install.ps1`) create workspace pointer files:
-  - Cursor: `.cursorrules` or `.cursor/rules/harness.mdc` → `.heli-harness/adapters/cursor/CURSOR.md`
-- `verify-adapters.mjs` validates file presence
-
-**Enforcement surfaces:**
-- Workspace pointer files direct agents to adapter instructions
-- Agents read `.heli-harness/HARNESS.md` and follow protocols
-- No runtime hook enforcement (agents must voluntarily follow instructions)
-
-**Limitations:**
-- No runtime enforcement; relies on agent reading and following instructions
-- No smoke test proving agents actually read the pointer files
-- No hook-based safety guards (unlike Pi)
-
-### Generic Adapter (documented)
-
-**Evidence:**
-- `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md` exists
-- Provides instructions for any local coding agent
-
-**Enforcement surfaces:**
-- None (manual setup required)
-
-**Limitations:**
-- No install automation
-- No runtime enforcement
-- No smoke tests
-
-## Verification
-
-Run `node scripts/verify-adapters.mjs` to validate:
-- Adapter manifest schema
-- Evidence file presence
-- Docs consistency
-- No overclaims (e.g., claiming "enforced" without smoke tests)
+This proves plugin artifacts are present and locally valid. It does not prove a live Codex session installed, trusted, or executed the hook.
 
 ## Claims Policy
 
-**Claims require evidence.**
+Claims require evidence.
 
-- Do not claim an adapter is "enforced" unless smoke tests prove runtime enforcement.
-- Do not claim an adapter is "verified-wired" unless a smoke test validates generated adapter artifacts.
-- Do not claim an adapter is "wired" unless install scripts create the expected files.
-- Do not claim an adapter is "documented" unless docs exist.
-- If an adapter is "planned", say so explicitly.
-- If an adapter is "unsupported", say so explicitly.
+- Do not claim `enforced` unless runtime hook/tool-call blocking is proven.
+- Use `verified-plugin-wired` only when native plugin files and plugin smoke tests exist.
+- Use `verified-wired` for smoke-tested pointer adapters.
+- Use `wired` for pointer files without dedicated smoke coverage.
+- Keep planned hosts planned until artifacts ship.
 
-## Future Work
-
-**v0.5.10+ — Real Adapter Implementation:**
-- Add runtime hook support for Claude Code if host support is confirmed and smoke-tested
-- Add runtime hook support for Codex (if host supports it)
-- Add runtime hook support for Cursor (if host supports it)
-- Add dedicated smoke tests for each adapter
-- Move adapters from "wired" to "enforced" when runtime enforcement is proven
-
-**Post-v0.5 — Planned Adapters:**
-- OpenCode adapter
-- Windsurf adapter
-- Cline adapter
-- Gemini adapter
-- OpenClaw adapter
-
-## Notes
-
-- This matrix is updated by `verify-adapters.mjs` during release validation.
-- Adapter status is based on evidence, not aspirations.
-- "Verified-wired" does not mean "enforced". It means generated adapter artifacts are smoke-tested.
-- "Wired" does not mean "enforced". Wired means files exist and install wires them.
-- "Enforced" means runtime hooks are verified and tested.
+Run `node scripts/verify-adapters.mjs` and `node scripts/validate-release.mjs` before changing status claims.

@@ -1,8 +1,10 @@
 {
-  "version": "0.5.9",
+  "version": "0.5.10",
   "taxonomy": {
     "enforced": "Runtime hook/tool-call guard is verified and tested. Smoke test or interactive test exists.",
-    "verified-wired": "Adapter files, install/update wiring, generated pointer files, and config examples are validated by smoke tests, but runtime enforcement is not proven.",
+    "verified-plugin-wired": "Native plugin artifacts are shipped and smoke-tested, but runtime enforcement is not proven.",
+    "plugin-wired": "Native plugin artifacts exist but lack smoke tests.",
+    "verified-wired": "Instruction/pointer adapter files, install/update wiring, generated pointer files, and config examples are validated by smoke tests, but runtime enforcement is not proven.",
     "wired": "Files/config/install paths exist and are validated. Runtime enforcement may not be proven yet.",
     "documented": "Documentation exists, but no verified wiring or runtime enforcement.",
     "planned": "Roadmap item exists, but no shipped adapter wiring yet.",
@@ -52,12 +54,20 @@
     {
       "id": "codex",
       "name": "Codex",
-      "status": "verified-wired",
+      "status": "verified-plugin-wired",
       "evidence": [
         ".heli-harness/adapters/codex/AGENTS.md",
         ".heli-harness/adapters/codex/README.md",
         ".heli-harness/adapters/codex/install.md",
+        ".heli-harness/adapters/codex-plugin/.codex-plugin/plugin.json",
+        ".heli-harness/adapters/codex-plugin/hooks/hooks.json",
+        ".heli-harness/adapters/codex-plugin/hooks/heli-session-start.mjs",
+        ".heli-harness/adapters/codex-plugin/hooks/heli-pre-tool-use.mjs",
+        ".heli-harness/adapters/codex-plugin/skills/heli-governance/SKILL.md",
+        ".heli-harness/adapters/codex-plugin/AGENTS.md",
+        ".heli-harness/adapters/codex-plugin/README.md",
         "scripts/smoke-codex-adapter.mjs",
+        "scripts/smoke-codex-plugin.mjs",
         "install.sh",
         "install.ps1",
         "update.sh",
@@ -65,14 +75,19 @@
       ],
       "verification": [
         "node scripts/smoke-codex-adapter.mjs",
+        "node scripts/smoke-codex-plugin.mjs",
         "node scripts/verify-adapters.mjs"
       ],
       "enforcementSurfaces": [
-        "Workspace AGENTS.md pointer file created by installer"
+        "Workspace AGENTS.md pointer file created by installer",
+        "Native plugin manifest with skills and hook config",
+        "Synthetic SessionStart context hook smoke",
+        "Synthetic PreToolUse deny hook smoke"
       ],
       "limitations": [
-        "No runtime hook enforcement unless proven by a future local smoke or interactive test",
-        "Adapter is instruction/pointer based",
+        "No live Codex runtime hook enforcement has been proven",
+        "Plugin hooks still require host install/trust review",
+        "Pointer adapter remains the fallback path",
         "Codex must voluntarily follow AGENTS.md",
         "Not a sandbox"
       ]
@@ -80,13 +95,20 @@
     {
       "id": "claude",
       "name": "Claude Code",
-      "status": "verified-wired",
+      "status": "verified-plugin-wired",
       "evidence": [
         ".heli-harness/adapters/claude/CLAUDE.md",
         ".heli-harness/adapters/claude/README.md",
         ".heli-harness/adapters/claude/install.md",
         ".heli-harness/adapters/claude/settings.local.json.example",
+        ".heli-harness/adapters/claude-plugin/.claude-plugin/plugin.json",
+        ".heli-harness/adapters/claude-plugin/hooks/hooks.json",
+        ".heli-harness/adapters/claude-plugin/hooks/heli-session-start.mjs",
+        ".heli-harness/adapters/claude-plugin/hooks/heli-pre-tool-use.mjs",
+        ".heli-harness/adapters/claude-plugin/skills/heli-governance/SKILL.md",
+        ".heli-harness/adapters/claude-plugin/README.md",
         "scripts/smoke-claude-adapter.mjs",
+        "scripts/smoke-claude-plugin.mjs",
         "install.sh",
         "install.ps1",
         "update.sh",
@@ -94,16 +116,20 @@
       ],
       "verification": [
         "node scripts/smoke-claude-adapter.mjs",
+        "node scripts/smoke-claude-plugin.mjs",
         "node scripts/verify-adapters.mjs"
       ],
       "enforcementSurfaces": [
         "Workspace CLAUDE.md pointer file created by installer",
-        "Optional SessionStart context-injection example"
+        "Native plugin manifest with skills and hook config",
+        "Synthetic SessionStart context hook smoke",
+        "Synthetic PreToolUse deny hook smoke"
       ],
       "limitations": [
-        "No runtime hook enforcement unless proven by a future local smoke or interactive test",
-        "Adapter is instruction/config/pointer based",
-        "Enforcement depends on Claude Code hook support if any"
+        "No live Claude Code runtime hook enforcement has been proven",
+        "Plugin hooks still require host install/trust review",
+        "Pointer adapter remains the fallback path",
+        "Not a sandbox"
       ]
     },
     {

@@ -59,8 +59,8 @@ Final reports should include summary, files changed, validation, remaining risks
 ## Limitations
 
 - This Codex adapter is instruction/pointer based.
-- v0.5.9 verifies adapter files, installer-created `AGENTS.md`, update preservation of user-owned workspace `AGENTS.md`, manifest evidence, and support matrix claims.
-- No Codex runtime hook enforcement is claimed unless a local smoke or interactive test proves it.
+- v0.5.10 verifies adapter files, installer-created `AGENTS.md`, update preservation of user-owned workspace `AGENTS.md`, manifest evidence, and support matrix claims.
+- No live Codex runtime hook enforcement is claimed; v0.5.10 only proves synthetic plugin hook behavior.
 - Pi remains the only `enforced` adapter in the current release.
 
 Codex-specific behavior belongs here. Core harness files must remain tool-neutral.

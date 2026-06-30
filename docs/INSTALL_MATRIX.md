@@ -18,10 +18,10 @@ These expose harness rules/skills to a specific agent host. They do not replace 
 
 | Host | Command | Status | What it installs | Notes |
 |------|---------|--------|------------------|-------|
-| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.9` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.9` | **supported** | 23 skills + lightweight extension (startup status, `/heli-install`, `/hh-install`, `/hh-status`, `/heli-target`, `/heli-lock`, `/heli-hooks`, `/heli-validate lint`, command-rule guard, safety classifier) | Does not auto-create `.heli-harness/`. Use `/heli-install` or `/hh-install` to set up workspace. Use the v0.5.9 tag after release |
-| Codex | Workspace `AGENTS.md` → `.heli-harness/adapters/codex/AGENTS.md` | **verified-wired** | Adapter pointer file created by workspace installer; update preserves user-owned workspace `AGENTS.md` | No runtime hook enforcement proven. No marketplace plugin. Requires workspace install first |
-| Claude Code | Workspace `CLAUDE.md` → `.heli-harness/adapters/claude/CLAUDE.md` | **verified-wired** | Adapter pointer file created by workspace installer; settings JSON example; update preserves user-owned workspace `CLAUDE.md` | No runtime hook enforcement proven. No marketplace plugin. Requires workspace install first |
-| Cursor | Workspace `.cursor/rules/` → `.heli-harness/adapters/cursor/CURSOR.md` | **supported** | Adapter created by workspace installer | Requires workspace install first |
+| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.10` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.10` | **supported** | 23 skills + lightweight extension (startup status, `/heli-install`, `/hh-install`, `/hh-status`, `/heli-target`, `/heli-lock`, `/heli-hooks`, `/heli-validate lint`, command-rule guard, safety classifier) | Does not auto-create `.heli-harness/`. Use `/heli-install` or `/hh-install` to set up workspace. Use the v0.5.10 tag after release |
+| Codex | Workspace `AGENTS.md` -> `.heli-harness/adapters/codex/AGENTS.md`; plugin artifacts in `.heli-harness/adapters/codex-plugin/` | **verified-plugin-wired** | Pointer adapter plus `.codex-plugin/plugin.json`, hooks, skills, plugin `AGENTS.md`, and smoke tests | No live runtime hook enforcement proven. Plugin install/trust remains host-controlled |
+| Claude Code | Workspace `CLAUDE.md` -> `.heli-harness/adapters/claude/CLAUDE.md`; plugin artifacts in `.heli-harness/adapters/claude-plugin/` | **verified-plugin-wired** | Pointer adapter plus `.claude-plugin/plugin.json`, hooks, skills, and smoke tests | No live runtime hook enforcement proven. Plugin install/trust remains host-controlled |
+| Cursor | Workspace `.cursor/rules/` â†’ `.heli-harness/adapters/cursor/CURSOR.md` | **supported** | Adapter created by workspace installer | Requires workspace install first |
 | Generic agents | `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md` | **supported** | Adapter instructions for any local coding agent | Requires workspace install first |
 
 ## Planned Adapters
@@ -51,7 +51,7 @@ To inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.5.9
+git checkout v0.5.10
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```
@@ -60,12 +60,12 @@ git checkout v0.5.9
 
 After a successful workspace install, you can delete the source checkout folder (e.g., `hh-source/` or `heli-harness/`). The installed `.heli-harness/` folder in your workspace is self-contained.
 
-**Do not delete `.heli-harness/` from your workspace** — that is the installed harness.
+**Do not delete `.heli-harness/` from your workspace** â€” that is the installed harness.
 
 ## What next after install?
 
 1. **Start your agent** (Codex, Claude Code, Cursor, Pi, or generic) from the parent workspace folder.
-2. **Read HARNESS.md** — the agent should read `.heli-harness/HARNESS.md` as the source of truth.
+2. **Read HARNESS.md** â€” the agent should read `.heli-harness/HARNESS.md` as the source of truth.
 3. **Clone or create a target repo** inside the parent workspace.
-4. **Create a repo profile** — add a profile under `.heli-harness/profiles/<repo>.md` describing the repo's conventions, test commands, and risk areas. Use templates in `.heli-harness/templates/` as a starting point.
-5. **Run test-validation in audit-only mode** — validate that your repo profile's test commands are safe and non-mutating before relying on them.
+4. **Create a repo profile** â€” add a profile under `.heli-harness/profiles/<repo>.md` describing the repo's conventions, test commands, and risk areas. Use templates in `.heli-harness/templates/` as a starting point.
+5. **Run test-validation in audit-only mode** â€” validate that your repo profile's test commands are safe and non-mutating before relying on them.

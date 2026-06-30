@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.5.10 - Native Plugin Parity
+
+### Added
+
+- Added `docs/PONYTAIL_PARITY_AUDIT.md` comparing Heli against Ponytail plugin artifacts, hooks, commands, skills, install flow, and validation evidence.
+- Added Claude Code native plugin artifacts under `.heli-harness/adapters/claude-plugin/`.
+- Added Codex native plugin artifacts under `.heli-harness/adapters/codex-plugin/`.
+- Added `scripts/smoke-claude-plugin.mjs`, `scripts/smoke-codex-plugin.mjs`, and a small shared plugin smoke helper.
+
+### Changed
+
+- Added `verified-plugin-wired` and `plugin-wired` adapter statuses.
+- Promoted Claude Code and Codex from `verified-wired` to `verified-plugin-wired`.
+- Integrated plugin smoke tests into `npm run check`, adapter verification, and release validation.
+- Updated install docs, support matrix, governance model, and README for pointer adapter mode versus native plugin artifact mode.
+
+### Notes
+
+- Does not claim live Claude Code or Codex runtime hook enforcement.
+- Synthetic PreToolUse hook tests deny `git push` and `.env` writes, but host install/trust/runtime execution still needs live verification before any `enforced` claim.
+- Pi remains the only `enforced` adapter.
+
 ## v0.5.9 - Codex Governance Workflow
 
 ### Added

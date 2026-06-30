@@ -2,7 +2,7 @@
 
 This folder connects Codex to Heli-Harness without making Codex the source of truth.
 
-Status: `verified-wired`.
+Status: pointer adapter `verified-wired`; native plugin artifacts `verified-plugin-wired`.
 
 What gets installed:
 
@@ -26,4 +26,4 @@ Recommended Codex workflow:
 5. Report evidence, skipped checks, risks, and final git status.
 6. Do not push, tag, merge, or release unless explicitly asked.
 
-No runtime hook enforcement is proven for Codex in this release. This adapter is instruction/pointer based, not a sandbox.
+No live runtime hook enforcement is proven for Codex in this release. This adapter is instruction/pointer based, not a sandbox.

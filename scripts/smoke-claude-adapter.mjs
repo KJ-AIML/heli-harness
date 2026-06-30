@@ -68,18 +68,18 @@ try {
 
 	const claude = manifest.adapters.find((adapter) => adapter.id === "claude");
 	assert.ok(claude, "Claude adapter should be present in adapters.json");
-	assert.equal(claude.status, "verified-wired", "Claude adapter should be verified-wired");
+	assert.equal(claude.status, "verified-plugin-wired", "Claude adapter should be verified-plugin-wired");
 	assert.ok(claude.evidence.includes("scripts/smoke-claude-adapter.mjs"), "Claude manifest should include smoke evidence");
 	assert.ok(claude.verification.includes("node scripts/smoke-claude-adapter.mjs"), "Claude manifest should include smoke command");
 	for (const evidencePath of claude.evidence) {
 		assert.ok(existsSync(join(root, evidencePath)), `Claude evidence should exist: ${evidencePath}`);
 	}
-	assert.ok(claude.limitations.some((item) => /No runtime hook enforcement/i.test(item)), "Claude limitations should say no runtime hook enforcement");
+	assert.ok(claude.limitations.some((item) => /No live Claude Code runtime hook enforcement/i.test(item)), "Claude limitations should say no live runtime hook enforcement");
 
 	assertContains(matrix, "Claude Code", "support matrix");
-	assertContains(matrix, "verified-wired", "support matrix");
+	assertContains(matrix, "verified-plugin-wired", "support matrix");
 	assertContains(matrix, "node scripts/smoke-claude-adapter.mjs", "support matrix");
-	assertContains(matrix, "No runtime hook enforcement proven", "support matrix");
+	assertContains(matrix, "No live Claude Code runtime hook enforcement has been proven", "support matrix");
 
 	if (platform() === "win32") {
 		run("powershell", [
