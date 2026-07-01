@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.5.11 - Live Runtime Verification
+
+### Added
+
+- Added `.heli-harness/adapters/codex-plugin/.agents/plugins/marketplace.json` — the Codex plugin directory had no marketplace manifest, so `codex plugin marketplace add` could not recognize it. Fixed and live-verified against the real Codex CLI.
+- Added `scripts/live-verify-claude-plugin.mjs`: drives a real `claude -p` session (`--plugin-dir`, isolated sandbox repo) and asserts the session's own `permission_denials` result shows the PreToolUse hook denying `git push` and a `.env` write.
+- Added `scripts/live-verify-codex-plugin-install.mjs`: drives the real `codex` CLI (isolated `CODEX_HOME`) through `plugin marketplace add` and `plugin add`, and confirms `plugin list` reports it installed and enabled.
+- Added `live-verify:claude-plugin` and `live-verify:codex-plugin-install` npm scripts. Not part of `npm run check` — they require a real installed CLI and make real API calls.
+
+### Changed
+
+- Promoted Claude Code from `verified-plugin-wired` to `enforced`, backed by live-session evidence.
+- Updated adapter manifest, support matrix, README, and Claude/Codex adapter docs for the new evidence and status.
+
+### Notes
+
+- Codex remains `verified-plugin-wired`: marketplace add, plugin install, and trust are proven live against the real Codex CLI, but PreToolUse hook firing during a real model turn is not yet proven — that check needs Codex usage quota that was unavailable at verification time.
+- Claude Code's live proof used `--plugin-dir` session loading, not the marketplace-installed-and-trusted flow (`claude plugin install`); that path is not separately verified.
+- Pi and Claude Code are the `enforced` adapters. Codex is not.
+
 ## v0.5.10 - Native Plugin Parity
 
 ### Added

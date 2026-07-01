@@ -60,7 +60,7 @@ Final reports should include summary, files changed, validation, remaining risks
 
 - This Claude Code adapter is instruction/config/pointer based.
 - v0.5.10 verifies adapter files, settings JSON, installer-created `CLAUDE.md`, and update preservation of user-owned workspace `CLAUDE.md`.
-- No live Claude runtime hook enforcement is claimed; v0.5.10 only proves synthetic plugin hook behavior.
-- Pi remains the only `enforced` adapter in the current release.
+- v0.5.11 live-verifies the native plugin: a real `claude -p` session loading it via `--plugin-dir` in an isolated sandbox denies `git push` and a `.env` write, confirmed via the session's own `permission_denials` result. This is `enforced`, not just synthetic plugin hook behavior, but it covers `--plugin-dir` loading, not the marketplace-installed-and-trusted flow (`claude plugin install`).
+- Claude Code and Pi are the `enforced` adapters in the current release.
 
 Claude-specific behavior belongs here. Core harness files must remain tool-neutral.

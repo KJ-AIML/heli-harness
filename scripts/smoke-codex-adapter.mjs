@@ -79,12 +79,13 @@ try {
 	for (const evidencePath of codex.evidence) {
 		assert.ok(existsSync(join(root, evidencePath)), `Codex evidence should exist: ${evidencePath}`);
 	}
-	assert.ok(codex.limitations.some((item) => /No live Codex runtime hook enforcement/i.test(item)), "Codex limitations should say no live runtime hook enforcement");
+	assert.ok(codex.limitations.some((item) => /PreToolUse hook firing.*not yet proven live/i.test(item)), "Codex limitations should say hook firing is not yet proven live");
 
 	assertContains(matrix, "Codex", "support matrix");
 	assertContains(matrix, "verified-plugin-wired", "support matrix");
 	assertContains(matrix, "node scripts/smoke-codex-adapter.mjs", "support matrix");
-	assertContains(matrix, "No live Codex runtime hook enforcement has been proven", "support matrix");
+	assertContains(matrix, "node scripts/live-verify-codex-plugin-install.mjs", "support matrix");
+	assert.match(matrix, /PreToolUse hook firing.*not yet proven live/i, "support matrix should say hook firing is not yet proven live");
 
 	if (platform() === "win32") {
 		run("powershell", [

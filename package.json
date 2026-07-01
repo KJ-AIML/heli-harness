@@ -1,6 +1,6 @@
 {
   "name": "heli-harness",
-  "version": "0.5.10",
+  "version": "0.5.11",
   "description": "Parent-workspace AI development harness for multi-repo, multi-agent engineering work.",
   "keywords": [
     "pi-package",
@@ -38,6 +38,8 @@
     "smoke:codex": "node scripts/smoke-codex-adapter.mjs",
     "smoke:claude-plugin": "node scripts/smoke-claude-plugin.mjs",
     "smoke:codex-plugin": "node scripts/smoke-codex-plugin.mjs",
+    "live-verify:claude-plugin": "node scripts/live-verify-claude-plugin.mjs",
+    "live-verify:codex-plugin-install": "node scripts/live-verify-codex-plugin-install.mjs",
     "verify:adapters": "node scripts/verify-adapters.mjs",
     "validate:release": "node scripts/validate-release.mjs"
   },

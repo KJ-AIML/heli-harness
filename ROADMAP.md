@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.10
+## Current Baseline: v0.5.11
 
-Latest stable release: `v0.5.10`
+Latest stable release: `v0.5.11`
 
-Release commit: pending tag `v0.5.10`
+Release commit: pending tag `v0.5.11`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.10>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.11>
 
 Stable behavior in this baseline:
 
@@ -153,6 +153,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.8 | Claude Code Adapter Verification | Smoke-test Claude adapter files, settings JSON, installer pointer, and update preservation without claiming runtime enforcement. |
 | v0.5.9 | Codex Governance Workflow | Smoke-test Codex adapter files, installer pointer, and update preservation without claiming runtime enforcement. |
 | v0.5.10 | Native Plugin Parity | Add Ponytail parity audit, Claude/Codex native plugin artifacts, plugin smoke tests, and verified-plugin-wired taxonomy without claiming live runtime enforcement. |
+| v0.5.11 | Live Runtime Verification | Prove plugin hooks fire in a real Claude Code session, add the missing Codex marketplace manifest, and live-verify Codex install/trust; promote Claude Code to `enforced`. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -773,6 +774,50 @@ Risks:
 
 - Codex host enforcement capabilities may change; runtime blocking must be validated in a later milestone before any enforcement claim.
 - Instruction/pointer wiring still relies on Codex loading and following workspace `AGENTS.md`.
+
+## v0.5.11 - Live Runtime Verification (Implemented)
+
+Goal:
+Close the v0.5.10 gap by proving plugin hooks fire in a real host session, instead of only synthetic/local smoke coverage.
+
+Rationale:
+v0.5.10 shipped native plugin artifacts and local smoke tests but explicitly could not claim live runtime enforcement for Claude Code or Codex. Reviewing that gap surfaced a real defect: Heli shipped no Codex plugin marketplace manifest, so `codex plugin marketplace add` could not recognize the codex-plugin directory at all. Claims require evidence, so this milestone gets real evidence instead of closing the gap on paper.
+
+Scope:
+
+- Add `.heli-harness/adapters/codex-plugin/.agents/plugins/marketplace.json` so the shipped Codex plugin directory is a valid, installable marketplace.
+- Add `scripts/live-verify-claude-plugin.mjs`: copies the Claude plugin into an isolated temp directory and drives a real `claude -p` session (`--plugin-dir`, throwaway git repo, `--dangerously-skip-permissions`) that attempts `git push` and a `.env` write, then asserts the session's own `permission_denials` result contains both denials.
+- Add `scripts/live-verify-codex-plugin-install.mjs`: drives the real `codex` CLI (isolated `CODEX_HOME`) through `plugin marketplace add` and `plugin add`, then confirms `plugin list` reports the plugin installed and enabled.
+- Promote Claude Code from `verified-plugin-wired` to `enforced`, backed by the live-verify script.
+- Keep Codex at `verified-plugin-wired`: install/trust is live-verified, but PreToolUse hook firing during a real model turn is not yet proven (blocked on Codex account usage quota at verification time).
+- Add both live-verify scripts as opt-in npm scripts (`live-verify:claude-plugin`, `live-verify:codex-plugin-install`), not part of `npm run check`, since they require a real installed CLI and make real API calls.
+
+Non-goals:
+
+- No live Codex PreToolUse hook-fire proof yet (tracked as follow-up once quota is available).
+- No OpenCode/Cursor/Windsurf/Cline/Gemini/OpenClaw plugin implementation.
+- No plugin marketplace publication.
+- No change to command-rules.json source-of-truth or the classifier architecture.
+
+Deliverables:
+
+- `.heli-harness/adapters/codex-plugin/.agents/plugins/marketplace.json`.
+- `scripts/live-verify-claude-plugin.mjs`, `scripts/live-verify-codex-plugin-install.mjs`.
+- Updated adapter manifest, support matrix, and README reflecting Claude Code `enforced` status and Codex's live install/trust evidence.
+
+Acceptance criteria:
+
+- `npm run check` passes.
+- `node scripts/live-verify-claude-plugin.mjs` passes against a real, locally installed Claude Code CLI.
+- `node scripts/live-verify-codex-plugin-install.mjs` passes against a real, locally installed Codex CLI.
+- Claude Code status is `enforced` with live-session evidence; Codex remains `verified-plugin-wired` with an honest, quota-blocked limitation recorded.
+- Pi and Claude Code are the `enforced` adapters; no adapter claims enforcement without runtime evidence.
+
+Risks:
+
+- Live-verify scripts depend on real CLI behavior (flag names, output shape) that may change between Claude Code / Codex releases.
+- The Claude Code live proof used `--plugin-dir` session loading, not the marketplace-installed-and-trusted flow (`claude plugin install`); that path still needs separate verification.
+- The Codex PreToolUse hook-fire proof remains open until Codex usage quota is available; status must not be silently upgraded without it.
 
 ## Post-v0.5 Stabilization
 

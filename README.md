@@ -36,8 +36,8 @@ See [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) for detailed status
 
 **Current adapter status:**
 - **Pi**: `enforced` â€” Extension file, smoke tests, hook guards verified
-- **Claude Code**: `verified-plugin-wired` - Pointer adapter plus native plugin files, hook config, skill, and synthetic hook smoke tests; no live runtime enforcement proven
-- **Codex**: `verified-plugin-wired` - Pointer adapter plus native plugin files, hook config, skill, `AGENTS.md`, and synthetic hook smoke tests; no live runtime enforcement proven
+- **Claude Code**: `enforced` - Pointer adapter plus native plugin files; live-verified against the real Claude Code CLI (`--plugin-dir`, isolated sandbox) — a real session denies `git push` and `.env` writes and reports it in `permission_denials`
+- **Codex**: `verified-plugin-wired` - Pointer adapter plus native plugin files, hook config, skill, `AGENTS.md`, marketplace manifest, and synthetic hook smoke tests; marketplace add/install/trust is live-verified against the real Codex CLI, but live PreToolUse hook firing is not yet proven (blocked on Codex usage quota)
 - **Cursor**: `wired` â€” Adapter files exist, install creates pointer, no runtime enforcement
 - **AXGA**: `documented` â€” Shares Pi adapter docs, no dedicated verification
 - **Generic**: `documented` â€” Adapter instructions exist, manual setup
@@ -75,7 +75,7 @@ Install this repo into the current folder as a parent-workspace harness:
 
 https://github.com/KJ-AIML/heli-harness
 
-Use the latest stable tag (v0.5.10). Do not install globally. Treat the current
+Use the latest stable tag (v0.5.11). Do not install globally. Treat the current
 directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
@@ -87,7 +87,7 @@ and CLAUDE.md exist after install.
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.10
+git checkout v0.5.11
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install
@@ -99,7 +99,7 @@ Remove-Item -Recurse -Force hh-source
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.10
+git checkout v0.5.11
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -111,8 +111,8 @@ rm -rf hh-source
 Pi and AXGA can load Heli-Harness as a package to get skills and a lightweight extension:
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.10
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.10
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.11
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.11
 ```
 
 This installs the agent package, which does two things:
@@ -164,7 +164,7 @@ Hook observability is opt-in and one-shot:
 - `pi install ...` does **not** automatically create `.heli-harness/` in every folder. Use `/heli-install` to set up the workspace harness in a specific folder.
 - Workspace install remains the source of truth for parent-workspace behavior.
 - Agent packages may run with broad local access. Inspect source code before installing.
-- **Status: supported** - use the v0.5.10 tag after release.
+- **Status: supported** - use the v0.5.11 tag after release.
 
 ### Multi-repo targeting
 
@@ -188,10 +188,11 @@ Pointer adapter path:
 Native plugin artifact path:
 
 1. Inspect `.heli-harness/adapters/codex-plugin/`.
-2. The package includes `.codex-plugin/plugin.json`, `hooks/hooks.json`, `skills/heli-governance/SKILL.md`, and plugin `AGENTS.md`.
+2. The package includes `.codex-plugin/plugin.json`, `hooks/hooks.json`, `skills/heli-governance/SKILL.md`, `.agents/plugins/marketplace.json`, and plugin `AGENTS.md`.
 3. Run `node scripts/smoke-codex-plugin.mjs` to verify local plugin artifacts and synthetic hook decisions.
+4. Run `node scripts/live-verify-codex-plugin-install.mjs` to prove `codex plugin marketplace add` and `codex plugin add` install and trust the plugin against your real, locally installed Codex CLI (isolated `CODEX_HOME`; does not touch your real Codex config).
 
-Status: `verified-plugin-wired`. v0.5.10 smoke-tests both the pointer adapter and native plugin artifacts. Synthetic PreToolUse hook inputs deny `git push` and `.env` writes, but no live Codex runtime hook enforcement is claimed.
+Status: `verified-plugin-wired`. v0.5.11 adds a real Codex marketplace manifest (previously missing, so `codex plugin marketplace add` could not recognize the directory) and live-verifies marketplace add/install/trust against the real Codex CLI. Live PreToolUse hook firing during an actual model turn is not yet proven — that check needs Codex usage quota that was unavailable at verification time.
 
 ### Claude Code
 
@@ -206,8 +207,9 @@ Native plugin artifact path:
 1. Inspect `.heli-harness/adapters/claude-plugin/`.
 2. The package includes `.claude-plugin/plugin.json`, `hooks/hooks.json`, and `skills/heli-governance/SKILL.md`.
 3. Run `node scripts/smoke-claude-plugin.mjs` to verify local plugin artifacts and synthetic hook decisions. When the local Claude CLI is available, the smoke also runs `claude plugin validate`.
+4. Run `node scripts/live-verify-claude-plugin.mjs` to prove the PreToolUse hook actually denies `git push` and `.env` writes in a real Claude Code session (isolated `--plugin-dir` sandbox; makes real API calls).
 
-Status: `verified-plugin-wired`. v0.5.10 smoke-tests both the pointer adapter and native plugin artifacts. Synthetic PreToolUse hook inputs deny `git push` and `.env` writes, but no live Claude Code runtime hook enforcement is claimed.
+Status: `enforced`. v0.5.11 live-verifies the plugin against the real, locally installed Claude Code CLI: a real `claude -p` session loading the plugin via `--plugin-dir` in an isolated sandbox repo denies both `git push` and a `.env` write, and the session's own `permission_denials` result confirms it. This covers `--plugin-dir` session loading, not the marketplace-installed-and-trusted flow (`claude plugin install`).
 
 ### Cursor
 
@@ -234,7 +236,7 @@ If you want to inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.5.10
+git checkout v0.5.11
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```

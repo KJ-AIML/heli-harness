@@ -60,7 +60,7 @@ Final reports should include summary, files changed, validation, remaining risks
 
 - This Codex adapter is instruction/pointer based.
 - v0.5.10 verifies adapter files, installer-created `AGENTS.md`, update preservation of user-owned workspace `AGENTS.md`, manifest evidence, and support matrix claims.
-- No live Codex runtime hook enforcement is claimed; v0.5.10 only proves synthetic plugin hook behavior.
-- Pi remains the only `enforced` adapter in the current release.
+- v0.5.11 adds the marketplace manifest the Codex plugin was missing and live-verifies `codex plugin marketplace add` / `plugin add` install and trust against the real Codex CLI. No live Codex PreToolUse hook-fire proof exists yet; that check needs Codex usage quota that was unavailable at verification time.
+- Pi and Claude Code are the `enforced` adapters in the current release; Codex is not.
 
 Codex-specific behavior belongs here. Core harness files must remain tool-neutral.

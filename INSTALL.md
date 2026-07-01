@@ -7,7 +7,7 @@
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.10
+git checkout v0.5.11
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install
@@ -19,7 +19,7 @@ Remove-Item -Recurse -Force hh-source
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.10
+git checkout v0.5.11
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -34,7 +34,7 @@ rm -rf hh-source
 
 ## Claude/Codex plugin artifacts
 
-v0.5.10 also ships local plugin artifact roots:
+v0.5.11 also ships local plugin artifact roots:
 
 - `.heli-harness/adapters/claude-plugin/`
 - `.heli-harness/adapters/codex-plugin/`
@@ -51,8 +51,8 @@ These are `verified-plugin-wired`: manifests, hook configs, skills, and syntheti
 ## Pi / AXGA package install
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.10
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.10
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.11
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.11
 ```
 
 Then run `/heli-install` inside Pi or AXGA to install the workspace harness.

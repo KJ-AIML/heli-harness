@@ -1,5 +1,5 @@
 {
-  "version": "0.5.10",
+  "version": "0.5.11",
   "taxonomy": {
     "enforced": "Runtime hook/tool-call guard is verified and tested. Smoke test or interactive test exists.",
     "verified-plugin-wired": "Native plugin artifacts are shipped and smoke-tested, but runtime enforcement is not proven.",
@@ -60,6 +60,7 @@
         ".heli-harness/adapters/codex/README.md",
         ".heli-harness/adapters/codex/install.md",
         ".heli-harness/adapters/codex-plugin/.codex-plugin/plugin.json",
+        ".heli-harness/adapters/codex-plugin/.agents/plugins/marketplace.json",
         ".heli-harness/adapters/codex-plugin/hooks/hooks.json",
         ".heli-harness/adapters/codex-plugin/hooks/heli-session-start.mjs",
         ".heli-harness/adapters/codex-plugin/hooks/heli-pre-tool-use.mjs",
@@ -68,6 +69,7 @@
         ".heli-harness/adapters/codex-plugin/README.md",
         "scripts/smoke-codex-adapter.mjs",
         "scripts/smoke-codex-plugin.mjs",
+        "scripts/live-verify-codex-plugin-install.mjs",
         "install.sh",
         "install.ps1",
         "update.sh",
@@ -76,17 +78,18 @@
       "verification": [
         "node scripts/smoke-codex-adapter.mjs",
         "node scripts/smoke-codex-plugin.mjs",
+        "node scripts/live-verify-codex-plugin-install.mjs",
         "node scripts/verify-adapters.mjs"
       ],
       "enforcementSurfaces": [
         "Workspace AGENTS.md pointer file created by installer",
-        "Native plugin manifest with skills and hook config",
+        "Native plugin manifest with skills, hook config, and marketplace manifest",
         "Synthetic SessionStart context hook smoke",
-        "Synthetic PreToolUse deny hook smoke"
+        "Synthetic PreToolUse deny hook smoke",
+        "Live-verified: real `codex plugin marketplace add` + `plugin add` install/trust against the actual Codex CLI (isolated CODEX_HOME)"
       ],
       "limitations": [
-        "No live Codex runtime hook enforcement has been proven",
-        "Plugin hooks still require host install/trust review",
+        "Marketplace add, plugin install, and trust are proven live against the real Codex CLI; the PreToolUse hook firing during a real model turn is not yet proven live (blocked on Codex account usage quota as of 2026-07-01)",
         "Pointer adapter remains the fallback path",
         "Codex must voluntarily follow AGENTS.md",
         "Not a sandbox"
@@ -95,7 +98,7 @@
     {
       "id": "claude",
       "name": "Claude Code",
-      "status": "verified-plugin-wired",
+      "status": "enforced",
       "evidence": [
         ".heli-harness/adapters/claude/CLAUDE.md",
         ".heli-harness/adapters/claude/README.md",
@@ -109,6 +112,7 @@
         ".heli-harness/adapters/claude-plugin/README.md",
         "scripts/smoke-claude-adapter.mjs",
         "scripts/smoke-claude-plugin.mjs",
+        "scripts/live-verify-claude-plugin.mjs",
         "install.sh",
         "install.ps1",
         "update.sh",
@@ -117,18 +121,20 @@
       "verification": [
         "node scripts/smoke-claude-adapter.mjs",
         "node scripts/smoke-claude-plugin.mjs",
+        "node scripts/live-verify-claude-plugin.mjs",
         "node scripts/verify-adapters.mjs"
       ],
       "enforcementSurfaces": [
         "Workspace CLAUDE.md pointer file created by installer",
         "Native plugin manifest with skills and hook config",
         "Synthetic SessionStart context hook smoke",
-        "Synthetic PreToolUse deny hook smoke"
+        "Synthetic PreToolUse deny hook smoke",
+        "Live-verified: real Claude Code session (`--plugin-dir`, isolated sandbox repo) denies `git push` and `.env` writes and reports them in the session's `permission_denials`"
       ],
       "limitations": [
-        "No live Claude Code runtime hook enforcement has been proven",
-        "Plugin hooks still require host install/trust review",
-        "Pointer adapter remains the fallback path",
+        "Live proof used `--plugin-dir` (session-scoped local plugin loading), not the marketplace-installed-and-trusted flow (`claude plugin install`); that install/trust path is not separately verified",
+        "Guard rules only cover git push and .env-style writes today",
+        "Pointer adapter (CLAUDE.md) remains the fallback path for hosts that don't load the native plugin",
         "Not a sandbox"
       ]
     },

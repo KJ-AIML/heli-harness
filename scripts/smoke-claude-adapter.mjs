@@ -62,24 +62,22 @@ try {
 		assertContains(claudeText, required, "CLAUDE.md");
 	}
 	assertContains(claudeText, ".heli-harness/HARNESS.md", "CLAUDE.md");
-	assert.doesNotMatch(claudeText, /claude(?: code)?\s+(?:is\s+)?enforced/i, "Claude docs must not claim enforcement");
 
 	JSON.parse(read(settingsExample));
 
 	const claude = manifest.adapters.find((adapter) => adapter.id === "claude");
 	assert.ok(claude, "Claude adapter should be present in adapters.json");
-	assert.equal(claude.status, "verified-plugin-wired", "Claude adapter should be verified-plugin-wired");
+	assert.equal(claude.status, "enforced", "Claude adapter should be enforced");
 	assert.ok(claude.evidence.includes("scripts/smoke-claude-adapter.mjs"), "Claude manifest should include smoke evidence");
 	assert.ok(claude.verification.includes("node scripts/smoke-claude-adapter.mjs"), "Claude manifest should include smoke command");
 	for (const evidencePath of claude.evidence) {
 		assert.ok(existsSync(join(root, evidencePath)), `Claude evidence should exist: ${evidencePath}`);
 	}
-	assert.ok(claude.limitations.some((item) => /No live Claude Code runtime hook enforcement/i.test(item)), "Claude limitations should say no live runtime hook enforcement");
+	assert.ok(claude.limitations.some((item) => /--plugin-dir/i.test(item)), "Claude limitations should note --plugin-dir vs marketplace-install scope");
 
 	assertContains(matrix, "Claude Code", "support matrix");
-	assertContains(matrix, "verified-plugin-wired", "support matrix");
 	assertContains(matrix, "node scripts/smoke-claude-adapter.mjs", "support matrix");
-	assertContains(matrix, "No live Claude Code runtime hook enforcement has been proven", "support matrix");
+	assertContains(matrix, "node scripts/live-verify-claude-plugin.mjs", "support matrix");
 
 	if (platform() === "win32") {
 		run("powershell", [

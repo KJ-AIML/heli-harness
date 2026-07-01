@@ -16,7 +16,7 @@ assertFile(join(pluginRoot, "skills", "heli-governance", "SKILL.md"), "Claude pl
 
 const manifest = json(join(pluginRoot, ".claude-plugin", "plugin.json"));
 assert.equal(manifest.name, "heli-harness");
-assert.equal(manifest.version, "0.5.10");
+assert.equal(manifest.version, "0.5.11");
 
 const hooks = json(join(pluginRoot, "hooks", "hooks.json"));
 assert.ok(hooks.hooks.SessionStart, "Claude plugin should define SessionStart");
@@ -40,14 +40,15 @@ assertHookDeny(root, `${plugin}/hooks/heli-pre-tool-use.mjs`, {
 }, /\.env/);
 
 const claude = json(join(root, ".heli-harness", "adapters", "adapters.json")).adapters.find((adapter) => adapter.id === "claude");
-assert.equal(claude.status, "verified-plugin-wired");
+assert.equal(claude.status, "enforced");
 assert.ok(claude.evidence.includes(".heli-harness/adapters/claude-plugin/.claude-plugin/plugin.json"));
+assert.ok(claude.evidence.includes("scripts/live-verify-claude-plugin.mjs"));
 assert.ok(claude.verification.includes("node scripts/smoke-claude-plugin.mjs"));
+assert.ok(claude.verification.includes("node scripts/live-verify-claude-plugin.mjs"));
 
 const matrix = read(join(root, "docs", "ADAPTER_SUPPORT_MATRIX.md"));
 const row = matrix.split("\n").find((line) => line.includes("**Claude Code**")) || "";
-assert.match(row, /verified-plugin-wired/);
-assert.doesNotMatch(row, /enforced/);
+assert.match(row, /enforced/);
 
 const validate = spawnSync("claude", ["plugin", "validate", pluginRoot], {
 	cwd: root,

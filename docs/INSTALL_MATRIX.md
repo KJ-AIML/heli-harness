@@ -18,7 +18,7 @@ These expose harness rules/skills to a specific agent host. They do not replace 
 
 | Host | Command | Status | What it installs | Notes |
 |------|---------|--------|------------------|-------|
-| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.10` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.10` | **supported** | 23 skills + lightweight extension (startup status, `/heli-install`, `/hh-install`, `/hh-status`, `/heli-target`, `/heli-lock`, `/heli-hooks`, `/heli-validate lint`, command-rule guard, safety classifier) | Does not auto-create `.heli-harness/`. Use `/heli-install` or `/hh-install` to set up workspace. Use the v0.5.10 tag after release |
+| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.11` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.11` | **supported** | 23 skills + lightweight extension (startup status, `/heli-install`, `/hh-install`, `/hh-status`, `/heli-target`, `/heli-lock`, `/heli-hooks`, `/heli-validate lint`, command-rule guard, safety classifier) | Does not auto-create `.heli-harness/`. Use `/heli-install` or `/hh-install` to set up workspace. Use the v0.5.11 tag after release |
 | Codex | Workspace `AGENTS.md` -> `.heli-harness/adapters/codex/AGENTS.md`; plugin artifacts in `.heli-harness/adapters/codex-plugin/` | **verified-plugin-wired** | Pointer adapter plus `.codex-plugin/plugin.json`, hooks, skills, plugin `AGENTS.md`, and smoke tests | No live runtime hook enforcement proven. Plugin install/trust remains host-controlled |
 | Claude Code | Workspace `CLAUDE.md` -> `.heli-harness/adapters/claude/CLAUDE.md`; plugin artifacts in `.heli-harness/adapters/claude-plugin/` | **verified-plugin-wired** | Pointer adapter plus `.claude-plugin/plugin.json`, hooks, skills, and smoke tests | No live runtime hook enforcement proven. Plugin install/trust remains host-controlled |
 | Cursor | Workspace `.cursor/rules/` â†’ `.heli-harness/adapters/cursor/CURSOR.md` | **supported** | Adapter created by workspace installer | Requires workspace install first |
@@ -51,7 +51,7 @@ To inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.5.10
+git checkout v0.5.11
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```

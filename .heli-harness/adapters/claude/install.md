@@ -22,4 +22,4 @@ Updates do not modify the parent workspace `CLAUDE.md`; keep local Claude notes 
 
 Do not copy Heli-Harness into `%USERPROFILE%\.claude\skills` by default. This harness is intended to live with the parent workspace.
 
-Optional settings examples are packaged for review, but v0.5.10 does not claim live Claude runtime enforcement.
+Optional settings examples are packaged for review. v0.5.11 live-verifies the native plugin against a real Claude Code session (`node scripts/live-verify-claude-plugin.mjs`); see the native plugin path in the root README for details.
