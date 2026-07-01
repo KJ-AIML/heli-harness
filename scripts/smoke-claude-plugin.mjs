@@ -16,7 +16,7 @@ assertFile(join(pluginRoot, "skills", "heli-governance", "SKILL.md"), "Claude pl
 
 const manifest = json(join(pluginRoot, ".claude-plugin", "plugin.json"));
 assert.equal(manifest.name, "heli-harness");
-assert.equal(manifest.version, "0.5.11");
+assert.equal(manifest.version, "0.5.12");
 
 const hooks = json(join(pluginRoot, "hooks", "hooks.json"));
 assert.ok(hooks.hooks.SessionStart, "Claude plugin should define SessionStart");
@@ -37,6 +37,12 @@ assertHookDeny(root, `${plugin}/hooks/heli-pre-tool-use.mjs`, {
 assertHookDeny(root, `${plugin}/hooks/heli-pre-tool-use.mjs`, {
 	tool_name: "Write",
 	tool_input: { file_path: ".env" },
+}, /\.env/);
+// apply_patch-style calls (e.g. Codex, or Bash-driven patch flows) embed the
+// target path in a patch body under `command`, not a path/file field.
+assertHookDeny(root, `${plugin}/hooks/heli-pre-tool-use.mjs`, {
+	tool_name: "apply_patch",
+	tool_input: { command: "*** Begin Patch\n*** Add File: .env\n+FOO=bar\n*** End Patch\n" },
 }, /\.env/);
 
 const claude = json(join(root, ".heli-harness", "adapters", "adapters.json")).adapters.find((adapter) => adapter.id === "claude");

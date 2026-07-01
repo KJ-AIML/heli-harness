@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.5.11-informational"></a>
+  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.5.12-informational"></a>
   <a href="https://github.com/KJ-AIML/heli-harness/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/KJ-AIML/heli-harness/ci.yml?branch=main&label=CI"></a>
   <a href="docs/ADAPTER_SUPPORT_MATRIX.md"><img alt="Adapters" src="https://img.shields.io/badge/adapters-Pi%20%C2%B7%20Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20Cursor-8A2BE2"></a>
 </p>
@@ -49,7 +49,7 @@ Install this repo into the current folder as a parent-workspace harness:
 
 https://github.com/KJ-AIML/heli-harness
 
-Use the latest stable tag (v0.5.11). Do not install globally. Treat the current
+Use the latest stable tag (v0.5.12). Do not install globally. Treat the current
 directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
@@ -87,14 +87,43 @@ Agent:
 - **planned** - Roadmap item exists, but no shipped adapter wiring yet
 - **unsupported** - Explicitly not supported
 
-**Current adapter status:**
-- **Pi**: `enforced` — Extension file, smoke tests, hook guards verified
-- **Claude Code**: `enforced` - Pointer adapter plus native plugin files; live-verified against the real Claude Code CLI (`--plugin-dir`, isolated sandbox) — a real session denies `git push` and `.env` writes and reports it in `permission_denials`
-- **Codex**: `verified-plugin-wired` - Pointer adapter plus native plugin files, hook config, skill, `AGENTS.md`, marketplace manifest, and synthetic hook smoke tests; marketplace add/install/trust is live-verified against the real Codex CLI, but live PreToolUse hook firing is not yet proven (blocked on Codex usage quota)
-- **Cursor**: `wired` — Adapter files exist, install creates pointer, no runtime enforcement
-- **AXGA**: `documented` — Shares Pi adapter docs, no dedicated verification
-- **Generic**: `documented` — Adapter instructions exist, manual setup
-- **OpenCode/Windsurf/Cline/Gemini/OpenClaw**: `planned` — No implementation yet
+Every command below is what actually works today against the real, locally installed CLI — nothing here needs a published marketplace listing.
+
+### Claude Code — `enforced`
+
+```bash
+claude --plugin-dir .heli-harness/adapters/claude-plugin
+```
+
+Loads the native plugin for that session. Live-verified: a real session denies `git push` and `.env` writes and reports it in `permission_denials`. For the full workspace harness instead, use the [Quickstart](#-quickstart) above.
+
+### Codex — `enforced`
+
+```bash
+codex plugin marketplace add ./.heli-harness/adapters/codex-plugin
+codex plugin add heli-harness@heli-harness
+```
+
+Live-verified: a real `codex exec` turn denies `git push` and `.env` writes via the PreToolUse hook.
+
+### Pi / AXGA — `enforced` (Pi) / `documented` (AXGA)
+
+```bash
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.12
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.12
+```
+
+Loads 23 skills plus the Pi extension (hooks/guards). Then run `/heli-install` inside Pi/AXGA to set up the workspace harness — see [.heli-harness/adapters/pi/README.md](.heli-harness/adapters/pi/README.md).
+
+### Cursor — `wired`
+
+No plugin mechanism. After the workspace install (Quickstart above), Cursor reads `.heli-harness/adapters/cursor/CURSOR.md` on its own.
+
+### Generic agents — `documented`
+
+After the workspace install, point any other agent at `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md`.
+
+**OpenCode/Windsurf/Cline/Gemini/OpenClaw**: `planned` — no implementation yet.
 
 Every claim above has to point at real evidence — see **[docs/ADAPTER_SUPPORT_MATRIX.md](docs/ADAPTER_SUPPORT_MATRIX.md)** for the file paths, verification commands, and limitations behind each status. Per-adapter install paths (pointer vs. native plugin) live in **[INSTALL.md](INSTALL.md)**.
 

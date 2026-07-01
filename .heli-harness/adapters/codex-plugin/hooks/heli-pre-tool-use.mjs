@@ -32,9 +32,26 @@ function pathsFrom(value, out = []) {
 	return out;
 }
 
+// apply_patch tools (Codex, and Claude's Bash-driven patch flows) send the
+// target path inside a patch-format command string, not a path/file field:
+//   *** Begin Patch
+//   *** Add File: .env
+//   +FOO=bar
+//   *** End Patch
+function patchPathsFrom(commandText, out = []) {
+	const re = /^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm;
+	let match;
+	while ((match = re.exec(commandText))) out.push(match[1].trim());
+	const moveRe = /^\*\*\* Move to: (.+)$/gm;
+	while ((match = moveRe.exec(commandText))) out.push(match[1].trim());
+	return out;
+}
+
 const event = input.trim() ? JSON.parse(input) : {};
-const command = commandFrom(event).replace(/\s+/g, " ").trim().toLowerCase();
-const paths = pathsFrom(event.tool_input).map((path) => path.replaceAll("\\", "/").toLowerCase());
+const rawCommand = commandFrom(event);
+const command = rawCommand.replace(/\s+/g, " ").trim().toLowerCase();
+const paths = [...pathsFrom(event.tool_input), ...patchPathsFrom(rawCommand)]
+	.map((path) => path.replaceAll("\\", "/").toLowerCase());
 
 if (/\bgit\s+push\b/.test(command)) deny("Heli-Harness blocks git push without explicit release approval.");
 else if (paths.some((path) => /(^|\/)\.env(\.|$)/.test(path))) deny("Heli-Harness blocks writes to .env-style secret files.");

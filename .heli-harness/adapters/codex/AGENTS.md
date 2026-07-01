@@ -60,7 +60,8 @@ Final reports should include summary, files changed, validation, remaining risks
 
 - This Codex adapter is instruction/pointer based.
 - v0.5.10 verifies adapter files, installer-created `AGENTS.md`, update preservation of user-owned workspace `AGENTS.md`, manifest evidence, and support matrix claims.
-- v0.5.11 adds the marketplace manifest the Codex plugin was missing and live-verifies `codex plugin marketplace add` / `plugin add` install and trust against the real Codex CLI. No live Codex PreToolUse hook-fire proof exists yet; that check needs Codex usage quota that was unavailable at verification time.
-- Pi and Claude Code are the `enforced` adapters in the current release; Codex is not.
+- v0.5.11 adds the marketplace manifest the Codex plugin was missing and live-verifies `codex plugin marketplace add` / `plugin add` install and trust against the real Codex CLI.
+- v0.5.12 live-verifies the PreToolUse hook itself: a real `codex exec` turn (isolated CODEX_HOME, `--dangerously-bypass-hook-trust`) denies `git push` and a `.env` write. This also fixed a real bug the live test surfaced — the hook's file-write guard only recognized `path`/`file` keys, but Codex's `apply_patch` tool embeds the target path inside a patch-format string, so `.env` writes went through unguarded until fixed.
+- Pi, Claude Code, and Codex are the `enforced` adapters in the current release.
 
 Codex-specific behavior belongs here. Core harness files must remain tool-neutral.

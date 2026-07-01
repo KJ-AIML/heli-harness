@@ -2,7 +2,7 @@
 
 This folder connects Codex to Heli-Harness without making Codex the source of truth.
 
-Status: pointer adapter `verified-wired`; native plugin artifacts `verified-plugin-wired`.
+Status: pointer adapter `verified-wired`; native plugin artifacts `enforced`.
 
 What gets installed:
 
@@ -26,4 +26,4 @@ Recommended Codex workflow:
 5. Report evidence, skipped checks, risks, and final git status.
 6. Do not push, tag, merge, or release unless explicitly asked.
 
-No live runtime hook enforcement is proven for Codex in this release. This adapter is instruction/pointer based, not a sandbox.
+A real `codex exec` turn (isolated CODEX_HOME, `--dangerously-bypass-hook-trust`) denies `git push` and a `.env` write via the PreToolUse hook — see `node scripts/live-verify-codex-plugin-hook.mjs`. This proves the native plugin's PreToolUse hook, not the pointer/instruction adapter, which remains instruction-based, not a sandbox.

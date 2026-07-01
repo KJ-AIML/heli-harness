@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.11
+## Current Baseline: v0.5.12
 
-Latest stable release: `v0.5.11`
+Latest stable release: `v0.5.12`
 
-Release commit: pending tag `v0.5.11`
+Release commit: pending tag `v0.5.12`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.11>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.12>
 
 Stable behavior in this baseline:
 
@@ -154,6 +154,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.9 | Codex Governance Workflow | Smoke-test Codex adapter files, installer pointer, and update preservation without claiming runtime enforcement. |
 | v0.5.10 | Native Plugin Parity | Add Ponytail parity audit, Claude/Codex native plugin artifacts, plugin smoke tests, and verified-plugin-wired taxonomy without claiming live runtime enforcement. |
 | v0.5.11 | Live Runtime Verification | Prove plugin hooks fire in a real Claude Code session, add the missing Codex marketplace manifest, and live-verify Codex install/trust; promote Claude Code to `enforced`. |
+| v0.5.12 | Codex Live Hook Verification | Prove the Codex PreToolUse hook fires in a real session, fix a file-write guard bug the live test surfaced, and promote Codex to `enforced`. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -818,6 +819,47 @@ Risks:
 - Live-verify scripts depend on real CLI behavior (flag names, output shape) that may change between Claude Code / Codex releases.
 - The Claude Code live proof used `--plugin-dir` session loading, not the marketplace-installed-and-trusted flow (`claude plugin install`); that path still needs separate verification.
 - The Codex PreToolUse hook-fire proof remains open until Codex usage quota is available; status must not be silently upgraded without it.
+
+## v0.5.12 - Codex Live Hook Verification (Implemented)
+
+Goal:
+Close the last v0.5.11 gap: prove the Codex PreToolUse hook actually fires and denies during a real model turn, once Codex usage quota was available again.
+
+Rationale:
+Live-testing the actual hook (rather than trusting synthetic smoke coverage) surfaced a real bug: Codex's `apply_patch` tool sends its target path embedded inside a patch-format string under the `command` field (e.g. `*** Add File: .env`), not a `path`/`file` field. The hook's file-write guard only ever looked for `path`/`file` keys, so it correctly denied `git push` in a live session but silently let a real `.env` write through. The existing synthetic smoke test used a `{ path: ".env.local" }` payload that never matched Codex's real shape, so the gap was invisible until an actual live model turn exercised it — exactly the class of bug live verification exists to catch.
+
+Scope:
+
+- Add `scripts/live-verify-codex-plugin-hook.mjs`: drives a real `codex exec` turn (isolated `CODEX_HOME`, throwaway git repo, `--dangerously-bypass-hook-trust`) asking it to run `git push` and write a `.env` file, and asserts the CLI's own output shows both PreToolUse denials, with the filesystem confirming `.env` was never created.
+- Fix `heli-pre-tool-use.mjs` (both the Codex and Claude Code plugin copies, for parity) to also extract file paths from `*** Add/Update/Delete File:` and `*** Move to:` lines in patch-format command text, not just `path`/`file` object keys.
+- Replace the unrealistic synthetic `apply_patch` test payload in both plugin smoke tests with the real captured payload shape, so this exact regression class is covered going forward.
+- Promote Codex from `verified-plugin-wired` to `enforced`, backed by live-session evidence.
+- Add `live-verify:codex-plugin-hook` as an opt-in npm script, not part of `npm run check` (real API calls, requires `codex login` and available quota).
+
+Non-goals:
+
+- No change to the normal interactive Codex hook-trust prompt flow; live proof deliberately bypasses it with `--dangerously-bypass-hook-trust` for automation.
+- No new guard rules beyond fixing path detection for the two rules that already existed (git push, .env writes).
+- No OpenCode/Cursor/Windsurf/Cline/Gemini/OpenClaw plugin implementation.
+
+Deliverables:
+
+- `scripts/live-verify-codex-plugin-hook.mjs`.
+- Fixed `heli-pre-tool-use.mjs` in both plugin copies.
+- Corrected synthetic regression tests in `smoke-claude-plugin.mjs` and `smoke-codex-plugin.mjs`.
+- Updated adapter manifest, support matrix, README, and Codex adapter docs reflecting `enforced` status.
+
+Acceptance criteria:
+
+- `npm run check` passes.
+- `node scripts/live-verify-codex-plugin-hook.mjs` passes against a real, logged-in, locally installed Codex CLI.
+- Codex status is `enforced` with live-session evidence for both guard rules.
+- Pi, Claude Code, and Codex are the `enforced` adapters; no adapter claims enforcement without runtime evidence.
+
+Risks:
+
+- The fix only covers patch-format `command` text and `path`/`file` keys; a future tool shape could still slip past undetected until live-tested.
+- `--dangerously-bypass-hook-trust` proves hook logic, not the normal trust-prompt UX; a user declining trust interactively is not covered.
 
 ## Post-v0.5 Stabilization
 

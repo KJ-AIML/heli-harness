@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.5.12 - Codex Live Hook Verification
+
+### Fixed
+
+- Fixed `heli-pre-tool-use.mjs` (Codex and Claude Code plugin copies): the file-write guard only recognized `path`/`file` object keys, but Codex's `apply_patch` tool embeds the target path inside a patch-format string under `command` (e.g. `*** Add File: .env`), so `.env` writes went through unguarded in a real Codex session. Now also parses `*** Add/Update/Delete File:` and `*** Move to:` patch directives.
+- Fixed the synthetic `apply_patch` test case in `smoke-claude-plugin.mjs` and `smoke-codex-plugin.mjs`, which used an unrealistic `{ path: ... }` payload that passed without exercising Codex's real tool shape — replaced with the actual payload shape captured from a live Codex session.
+
+### Added
+
+- Added `scripts/live-verify-codex-plugin-hook.mjs`: drives a real `codex exec` turn (isolated `CODEX_HOME`, throwaway git repo, `--dangerously-bypass-hook-trust`) and asserts the CLI's own output shows the PreToolUse hook denying both `git push` and a `.env` write, with the filesystem confirming `.env` was never created.
+- Added `live-verify:codex-plugin-hook` npm script. Not part of `npm run check` — requires a real installed, logged-in Codex CLI and available usage quota.
+
+### Changed
+
+- Promoted Codex from `verified-plugin-wired` to `enforced`, backed by live-session evidence.
+- Updated adapter manifest, support matrix, README, and Codex adapter docs for the new status.
+
+### Notes
+
+- Live proof used `--dangerously-bypass-hook-trust`; the normal interactive hook-trust prompt flow is not separately verified.
+- Pi, Claude Code, and Codex are now all `enforced`.
+
 ## v0.5.11 - Live Runtime Verification
 
 ### Added

@@ -64,28 +64,26 @@ try {
 	assertContains(agentsText, ".heli-harness/HARNESS.md", "AGENTS.md");
 	assertContains(agentsText, "Never use `git add .`", "AGENTS.md");
 	assertContains(agentsText, "Do not claim support, enforcement", "AGENTS.md");
-	assert.doesNotMatch(agentsText, /codex\s+(?:is\s+)?enforced/i, "Codex docs must not claim enforcement");
 
 	const readmeText = read(adapterReadme);
-	assertContains(readmeText, "Status: pointer adapter `verified-wired`; native plugin artifacts `verified-plugin-wired`", "Codex README");
-	assertContains(readmeText, "No live runtime hook enforcement is proven", "Codex README");
+	assertContains(readmeText, "Status: pointer adapter `verified-wired`; native plugin artifacts `enforced`", "Codex README");
 	assertContains(readmeText, "Recommended Codex workflow", "Codex README");
 
 	const codex = manifest.adapters.find((adapter) => adapter.id === "codex");
 	assert.ok(codex, "Codex adapter should be present in adapters.json");
-	assert.equal(codex.status, "verified-plugin-wired", "Codex adapter should be verified-plugin-wired");
+	assert.equal(codex.status, "enforced", "Codex adapter should be enforced");
 	assert.ok(codex.evidence.includes("scripts/smoke-codex-adapter.mjs"), "Codex manifest should include smoke evidence");
+	assert.ok(codex.evidence.includes("scripts/live-verify-codex-plugin-hook.mjs"), "Codex manifest should include live hook-fire evidence");
 	assert.ok(codex.verification.includes("node scripts/smoke-codex-adapter.mjs"), "Codex manifest should include smoke command");
 	for (const evidencePath of codex.evidence) {
 		assert.ok(existsSync(join(root, evidencePath)), `Codex evidence should exist: ${evidencePath}`);
 	}
-	assert.ok(codex.limitations.some((item) => /PreToolUse hook firing.*not yet proven live/i.test(item)), "Codex limitations should say hook firing is not yet proven live");
+	assert.ok(codex.limitations.some((item) => /--dangerously-bypass-hook-trust/i.test(item)), "Codex limitations should note the hook-trust bypass scope");
 
 	assertContains(matrix, "Codex", "support matrix");
-	assertContains(matrix, "verified-plugin-wired", "support matrix");
 	assertContains(matrix, "node scripts/smoke-codex-adapter.mjs", "support matrix");
 	assertContains(matrix, "node scripts/live-verify-codex-plugin-install.mjs", "support matrix");
-	assert.match(matrix, /PreToolUse hook firing.*not yet proven live/i, "support matrix should say hook firing is not yet proven live");
+	assertContains(matrix, "node scripts/live-verify-codex-plugin-hook.mjs", "support matrix");
 
 	if (platform() === "win32") {
 		run("powershell", [
