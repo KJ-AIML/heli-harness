@@ -5,8 +5,8 @@ Heli-Harness can be installed as a Pi package to expose skills and a lightweight
 ## Install
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.9
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.9
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.11
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.11
 ```
 
 This installs the Pi package, which does two things:
@@ -30,7 +30,40 @@ This installs the Pi package, which does two things:
 - Use `/heli-install` or `/hh-install` inside Pi to install the workspace harness into the current folder.
 - Workflow commands (`/heli-init`, `/heli-review`, etc.) require workspace harness to be installed first.
 
-**Status: supported.** Use the v0.5.9 tag after release.
+**Status: supported.** Use the v0.5.11 tag after release.
+
+**Pi / AXGA extension commands:**
+
+| Command | Purpose | Mutates files? |
+|---------|---------|----------------|
+| `/heli-install` | Install workspace harness | Yes, with confirmation |
+| `/hh-install` | Short alias for install | Yes, with confirmation |
+| `/hh-status` | Show harness status | No |
+| `/heli-help` | Show command help | No |
+| `/heli-init` | Bootstrap repo profile | Yes, profile/state only |
+| `/heli-review` | Review repo/diff | No by default |
+| `/heli-audit` | Audit repo/workspace | No by default |
+| `/heli-validate` | Run safe validation flow | Maybe, only with approval |
+| `/heli-impact` | Impact/risk analysis | No by default |
+| `/heli-hooks` | Show auto hooks status | No |
+| `/heli-target` | Show or set active target repo | Yes, target state only |
+| `/heli-lock` | Show advisory lock state | No |
+| `/heli-hooks probe` | Arm one-shot `before_agent_start` canary | No |
+| `/heli-hooks test-guard` | Arm one-shot `tool_call` guard canary | No |
+
+All workflow commands are workspace-aware: they check for `.heli-harness/HARNESS.md` before proceeding and suggest `/heli-install` if missing.
+
+`/hh-status` shows visible harness state: package version, package/workspace mode, current working directory, policy/safety state, workspace index state, known repos, selected target repo, target git root, writes allowed under, target profile state, cwd alignment, advisory lock state, active hooks, recent hook activity, skill count, and probe state.
+
+`/heli-validate lint` runs lightweight local checks for repo profiles, policy overlays, safety overlays, workspace index, target state, advisory locks, and run report completeness. `/heli-validate workspace`, `/heli-validate target`, and `/heli-validate lock` provide focused checks.
+
+Hook observability is opt-in and one-shot:
+
+- `/heli-hooks probe` injects `HELI_HOOK_OK` into the next `before_agent_start` prompt context, then clears.
+- `/heli-hooks test-guard` returns `HELI_GUARD_OK` on the next matching dangerous `tool_call`, before the command executes, then clears.
+- Normal prompts and normal guarded tool calls do not include these canaries.
+
+`command-rules.json` is consumed by the Pi/AXGA runtime guard where compatible `tool_call` hooks are available. These rules remain the policy source of truth, and the local classifier normalizes common shell forms before matching rules. This is not a sandbox; it is an adapter-level guard that depends on host hook support.
 
 ### 2. Workspace harness install (recommended)
 
@@ -52,7 +85,7 @@ Or run the installer manually:
 # macOS/Linux
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.9
+git checkout v0.5.11
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -61,7 +94,7 @@ rm -rf hh-source
 # Windows PowerShell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.9
+git checkout v0.5.11
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install
