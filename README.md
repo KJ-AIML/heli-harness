@@ -1,7 +1,7 @@
 # Heli-Harness
 
 <p align="center">
-  <img src="assets/heli-harness-hero.png" alt="Heli-Harness mascot hero banner â€” governance for coding agents" width="100%">
+  <img src="assets/heli-harness-hero.png" alt="Heli-Harness mascot hero banner — governance for coding agents" width="100%">
 </p>
 
 Heli-Harness gives local coding agents a shared governance layer: protocols, repo profiles, policy overlays, state tracking, optional hooks, and adapter instructions. It is designed for a parent workspace that contains many repos and may be touched by many agents.
@@ -35,13 +35,13 @@ See [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) for detailed status
 - **unsupported** - Explicitly not supported
 
 **Current adapter status:**
-- **Pi**: `enforced` â€” Extension file, smoke tests, hook guards verified
+- **Pi**: `enforced` — Extension file, smoke tests, hook guards verified
 - **Claude Code**: `enforced` - Pointer adapter plus native plugin files; live-verified against the real Claude Code CLI (`--plugin-dir`, isolated sandbox) — a real session denies `git push` and `.env` writes and reports it in `permission_denials`
 - **Codex**: `verified-plugin-wired` - Pointer adapter plus native plugin files, hook config, skill, `AGENTS.md`, marketplace manifest, and synthetic hook smoke tests; marketplace add/install/trust is live-verified against the real Codex CLI, but live PreToolUse hook firing is not yet proven (blocked on Codex usage quota)
-- **Cursor**: `wired` â€” Adapter files exist, install creates pointer, no runtime enforcement
-- **AXGA**: `documented` â€” Shares Pi adapter docs, no dedicated verification
-- **Generic**: `documented` â€” Adapter instructions exist, manual setup
-- **OpenCode/Windsurf/Cline/Gemini/OpenClaw**: `planned` â€” No implementation yet
+- **Cursor**: `wired` — Adapter files exist, install creates pointer, no runtime enforcement
+- **AXGA**: `documented` — Shares Pi adapter docs, no dedicated verification
+- **Generic**: `documented` — Adapter instructions exist, manual setup
+- **OpenCode/Windsurf/Cline/Gemini/OpenClaw**: `planned` — No implementation yet
 
 ## Roadmap and Architecture
 
@@ -56,15 +56,15 @@ See [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) for detailed status
 `benchmarks/` contains repeatable governance benchmark templates for evaluating whether Heli improves coding-agent work quality, safety, target discipline, and report completeness.
 
 - Measures safety, target discipline, report completeness, validation, and implementation quality
-- No telemetry â€” all benchmark data stays local
-- Optional manual use â€” no automated runner required
+- No telemetry — all benchmark data stays local
+- Optional manual use — no automated runner required
 - Includes scenarios, scoring rubrics, experiment templates, and A/B/C/D comparison examples
 
 See [benchmarks/README.md](benchmarks/README.md) for details.
 
 ## Install
 
-Heli-Harness has two install modes. The **workspace harness** is the primary mode â€” it installs `.heli-harness/` into your parent workspace and is what most users want. The **agent package** mode exposes harness skills/rules to a specific agent host (Pi, etc.) without replacing the workspace model.
+Heli-Harness has two install modes. The **workspace harness** is the primary mode — it installs `.heli-harness/` into your parent workspace and is what most users want. The **agent package** mode exposes harness skills/rules to a specific agent host (Pi, etc.) without replacing the workspace model.
 
 ### Fast-path (prompt-based)
 
@@ -245,17 +245,17 @@ git checkout v0.5.11
 
 After a successful workspace install, you can delete the source checkout folder (e.g., `hh-source/` or `heli-harness/`). The installed `.heli-harness/` folder in your workspace is self-contained.
 
-**Do not delete `.heli-harness/` from your workspace** â€” that is the installed harness.
+**Do not delete `.heli-harness/` from your workspace** — that is the installed harness.
 
 ## What next after install?
 
 1. **Start your agent** (Codex, Claude Code, Cursor, Pi, or generic) from the parent workspace folder.
-2. **Read HARNESS.md** â€” the agent should read `.heli-harness/HARNESS.md` as the source of truth.
+2. **Read HARNESS.md** — the agent should read `.heli-harness/HARNESS.md` as the source of truth.
 3. **Clone or create target repos** inside the parent workspace.
 4. **Map repos in `.heli-harness/workspace/index.json`** so Heli can show known git roots and profile mappings.
 5. **Select the active target repo** with `/heli-target set <repo>` before write workflows in a multi-repo workspace.
-6. **Create a repo profile** â€” add a profile under `.heli-harness/profiles/<repo>.md` describing the repo's conventions, test commands, and risk areas. Use templates in `.heli-harness/templates/` as a starting point.
-7. **Run test-validation in audit-only mode** â€” validate that your repo profile's test commands are safe and non-mutating before relying on them.
+6. **Create a repo profile** — add a profile under `.heli-harness/profiles/<repo>.md` describing the repo's conventions, test commands, and risk areas. Use templates in `.heli-harness/templates/` as a starting point.
+7. **Run test-validation in audit-only mode** — validate that your repo profile's test commands are safe and non-mutating before relying on them.
 
 ## First-run prompt
 

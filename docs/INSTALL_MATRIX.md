@@ -60,12 +60,12 @@ git checkout v0.5.11
 
 After a successful workspace install, you can delete the source checkout folder (e.g., `hh-source/` or `heli-harness/`). The installed `.heli-harness/` folder in your workspace is self-contained.
 
-**Do not delete `.heli-harness/` from your workspace** â€” that is the installed harness.
+**Do not delete `.heli-harness/` from your workspace** — that is the installed harness.
 
 ## What next after install?
 
 1. **Start your agent** (Codex, Claude Code, Cursor, Pi, or generic) from the parent workspace folder.
-2. **Read HARNESS.md** â€” the agent should read `.heli-harness/HARNESS.md` as the source of truth.
+2. **Read HARNESS.md** — the agent should read `.heli-harness/HARNESS.md` as the source of truth.
 3. **Clone or create a target repo** inside the parent workspace.
-4. **Create a repo profile** â€” add a profile under `.heli-harness/profiles/<repo>.md` describing the repo's conventions, test commands, and risk areas. Use templates in `.heli-harness/templates/` as a starting point.
-5. **Run test-validation in audit-only mode** â€” validate that your repo profile's test commands are safe and non-mutating before relying on them.
+4. **Create a repo profile** — add a profile under `.heli-harness/profiles/<repo>.md` describing the repo's conventions, test commands, and risk areas. Use templates in `.heli-harness/templates/` as a starting point.
+5. **Run test-validation in audit-only mode** — validate that your repo profile's test commands are safe and non-mutating before relying on them.

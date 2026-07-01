@@ -28,9 +28,9 @@ rm -rf hh-source
 
 ## What gets installed
 
-- `.heli-harness/` â€” the full harness (HARNESS.md, skills, adapters, profiles, state, templates)
-- `AGENTS.md` â€” pointer file for Codex
-- `CLAUDE.md` â€” pointer file for Claude Code
+- `.heli-harness/` — the full harness (HARNESS.md, skills, adapters, profiles, state, templates)
+- `AGENTS.md` — pointer file for Codex
+- `CLAUDE.md` — pointer file for Claude Code
 
 ## Claude/Codex plugin artifacts
 
