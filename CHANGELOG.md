@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.5.13 - Plugin Target Parity
+
+### Added
+
+- Added a `heli-target` skill to both `.heli-harness/adapters/claude-plugin/skills/` and `.heli-harness/adapters/codex-plugin/skills/`, giving `list`/`show`/`set`/`clear` parity with Pi/AXGA's `/heli-target` against `.heli-harness/workspace/index.json` and `target.json`. Instruction-based (no JS runtime in these plugins), so the agent performs the steps itself with its own file tools.
+- `set` now confirms with the user before overwriting a `target.json` that already points at a different repo, instead of silently switching.
+
+### Changed
+
+- Reworded the `git push` deny message in both `heli-pre-tool-use.mjs` plugin copies: it previously said "without explicit release approval," which read as though ordinary branch pushes were release-gated. It now states plainly this is a blanket in-session rule with no bypass.
+- Both `heli-governance/SKILL.md` copies now point at the `heli-target` mismatch-confirm workflow when the repo the user describes differs from the active target.
+- `adapters.json` and `docs/ADAPTER_SUPPORT_MATRIX.md` now disclose that the Claude Code and Codex plugin skill surface is `heli-governance` + `heli-target` only, not Pi/AXGA's full 23-skill set. No adapter `status` value changed.
+
+### Notes
+
+- Prompted by real Codex CLI feedback hitting this exact gap while working against this harness in a separate workspace.
+- `enforced` status for Claude Code and Codex is unaffected — it's scoped to runtime hook proof, which this release doesn't touch.
+
 ## v0.5.12 - Codex Live Hook Verification
 
 ### Fixed

@@ -11,7 +11,7 @@ Install this repo into the current folder as a parent-workspace harness:
 
 https://github.com/KJ-AIML/heli-harness
 
-Use the latest stable tag (v0.5.12). Do not install globally. Treat the current
+Use the latest stable tag (v0.5.13). Do not install globally. Treat the current
 directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
@@ -23,7 +23,7 @@ and CLAUDE.md exist after install.
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.12
+git checkout v0.5.13
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install
@@ -35,7 +35,7 @@ Remove-Item -Recurse -Force hh-source
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.12
+git checkout v0.5.13
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -55,7 +55,7 @@ If you want to inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.5.12
+git checkout v0.5.13
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```
@@ -153,8 +153,8 @@ For any other local coding agent:
 ### Pi / AXGA package install
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.12
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.12
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.13
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.13
 ```
 
 This installs the agent package, which loads 23 Heli-Harness skills and a lightweight extension (`extensions/pi-extension.js`) that announces status, exposes workflow commands, and enables hooks/guards where the host adapter supports them. `pi install` does **not** automatically create `.heli-harness/` in every folder — run `/heli-install` inside Pi/AXGA to set up the workspace harness. See [.heli-harness/adapters/pi/README.md](.heli-harness/adapters/pi/README.md) for the full command reference.

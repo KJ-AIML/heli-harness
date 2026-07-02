@@ -53,5 +53,5 @@ const command = rawCommand.replace(/\s+/g, " ").trim().toLowerCase();
 const paths = [...pathsFrom(event.tool_input), ...patchPathsFrom(rawCommand)]
 	.map((path) => path.replaceAll("\\", "/").toLowerCase());
 
-if (/\bgit\s+push\b/.test(command)) deny("Heli-Harness blocks git push without explicit release approval.");
+if (/\bgit\s+push\b/.test(command)) deny("Heli-Harness blocks git push in agent sessions — this is a blanket rule, not gated on release approval. Push manually outside the session if needed.");
 else if (paths.some((path) => /(^|\/)\.env(\.|$)/.test(path))) deny("Heli-Harness blocks writes to .env-style secret files.");

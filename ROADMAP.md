@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.12
+## Current Baseline: v0.5.13
 
-Latest stable release: `v0.5.12`
+Latest stable release: `v0.5.13`
 
-Release commit: pending tag `v0.5.12`
+Release commit: pending tag `v0.5.13`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.12>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.13>
 
 Stable behavior in this baseline:
 
@@ -79,6 +79,11 @@ Stable behavior in this baseline:
   - Codex is `verified-plugin-wired`: pointer adapter plus native plugin manifest, hook config, skill, plugin AGENTS.md, and synthetic hook smoke tests are validated
   - Cursor remains `wired`
   - runtime enforcement is not claimed without tested hook evidence
+- Plugin target parity:
+  - Claude Code and Codex native plugins ship a `heli-target` skill (`list`/`show`/`set`/`clear`), matching Pi/AXGA's `/heli-target` semantics against `.heli-harness/workspace/index.json` and `target.json`
+  - `set` confirms before overwriting a different active target instead of silently switching
+  - the git-push deny message no longer implies release-only gating
+  - `adapters.json` and the support matrix disclose that the plugin skill surface is `heli-governance` + `heli-target` only, not Pi/AXGA's full 23-skill set
 
 ## Product Positioning
 
@@ -155,6 +160,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.10 | Native Plugin Parity | Add Ponytail parity audit, Claude/Codex native plugin artifacts, plugin smoke tests, and verified-plugin-wired taxonomy without claiming live runtime enforcement. |
 | v0.5.11 | Live Runtime Verification | Prove plugin hooks fire in a real Claude Code session, add the missing Codex marketplace manifest, and live-verify Codex install/trust; promote Claude Code to `enforced`. |
 | v0.5.12 | Codex Live Hook Verification | Prove the Codex PreToolUse hook fires in a real session, fix a file-write guard bug the live test surfaced, and promote Codex to `enforced`. |
+| v0.5.13 | Plugin Target Parity | Port `/heli-target` to the Claude Code and Codex native plugins, fix the misleading git-push deny wording, add target-mismatch confirmation, and disclose the reduced plugin skill surface. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -860,6 +866,44 @@ Risks:
 
 - The fix only covers patch-format `command` text and `path`/`file` keys; a future tool shape could still slip past undetected until live-tested.
 - `--dangerously-bypass-hook-trust` proves hook logic, not the normal trust-prompt UX; a user declining trust interactively is not covered.
+
+## v0.5.13 - Plugin Target Parity (Implemented)
+
+Goal:
+Close the multi-repo workspace gap surfaced by real Codex CLI usage against this harness: no way to register or switch the active target repo from the Claude Code or Codex native plugins, and a git-push deny message that read as release-specific.
+
+Rationale:
+Pi/AXGA already implements `/heli-target list|show|set|clear` in `extensions/pi-extension.js`, but the Claude Code and Codex native plugins ship only a single ambient `heli-governance` skill with no equivalent — so an agent working through either plugin had no documented way to register a repo or switch `target.json`, and had to be told about `.heli-harness/workspace/` out of band. The `git push` deny message also said "without explicit release approval," which conflated an ordinary feature-branch push with an actual release.
+
+Scope:
+
+- Add a `heli-target` skill to both `.heli-harness/adapters/claude-plugin/skills/` and `.heli-harness/adapters/codex-plugin/skills/`, giving the agent step-by-step instructions to read/write `.heli-harness/workspace/index.json` and `target.json` itself, matching Pi's `list`/`show`/`set`/`clear` semantics and output shape.
+- `set` checks for an existing, different `targetRepo` before writing and asks for confirmation rather than silently overriding.
+- Reword the `git push` deny message in both `heli-pre-tool-use.mjs` copies to state plainly it is a blanket in-session rule, not gated on "release approval."
+- Add one sentence to both `heli-governance/SKILL.md` copies pointing at the mismatch-confirm workflow.
+- Disclose in `adapters.json` and `docs/ADAPTER_SUPPORT_MATRIX.md` that the plugin skill surface is `heli-governance` + `heli-target` only, not Pi/AXGA's full 23-skill set. No adapter `status` value changed — `enforced` already scopes to runtime hook proof, which this doesn't affect.
+
+Non-goals:
+
+- No CHANGELOG-triggering version bump beyond this release itself was implied by the underlying fix; no other Pi skill was ported.
+- No change to `extensions/pi-extension.js` itself.
+- No `.heli-harness/safety/command-tiers.md` taxonomy renames.
+
+Deliverables:
+
+- `heli-target/SKILL.md` in both plugin skill trees.
+- Updated `heli-pre-tool-use.mjs` deny message in both plugin copies.
+- Updated `heli-governance/SKILL.md` in both plugin copies.
+- Updated `adapters.json` and `docs/ADAPTER_SUPPORT_MATRIX.md` limitations.
+
+Acceptance criteria:
+
+- `npm run check` passes.
+- `git status` shows only the files listed above (plus this release's version/changelog/roadmap files) changed.
+
+Risks:
+
+- The new skill is instruction-based, not code-executed — an agent could still skip steps or misread `index.json`; it's a governance aid, not a sandboxed command.
 
 ## Post-v0.5 Stabilization
 

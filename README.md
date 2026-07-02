@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.5.12-informational"></a>
+  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.5.13-informational"></a>
   <a href="https://github.com/KJ-AIML/heli-harness/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/KJ-AIML/heli-harness/ci.yml?branch=main&label=CI"></a>
   <a href="docs/ADAPTER_SUPPORT_MATRIX.md"><img alt="Adapters" src="https://img.shields.io/badge/adapters-Pi%20%C2%B7%20Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20Cursor-8A2BE2"></a>
 </p>
@@ -49,7 +49,7 @@ Install this repo into the current folder as a parent-workspace harness:
 
 https://github.com/KJ-AIML/heli-harness
 
-Use the latest stable tag (v0.5.12). Do not install globally. Treat the current
+Use the latest stable tag (v0.5.13). Do not install globally. Treat the current
 directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
@@ -109,8 +109,8 @@ Live-verified: a real `codex exec` turn denies `git push` and `.env` writes via 
 ### Pi / AXGA — `enforced` (Pi) / `documented` (AXGA)
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.12
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.12
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.13
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.13
 ```
 
 Loads 23 skills plus the Pi extension (hooks/guards). Then run `/heli-install` inside Pi/AXGA to set up the workspace harness — see [.heli-harness/adapters/pi/README.md](.heli-harness/adapters/pi/README.md).
