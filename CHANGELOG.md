@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.5.14 - Plugin Install Parity
+
+### Added
+
+- Added a `heli-install` skill to both `.heli-harness/adapters/claude-plugin/skills/` and `.heli-harness/adapters/codex-plugin/skills/`, giving parity with Pi/AXGA's `/heli-install`. Instruction-based (no JS runtime in these plugins): the agent runs `install.ps1`/`install.sh` itself instead of the skill shelling out.
+- Reproduces Pi's `installHandler` guard (refuse and point at the update flow if the workspace is already installed) and `verifyInstall` checklist, since a dry-run confirmed `install.ps1` has no preserve-local-state logic of its own — that safety only exists in `update.ps1`.
+- Resolves the latest release tag at run time instead of hardcoding a version, so the skill won't go stale next release.
+- Added `assertFile` smoke coverage for `heli-target` and `heli-install` in both plugin smoke tests.
+
+### Changed
+
+- `adapters.json` and `docs/ADAPTER_SUPPORT_MATRIX.md` limitations updated to list the current plugin skill surface: `heli-governance` + `heli-target` + `heli-install`.
+
+### Notes
+
+- Same gap class as v0.5.13's `heli-target` port: a Pi/AXGA-only command with no Claude/Codex equivalent.
+- `enforced` status for Claude Code and Codex is unaffected.
+
 ## v0.5.13 - Plugin Target Parity
 
 ### Added

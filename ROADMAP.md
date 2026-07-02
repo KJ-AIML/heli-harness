@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.13
+## Current Baseline: v0.5.14
 
-Latest stable release: `v0.5.13`
+Latest stable release: `v0.5.14`
 
-Release commit: pending tag `v0.5.13`
+Release commit: pending tag `v0.5.14`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.13>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.14>
 
 Stable behavior in this baseline:
 
@@ -83,7 +83,10 @@ Stable behavior in this baseline:
   - Claude Code and Codex native plugins ship a `heli-target` skill (`list`/`show`/`set`/`clear`), matching Pi/AXGA's `/heli-target` semantics against `.heli-harness/workspace/index.json` and `target.json`
   - `set` confirms before overwriting a different active target instead of silently switching
   - the git-push deny message no longer implies release-only gating
-  - `adapters.json` and the support matrix disclose that the plugin skill surface is `heli-governance` + `heli-target` only, not Pi/AXGA's full 23-skill set
+  - `adapters.json` and the support matrix disclose that the plugin skill surface is `heli-governance` + `heli-target` + `heli-install`, not Pi/AXGA's full 23-skill set
+- Plugin install parity:
+  - Claude Code and Codex native plugins ship a `heli-install` skill, walking the agent through the same steps Pi/AXGA's `/heli-install` performs (via `install.ps1`/`install.sh`): refuse if already installed, confirm before writing, run the installer, verify the same file checklist
+  - resolves the latest release tag at run time instead of hardcoding a version
 
 ## Product Positioning
 
@@ -161,6 +164,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.11 | Live Runtime Verification | Prove plugin hooks fire in a real Claude Code session, add the missing Codex marketplace manifest, and live-verify Codex install/trust; promote Claude Code to `enforced`. |
 | v0.5.12 | Codex Live Hook Verification | Prove the Codex PreToolUse hook fires in a real session, fix a file-write guard bug the live test surfaced, and promote Codex to `enforced`. |
 | v0.5.13 | Plugin Target Parity | Port `/heli-target` to the Claude Code and Codex native plugins, fix the misleading git-push deny wording, add target-mismatch confirmation, and disclose the reduced plugin skill surface. |
+| v0.5.14 | Plugin Install Parity | Port `/heli-install` to the Claude Code and Codex native plugins, with the same safety checks Pi/AXGA's version has around it. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -904,6 +908,43 @@ Acceptance criteria:
 Risks:
 
 - The new skill is instruction-based, not code-executed — an agent could still skip steps or misread `index.json`; it's a governance aid, not a sandboxed command.
+
+## v0.5.14 - Plugin Install Parity (Implemented)
+
+Goal:
+Close the other Pi/AXGA-only command gap in the Claude Code and Codex native plugins: `/heli-install` (workspace bootstrap), the same gap class `/heli-target` closed in v0.5.13.
+
+Rationale:
+Pi/AXGA's `/heli-install` shells out to `install.ps1`/`install.sh` directly (`execSync` from `extensions/pi-extension.js`), guarded by a `detectWorkspaceHarness` check before running and a `verifyInstall` checklist after. The Claude Code and Codex plugins have no JS runtime to shell out from, so the port is an instruction-based skill telling the agent to run those same scripts itself, with the same guard and checklist reproduced as explicit steps rather than code.
+
+Scope:
+
+- Add a `heli-install` skill to both `.heli-harness/adapters/claude-plugin/skills/` and `.heli-harness/adapters/codex-plugin/skills/`.
+- Reproduce Pi's `installHandler` guard: refuse and point at `update.ps1`/`update.sh` instead if `.heli-harness/HARNESS.md` already exists in the target directory — confirmed by a scratch dry-run of `install.ps1` that `install.ps1` itself has no preserve-local-state logic (only `update.ps1` does), so re-running it over an existing workspace would silently clobber `profiles/`, `workspace/`, `policies/`, `safety/`, `state/`.
+- Reproduce Pi's `verifyInstall` checklist: `.heli-harness/HARNESS.md`, `.heli-harness/manifest.json`, `.heli-harness/skills/test-validation/SKILL.md`, `AGENTS.md`, `CLAUDE.md`.
+- Resolve the latest release tag at run time (`git tag --sort=-creatordate | head -1`) instead of hardcoding a version, so the skill doesn't go stale on future releases the way manually-maintained install docs do.
+- Add `assertFile` smoke coverage for `heli-target` and `heli-install` existing in both plugins (closing a small gap left from v0.5.13, which added `heli-target` without a matching smoke assertion).
+- Update `adapters.json` and `docs/ADAPTER_SUPPORT_MATRIX.md` limitations to list the current plugin skill surface (`heli-governance` + `heli-target` + `heli-install`).
+
+Non-goals:
+
+- No change to `extensions/pi-extension.js` itself.
+- No porting of any other Pi-only command or the remaining Pi skills.
+
+Deliverables:
+
+- `heli-install/SKILL.md` in both plugin skill trees.
+- Smoke assertions for `heli-target` and `heli-install` in `smoke-claude-plugin.mjs`/`smoke-codex-plugin.mjs`.
+- Updated `adapters.json` and `docs/ADAPTER_SUPPORT_MATRIX.md` limitations.
+
+Acceptance criteria:
+
+- `npm run check` passes.
+- `git status` shows only the files above (plus this release's version/changelog/roadmap files) changed.
+
+Risks:
+
+- Same as `heli-target`: instruction-based, not code-executed — a sandboxed governance aid, not enforcement.
 
 ## Post-v0.5 Stabilization
 
