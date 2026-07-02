@@ -13,6 +13,8 @@ const pluginRoot = join(root, plugin);
 assertFile(join(pluginRoot, ".claude-plugin", "plugin.json"), "Claude plugin manifest");
 assertFile(join(pluginRoot, "hooks", "hooks.json"), "Claude hook config");
 assertFile(join(pluginRoot, "skills", "heli-governance", "SKILL.md"), "Claude plugin skill");
+assertFile(join(pluginRoot, "skills", "heli-target", "SKILL.md"), "Claude plugin heli-target skill");
+assertFile(join(pluginRoot, "skills", "heli-install", "SKILL.md"), "Claude plugin heli-install skill");
 
 const manifest = json(join(pluginRoot, ".claude-plugin", "plugin.json"));
 assert.equal(manifest.name, "heli-harness");

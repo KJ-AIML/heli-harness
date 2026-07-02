@@ -11,6 +11,8 @@ const pluginRoot = join(root, plugin);
 assertFile(join(pluginRoot, ".codex-plugin", "plugin.json"), "Codex plugin manifest");
 assertFile(join(pluginRoot, "hooks", "hooks.json"), "Codex hook config");
 assertFile(join(pluginRoot, "skills", "heli-governance", "SKILL.md"), "Codex plugin skill");
+assertFile(join(pluginRoot, "skills", "heli-target", "SKILL.md"), "Codex plugin heli-target skill");
+assertFile(join(pluginRoot, "skills", "heli-install", "SKILL.md"), "Codex plugin heli-install skill");
 assertFile(join(pluginRoot, "AGENTS.md"), "Codex plugin AGENTS.md");
 
 const manifest = json(join(pluginRoot, ".codex-plugin", "plugin.json"));
