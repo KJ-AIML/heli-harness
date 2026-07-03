@@ -620,4 +620,69 @@ assert(notifications.some((item) => item.message.includes("ghost: profile does n
 assert(notifications.some((item) => item.message === "Target repo set: demo"));
 assert.deepEqual(messages, ["/skill:heli-help"]);
 
+// Stuck-task gate: 2+ failed attempts on an incomplete task blocks writes,
+// except writes to current-task.md itself, and clears once resolved.
+writeFileSync(join(tempDir, ".heli-harness", "state", "current-task.md"), `# Current Task
+
+Target repo: demo
+
+Current status: blocked
+
+Failed attempts count: 2
+`);
+assert.deepEqual(await toolCall({ toolName: "write", input: { path: "notes.txt" } }, {}), {
+	block: true,
+	reason: 'Blocked: current-task.md shows 2 failed attempts and status "blocked" on an incomplete task — update .heli-harness/state/current-task.md to resolve it before continuing.',
+});
+assert.equal(await toolCall({ toolName: "write", input: { path: ".heli-harness/state/current-task.md" } }, {}), undefined);
+writeFileSync(join(tempDir, ".heli-harness", "state", "current-task.md"), `# Current Task
+
+Target repo: demo
+
+Current status: complete
+
+Failed attempts count: 2
+`);
+assert.equal(await toolCall({ toolName: "write", input: { path: "notes.txt" } }, {}), undefined);
+
+// before_agent_start surfaces real current-task.md content and the last 5
+// decisions.md sections (not older ones).
+writeFileSync(join(tempDir, ".heli-harness", "state", "current-task.md"), `# Current Task
+
+Target repo: demo
+
+Current status: in progress
+`);
+writeFileSync(join(tempDir, ".heli-harness", "state", "decisions.md"), `# Decisions
+
+## alpha
+
+- oldest, should be dropped
+
+## bravo
+
+- kept
+
+## charlie
+
+- kept
+
+## delta
+
+- kept
+
+## echo
+
+- kept
+
+## foxtrot
+
+- newest, kept
+`);
+const contextPrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
+assert.match(contextPrompt.systemPrompt, /Target repo: demo/);
+assert.match(contextPrompt.systemPrompt, /Recent durable decisions/);
+assert.match(contextPrompt.systemPrompt, /foxtrot/);
+assert.ok(!/alpha/.test(contextPrompt.systemPrompt), "oldest decisions.md section should have been dropped");
+
 console.log("extension smoke ok");
