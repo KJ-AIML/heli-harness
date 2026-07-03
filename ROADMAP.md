@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.15
+## Current Baseline: v0.5.16
 
-Latest stable release: `v0.5.15`
+Latest stable release: `v0.5.16`
 
-Release commit: pending tag `v0.5.15`
+Release commit: pending tag `v0.5.16`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.15>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.16>
 
 Stable behavior in this baseline:
 
@@ -91,6 +91,10 @@ Stable behavior in this baseline:
   - Claude Code and Codex plugin `SessionStart` injects the real `.heli-harness/state/current-task.md` content instead of a static reminder
   - `PreToolUse` blocks `Edit`/`Write`/`apply_patch` when carried-over task state is stuck (2+ failed attempts, incomplete) or its target repo mismatches `workspace/target.json`, until the state file is updated
   - stateless: re-reads both files on every call, no session-id tracking or marker files
+- Cross-CLI context parity:
+  - Claude Code, Codex, and Pi/AXGA all surface the last 5 `## `-headed sections of `.heli-harness/state/decisions.md` at session start
+  - Pi/AXGA's `tool_call` hook gained the same stuck-task gate the plugins got in v0.5.15; `before_agent_start` now injects real `current-task.md`/`decisions.md` content instead of a generic reminder
+  - fixed a pre-existing `isSuspiciousHarnessRuntimePath` bug that broke the stuck-task gate's own self-exemption
 
 ## Product Positioning
 
@@ -170,6 +174,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.13 | Plugin Target Parity | Port `/heli-target` to the Claude Code and Codex native plugins, fix the misleading git-push deny wording, add target-mismatch confirmation, and disclose the reduced plugin skill surface. |
 | v0.5.14 | Plugin Install Parity | Port `/heli-install` to the Claude Code and Codex native plugins, with the same safety checks Pi/AXGA's version has around it. |
 | v0.5.15 | Session Task Gate | Close the cross-CLI handoff gap: surface real `current-task.md` content at session start and block edits when carried-over task state is stuck or target-mismatched, until it's resolved. |
+| v0.5.16 | Cross-CLI Context Parity | Bring Pi/AXGA up to the same context-continuity level as Claude/Codex (v0.5.15), and add `decisions.md` surfacing across all three adapters. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -987,6 +992,46 @@ Acceptance criteria:
 Risks:
 
 - Stateless design means the gate reappears if the underlying condition isn't actually fixed (by design) — an agent that doesn't understand the deny reason could get stuck retrying the same blocked action instead of updating the state file. The deny message names the exact file to update to mitigate this.
+
+## v0.5.16 - Cross-CLI Context Parity (Implemented)
+
+Goal:
+Close the remaining asymmetry left by v0.5.15: Pi/AXGA had weaker session-start context and no stuck-task gate compared to the Claude Code and Codex native plugins. Bring all three hook-capable adapters to the same level, and add `.heli-harness/state/decisions.md` (the durable "why" log) surfacing everywhere it was missing.
+
+Rationale:
+The actual usage pattern this harness serves is switching between Claude Code, Codex, and Pi/AXGA mid-task. v0.5.15 closed the gap for two of the three; leaving Pi behind just moved the same problem rather than closing it. Separately, `current-task.md` captures the state of the active task, but `decisions.md` captures the durable *why* behind past architectural calls — a distinct continuity need neither adapter surfaced automatically before this release.
+
+Scope:
+
+- `SessionStart` in both Claude Code and Codex native plugins now also injects the last 5 `## `-headed sections of `decisions.md` (all of it if ≤5 sections, nothing if the file has zero `## ` sections or doesn't exist).
+- `extensions/pi-extension.js`'s `before_agent_start` now injects real `current-task.md` and `decisions.md` content, matching what the plugins already did.
+- `extensions/pi-extension.js`'s `tool_call` now blocks file writes when `current-task.md` shows a stuck task (2+ failed attempts, incomplete) — the same condition the plugins' `PreToolUse` gate already used, reusing Pi's existing `safeReadText`/`FILE_WRITE_TOOL_NAMES`/`getFileWritePaths` helpers rather than duplicating them.
+- Both `heli-governance/SKILL.md` copies (Claude, Codex) gained a one-line nudge to log durable decisions to `decisions.md` after S2/S3-tier work — instructional only, not hook-enforced, since decision *quality* can't be mechanically checked the way task-state staleness can.
+- Fixed a pre-existing bug in `isSuspiciousHarnessRuntimePath`'s call site (predates this release) that broke the new Pi stuck-task gate's own self-exemption — discovered by the new test coverage for that exemption, which had zero prior tests.
+- Documented the new Pi enforcement surface and the cross-adapter `decisions.md` surfacing in `docs/ADAPTER_SUPPORT_MATRIX.md` and `.heli-harness/state/README.md`.
+
+Non-goals:
+
+- No change to Pi's existing target-selection/`writesAllowedUnder` enforcement — it's already stricter than the plugins' target-mismatch check in a different way, and out of scope here.
+- No enforcement of `decisions.md` content quality.
+- No Cursor or Generic adapter changes — no hook mechanism exists there to extend.
+- No new state file format.
+
+Deliverables:
+
+- Updated `heli-session-start.mjs` in both plugin copies; updated `extensions/pi-extension.js` (`before_agent_start`, `tool_call`, plus the `isSuspiciousHarnessRuntimePath` fix); updated `heli-governance/SKILL.md` in both plugin copies.
+- New fixture-based smoke coverage in `smoke-claude-plugin.mjs`, `smoke-codex-plugin.mjs`, and `smoke-extension-load.mjs`.
+- Updated `docs/ADAPTER_SUPPORT_MATRIX.md` and `.heli-harness/state/README.md`.
+
+Acceptance criteria:
+
+- `npm run check` passes.
+- `git status` shows only the files above (plus this release's version/changelog/roadmap files) changed.
+
+Risks:
+
+- Same statelessness tradeoff as v0.5.15's gate: the Pi stuck-task check reappears every call until the underlying condition is actually fixed, by design.
+- The `isSuspiciousHarnessRuntimePath` fix touches shared, undertested code outside this feature's original planned scope — reviewed and verified independently (existing full test suite still passes; the new exemption test now regression-tests it) before merging, rather than deferred, since it directly blocked verifying this release's own correctness.
 
 ## Post-v0.5 Stabilization
 

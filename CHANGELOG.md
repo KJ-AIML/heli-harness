@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.5.16 - Cross-CLI Context Parity
+
+### Added
+
+- Claude Code and Codex native plugins now surface the last 5 `## `-headed sections of `.heli-harness/state/decisions.md` (the durable "why" decision log) at session start, alongside the `current-task.md` content already surfaced since v0.5.15.
+- Pi/AXGA's `extensions/pi-extension.js` brought up to the same level as the Claude/Codex plugins: `before_agent_start` now injects real `current-task.md` and `decisions.md` content (previously only a generic reminder), and `tool_call` now gates file writes when `current-task.md` shows a stuck task (2+ failed attempts, incomplete) — mirroring the guard the plugins got in v0.5.15.
+- Both `heli-governance/SKILL.md` copies (Claude, Codex) gained a one-line nudge to log durable decisions to `decisions.md` after completing S2/S3-tier work.
+
+### Fixed
+
+- Fixed a pre-existing bug (predating this release, from the original safe-auto-hooks work) in `isSuspiciousHarnessRuntimePath`'s call site in `extensions/pi-extension.js`: it was called with the raw relative path instead of the already-resolved absolute path, causing it to incorrectly flag the harness's own `.heli-harness/state/current-task.md` as a "suspicious" runtime folder. This silently broke the new stuck-task gate's self-exemption (an agent couldn't write `current-task.md` to resolve a stuck task). Found by new test coverage for that exemption; had zero prior test coverage.
+
+### Changed
+
+- `docs/ADAPTER_SUPPORT_MATRIX.md` and `.heli-harness/state/README.md` document the new Pi stuck-task gate and the cross-adapter `decisions.md` surfacing.
+
+### Notes
+
+- Closes the remaining asymmetry from v0.5.15: Pi/AXGA previously had weaker context continuity than Claude/Codex; all three adapters with a runtime hook mechanism (Claude, Codex, Pi/AXGA) now behave identically on this feature. Cursor and Generic have no hook mechanism and are unaffected.
+- `enforced` status for Claude Code, Codex, and Pi is unaffected — this adds enforcement surface and context, it doesn't change the taxonomy basis for any adapter's status.
+
 ## v0.5.15 - Session Task Gate
 
 ### Added
