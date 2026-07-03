@@ -1506,6 +1506,20 @@ HELI_HOOK_OK`
 			}
 		}
 
+		if (writePaths.length) {
+			const taskStatePath = resolve(cwd, ".heli-harness", "state", "current-task.md");
+			const isTaskStateWrite = writePaths.some((path) => resolve(cwd, path) === taskStatePath);
+			if (!isTaskStateWrite) {
+				const taskText = safeReadText(join(cwd, ".heli-harness", "state", "current-task.md"));
+				const failedAttempts = parseInt(taskField(taskText, "Failed attempts count") || "0", 10) || 0;
+				const status = taskField(taskText, "Current status");
+				if (failedAttempts >= 2 && status.toLowerCase() !== "complete") {
+					lastToolGuardAt = new Date().toISOString();
+					return { block: true, reason: `Blocked: current-task.md shows ${failedAttempts} failed attempts and status "${status || "(empty)"}" on an incomplete task — update .heli-harness/state/current-task.md to resolve it before continuing.` };
+				}
+			}
+		}
+
 		return undefined;
 	});
 
