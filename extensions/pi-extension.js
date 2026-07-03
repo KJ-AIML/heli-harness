@@ -1507,6 +1507,9 @@ HELI_HOOK_OK`
 		}
 
 		if (writePaths.length) {
+			// Only current-task.md is exempted here (unlike the Claude/Codex plugin hooks, which also
+			// exempt target.json): this gate only checks the stuck-task condition, not target-mismatch —
+			// Pi already enforces target boundaries separately via writesAllowedUnder.
 			const taskStatePath = resolve(cwd, ".heli-harness", "state", "current-task.md");
 			const isTaskStateWrite = writePaths.some((path) => resolve(cwd, path) === taskStatePath);
 			if (!isTaskStateWrite) {
