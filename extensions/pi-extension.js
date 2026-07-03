@@ -53,6 +53,17 @@ function safeWriteJson(path, value) {
 	}
 }
 
+function taskField(text, label) {
+	const match = new RegExp(`^${label}:\\s*(.*)$`, "m").exec(text || "");
+	return match ? match[1].trim() : "";
+}
+
+function lastDecisionSections(text, max = 5) {
+	if (!text) return "";
+	const sections = text.split(/(?=^## )/m).filter((part) => part.startsWith("## "));
+	return sections.slice(-max).join("").trim();
+}
+
 function safeListFiles(dir) {
 	try {
 		return readdirSync(dir).sort().map((name) => join(dir, name));
@@ -1365,6 +1376,7 @@ export default function heliHarnessExtension(pi) {
 		if (!workspaceDetected) return undefined;
 		lastBeforeAgentStartAt = new Date().toISOString();
 		const existingPrompt = event && event.systemPrompt ? event.systemPrompt : "";
+		const cwd = process.cwd();
 		const heliInstructions = `
 Heli-Harness workspace detected.
 
@@ -1375,9 +1387,18 @@ Before non-trivial work:
 - Read .heli-harness/profiles/<repo>.md if present.
 - Preserve dirty work.
 - Update .heli-harness/state/current-task.md for meaningful tasks.
+- Record durable decisions in .heli-harness/state/decisions.md when appropriate.
 - Classify commands before running them.
 - Do not run mutating, API-credit, release, publish, push, or destructive commands without explicit user approval.
 - Prefer safe audit-only and non-mutating checks first.`;
+		const taskText = safeReadText(join(cwd, ".heli-harness", "state", "current-task.md")).trim();
+		const carriedOverTask = taskText
+			? `\n\nCarried-over task state from .heli-harness/state/current-task.md:\n${taskText}\n\nAcknowledge this before your first edit this session: confirm with the user whether to resume, abandon, or reset it. If it shows 2+ failed attempts on an incomplete task, the tool_call guard will block file writes until you update current-task.md to resolve it.`
+			: "";
+		const recentDecisions = lastDecisionSections(safeReadText(join(cwd, ".heli-harness", "state", "decisions.md")));
+		const decisionsContext = recentDecisions
+			? `\n\nRecent durable decisions from .heli-harness/state/decisions.md:\n${recentDecisions}`
+			: "";
 		const probeInstructions = hookProbePromptPending
 			? `
 
@@ -1386,7 +1407,7 @@ For this one test turn only, start your next response with:
 HELI_HOOK_OK`
 			: "";
 		hookProbePromptPending = false;
-		return { systemPrompt: `${existingPrompt}\n\n${heliInstructions}${probeInstructions}` };
+		return { systemPrompt: `${existingPrompt}\n\n${heliInstructions}${carriedOverTask}${decisionsContext}${probeInstructions}` };
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
