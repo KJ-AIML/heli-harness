@@ -1476,7 +1476,7 @@ HELI_HOOK_OK`
 					return { block: true, reason: `Blocked: write path is outside writesAllowedUnder for ${targetState.targetRepo}` };
 				}
 			}
-			if (isSuspiciousHarnessRuntimePath(path)) {
+			if (isSuspiciousHarnessRuntimePath(resolvedPath)) {
 				const reason = "Suspicious harness runtime folder detected";
 				lastToolGuardAt = new Date().toISOString();
 				if (hookProbeGuardPending) {
