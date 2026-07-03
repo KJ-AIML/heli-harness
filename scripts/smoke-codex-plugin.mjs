@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import { assertFile, assertHookDeny, assertSessionContext, json, nodeCheck, read } from "./lib/plugin-smoke-helpers.mjs";
+import { assertFile, assertHookDeny, assertHookAllowInCwd, assertHookDenyInCwd, assertSessionContext, json, nodeCheck, read, withFixtureWorkspace } from "./lib/plugin-smoke-helpers.mjs";
 
 const root = process.cwd();
 const plugin = ".heli-harness/adapters/codex-plugin";
@@ -45,6 +45,42 @@ assertHookDeny(root, `${plugin}/hooks/heli-pre-tool-use.mjs`, {
 	tool_name: "apply_patch",
 	tool_input: { command: "*** Begin Patch\n*** Add File: .env\n+FOO=bar\n*** End Patch\n" },
 }, /\.env/);
+
+const hookScript = `${plugin}/hooks/heli-pre-tool-use.mjs`;
+const writeCall = { tool_name: "Write", tool_input: { file_path: "notes.txt" } };
+
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+	".heli-harness/state/current-task.md": "# Current Task\n\nTarget repo: demo\n\nCurrent status: blocked\n\nFailed attempts count: 2\n",
+}, (cwd) => {
+	assertHookDenyInCwd(root, hookScript, cwd, writeCall, /2 failed attempts/);
+});
+
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+	".heli-harness/state/current-task.md": "# Current Task\n\nTarget repo: repo-a\n\nCurrent status: in progress\n\nFailed attempts count: 0\n",
+	".heli-harness/workspace/target.json": JSON.stringify({ targetRepo: "repo-b" }),
+}, (cwd) => {
+	assertHookDenyInCwd(root, hookScript, cwd, writeCall, /target repo "repo-a".*"repo-b"/s);
+});
+
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+	".heli-harness/state/current-task.md": "# Current Task\n\nTarget repo: repo-a\n\nCurrent status: in progress\n\nFailed attempts count: 0\n",
+	".heli-harness/workspace/target.json": JSON.stringify({ targetRepo: "repo-a" }),
+}, (cwd) => {
+	assertHookAllowInCwd(root, hookScript, cwd, writeCall);
+});
+
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+	".heli-harness/state/current-task.md": "# Current Task\n\nTarget repo: demo\n\nCurrent status: blocked\n\nFailed attempts count: 2\n",
+}, (cwd) => {
+	assertHookAllowInCwd(root, hookScript, cwd, {
+		tool_name: "Write",
+		tool_input: { file_path: ".heli-harness/state/current-task.md" },
+	});
+});
 
 assertFile(join(pluginRoot, ".agents", "plugins", "marketplace.json"), "Codex plugin marketplace manifest");
 const marketplace = json(join(pluginRoot, ".agents", "plugins", "marketplace.json"));
