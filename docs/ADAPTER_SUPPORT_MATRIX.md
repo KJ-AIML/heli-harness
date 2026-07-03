@@ -40,6 +40,7 @@ Heli ships `.heli-harness/adapters/claude-plugin/.claude-plugin/plugin.json`, ro
 `scripts/live-verify-claude-plugin.mjs` goes further: it copies the plugin into an isolated temp directory, drives a real `claude -p` session (`--plugin-dir`, isolated throwaway git repo, `--dangerously-skip-permissions`), asks it to run `git push origin main` and write a `.env` file, and asserts the session's own `permission_denials` result contains both denials. This is a live proof, not a synthetic one: it uses the actual installed Claude Code CLI, and confirms via the filesystem that neither action took effect. It does not cover the marketplace-installed-and-trusted flow (`claude plugin install`) — only `--plugin-dir` session loading.
 
 The plugin's skill surface is limited to `heli-governance`, `heli-target`, and `heli-install`; it does not port the rest of Pi/AXGA's 23-skill library.
+
 The `PreToolUse` hook also blocks `Edit`/`Write`/`apply_patch` calls when `current-task.md` carries over a stuck or target-mismatched task from a prior session, until the state file is updated — this is the cross-CLI handoff guard; see `scripts/smoke-claude-plugin.mjs` for the fixture-based coverage.
 
 ### Codex
@@ -51,6 +52,7 @@ Heli ships `.heli-harness/adapters/codex-plugin/.codex-plugin/plugin.json`, root
 `scripts/live-verify-codex-plugin-hook.mjs` goes further: it drives a real `codex exec` turn (isolated `CODEX_HOME`, throwaway git repo, `--dangerously-bypass-hook-trust`) asking it to run `git push origin main` and write a `.env` file, and asserts the CLI's own output shows the PreToolUse hook denying both — confirmed via the filesystem that `.env` was never created. This live test surfaced a real bug: Codex's `apply_patch` tool embeds the target path inside a patch-format string under `command` (e.g. `*** Add File: .env`), not a `path`/`file` field, so the hook's file-write guard never matched it. Fixed in `heli-pre-tool-use.mjs` for both the Codex and Claude Code plugin copies, with a synthetic regression test added to each plugin smoke test using the real captured payload shape.
 
 The plugin's skill surface is limited to `heli-governance`, `heli-target`, and `heli-install`; it does not port the rest of Pi/AXGA's 23-skill library.
+
 The `PreToolUse` hook also blocks `Edit`/`Write`/`apply_patch` calls when `current-task.md` carries over a stuck or target-mismatched task from a prior session, until the state file is updated — this is the cross-CLI handoff guard; see `scripts/smoke-codex-plugin.mjs` for the fixture-based coverage.
 
 ## Claims Policy
