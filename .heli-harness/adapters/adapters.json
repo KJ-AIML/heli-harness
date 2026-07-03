@@ -89,7 +89,8 @@
         "Synthetic SessionStart context hook smoke",
         "Synthetic PreToolUse deny hook smoke",
         "Live-verified: real `codex plugin marketplace add` + `plugin add` install/trust against the actual Codex CLI (isolated CODEX_HOME)",
-        "Live-verified: real `codex exec` turn denies `git push` and a `.env` write via the PreToolUse hook (isolated CODEX_HOME, `--dangerously-bypass-hook-trust`)"
+        "Live-verified: real `codex exec` turn denies `git push` and a `.env` write via the PreToolUse hook (isolated CODEX_HOME, `--dangerously-bypass-hook-trust`)",
+        "PreToolUse blocks Edit/Write/apply_patch when current-task.md shows a stuck (2+ failed attempts, incomplete) or target-mismatched task, until the state file is updated"
       ],
       "limitations": [
         "Live proof requires `--dangerously-bypass-hook-trust`; the normal interactive hook-trust prompt flow is not separately verified",
@@ -134,7 +135,8 @@
         "Native plugin manifest with skills and hook config",
         "Synthetic SessionStart context hook smoke",
         "Synthetic PreToolUse deny hook smoke",
-        "Live-verified: real Claude Code session (`--plugin-dir`, isolated sandbox repo) denies `git push` and `.env` writes and reports them in the session's `permission_denials`"
+        "Live-verified: real Claude Code session (`--plugin-dir`, isolated sandbox repo) denies `git push` and `.env` writes and reports them in the session's `permission_denials`",
+        "PreToolUse blocks Edit/Write/apply_patch when current-task.md shows a stuck (2+ failed attempts, incomplete) or target-mismatched task, until the state file is updated"
       ],
       "limitations": [
         "Live proof used `--plugin-dir` (session-scoped local plugin loading), not the marketplace-installed-and-trusted flow (`claude plugin install`); that install/trust path is not separately verified",

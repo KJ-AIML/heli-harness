@@ -19,6 +19,7 @@ Heli-Harness is the source of truth for this parent workspace. It is tool-neutra
 - Repo profiles should classify weak existing patterns as tech debt when appropriate, include evidence paths for meaningful claims, and record safer alternatives for future work.
 - Write workflows in multi-repo workspaces should not proceed silently when target identity is ambiguous.
 - The agent should check for advisory lock files (session.lock.json, target.lock.json) before write workflows when multiple agents may be active.
+- On Claude Code and Codex native plugin installs, `PreToolUse` blocks `Edit`/`Write`/`apply_patch` calls when `.heli-harness/state/current-task.md` shows 2+ failed attempts on an incomplete task, or a target repo that doesn't match `.heli-harness/workspace/target.json` — update the state file (or target.json) to resolve it before continuing. This closes the gap where a session in one CLI carries over stale or mismatched task state to a session in a different CLI without either agent noticing.
 - Locks are advisory warnings, not distributed locks. An expired or missing lock should warn, not block.
 - The agent must not run expensive loops repeatedly. Use the smallest useful check first, then widen only when evidence requires it.
 - After two failed fix attempts, stop coding and write a diagnosis with evidence, likely causes, and the next smallest action.
