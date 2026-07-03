@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { stdin } from "node:process";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const input = await new Promise((resolve) => {
 	let data = "";
@@ -47,11 +49,61 @@ function patchPathsFrom(commandText, out = []) {
 	return out;
 }
 
+// Stale/mismatched task-state gate. Stateless by design: re-reads
+// current-task.md and target.json on every call, so it clears itself the
+// moment the agent updates whichever file is out of sync — no session
+// tracking, no marker files.
+function field(text, label) {
+	const match = new RegExp(`^${label}:\\s*(.*)$`, "m").exec(text);
+	return match ? match[1].trim() : "";
+}
+
+function readTaskGate(cwd) {
+	if (!existsSync(join(cwd, ".heli-harness", "HARNESS.md"))) return null;
+	const taskPath = join(cwd, ".heli-harness", "state", "current-task.md");
+	if (!existsSync(taskPath)) return null;
+
+	const taskText = readFileSync(taskPath, "utf8");
+	const taskTarget = field(taskText, "Target repo");
+	const status = field(taskText, "Current status");
+	const failedAttempts = parseInt(field(taskText, "Failed attempts count") || "0", 10) || 0;
+
+	if (failedAttempts >= 2 && status.toLowerCase() !== "complete") {
+		return `Heli-Harness: current-task.md shows ${failedAttempts} failed attempts and status "${status || "(empty)"}" on an incomplete task — this looks carried over from a previous session. Read .heli-harness/state/current-task.md, diagnose or reset it, and update the file before continuing.`;
+	}
+
+	const targetPath = join(cwd, ".heli-harness", "workspace", "target.json");
+	if (taskTarget && existsSync(targetPath)) {
+		let workspaceTarget = "";
+		try {
+			workspaceTarget = JSON.parse(readFileSync(targetPath, "utf8")).targetRepo || "";
+		} catch { /* malformed target.json — nothing reliable to compare */ }
+		if (workspaceTarget && workspaceTarget.toLowerCase() !== taskTarget.toLowerCase()) {
+			return `Heli-Harness: current-task.md says target repo "${taskTarget}" but .heli-harness/workspace/target.json is set to "${workspaceTarget}" — confirm which repo you're working in and update current-task.md before continuing.`;
+		}
+	}
+
+	return null;
+}
+
+function isTaskStateWrite(paths) {
+	return paths.some((path) =>
+		path.endsWith(".heli-harness/state/current-task.md") ||
+		path.endsWith(".heli-harness/workspace/target.json"));
+}
+
 const event = input.trim() ? JSON.parse(input) : {};
 const rawCommand = commandFrom(event);
 const command = rawCommand.replace(/\s+/g, " ").trim().toLowerCase();
 const paths = [...pathsFrom(event.tool_input), ...patchPathsFrom(rawCommand)]
 	.map((path) => path.replaceAll("\\", "/").toLowerCase());
+const toolName = String(event?.tool_name ?? "");
 
-if (/\bgit\s+push\b/.test(command)) deny("Heli-Harness blocks git push in agent sessions — this is a blanket rule, not gated on release approval. Push manually outside the session if needed.");
-else if (paths.some((path) => /(^|\/)\.env(\.|$)/.test(path))) deny("Heli-Harness blocks writes to .env-style secret files.");
+if (/\bgit\s+push\b/.test(command)) {
+	deny("Heli-Harness blocks git push in agent sessions — this is a blanket rule, not gated on release approval. Push manually outside the session if needed.");
+} else if (paths.some((path) => /(^|\/)\.env(\.|$)/.test(path))) {
+	deny("Heli-Harness blocks writes to .env-style secret files.");
+} else if (["Edit", "Write", "apply_patch"].includes(toolName) && !isTaskStateWrite(paths)) {
+	const gateReason = readTaskGate(process.cwd());
+	if (gateReason) deny(gateReason);
+}
