@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.14
+## Current Baseline: v0.5.15
 
-Latest stable release: `v0.5.14`
+Latest stable release: `v0.5.15`
 
-Release commit: pending tag `v0.5.14`
+Release commit: pending tag `v0.5.15`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.14>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.15>
 
 Stable behavior in this baseline:
 
@@ -87,6 +87,10 @@ Stable behavior in this baseline:
 - Plugin install parity:
   - Claude Code and Codex native plugins ship a `heli-install` skill, walking the agent through the same steps Pi/AXGA's `/heli-install` performs (via `install.ps1`/`install.sh`): refuse if already installed, confirm before writing, run the installer, verify the same file checklist
   - resolves the latest release tag at run time instead of hardcoding a version
+- Session task gate:
+  - Claude Code and Codex plugin `SessionStart` injects the real `.heli-harness/state/current-task.md` content instead of a static reminder
+  - `PreToolUse` blocks `Edit`/`Write`/`apply_patch` when carried-over task state is stuck (2+ failed attempts, incomplete) or its target repo mismatches `workspace/target.json`, until the state file is updated
+  - stateless: re-reads both files on every call, no session-id tracking or marker files
 
 ## Product Positioning
 
@@ -165,6 +169,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.12 | Codex Live Hook Verification | Prove the Codex PreToolUse hook fires in a real session, fix a file-write guard bug the live test surfaced, and promote Codex to `enforced`. |
 | v0.5.13 | Plugin Target Parity | Port `/heli-target` to the Claude Code and Codex native plugins, fix the misleading git-push deny wording, add target-mismatch confirmation, and disclose the reduced plugin skill surface. |
 | v0.5.14 | Plugin Install Parity | Port `/heli-install` to the Claude Code and Codex native plugins, with the same safety checks Pi/AXGA's version has around it. |
+| v0.5.15 | Session Task Gate | Close the cross-CLI handoff gap: surface real `current-task.md` content at session start and block edits when carried-over task state is stuck or target-mismatched, until it's resolved. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -945,6 +950,43 @@ Acceptance criteria:
 Risks:
 
 - Same as `heli-target`: instruction-based, not code-executed — a sandboxed governance aid, not enforcement.
+
+## v0.5.15 - Session Task Gate (Implemented)
+
+Goal:
+Close the cross-CLI handoff gap in the Claude Code and Codex native plugins: today `current-task.md` is written by whichever agent finishes a session, but nothing forces the *next* agent — possibly a different CLI — to notice a stale or mismatched task before it starts editing.
+
+Rationale:
+This workspace's actual usage pattern is switching between Claude Code, Codex, and Pi/AXGA mid-task. `SessionStart` previously injected only a generic reminder to go read `HARNESS.md`, not the actual carried-over task content, and nothing structurally stopped a new session from silently working against stale or wrong-repo task state left by a prior one.
+
+Scope:
+
+- `SessionStart` in both plugins now injects the real content of `.heli-harness/state/current-task.md` when present.
+- `PreToolUse` in both plugins blocks `Edit`/`Write`/`apply_patch` calls when that task is stuck (2+ failed attempts, not `complete`) or its target repo mismatches `.heli-harness/workspace/target.json`, until the state file (or `target.json`) is updated. Stateless: re-reads both files on every call, clears itself automatically once resolved.
+- Gate applies only to `Edit`/`Write`/`apply_patch`, not generic `Bash`, so read-only diagnostics stay usable while the agent resolves the state.
+- New fixture-based smoke coverage (stuck case, mismatch case, healthy pass-through, and the exemption for edits to the state files themselves) in both plugin smoke tests, backed by new shared helpers in `scripts/lib/plugin-smoke-helpers.mjs`.
+- `adapters.json`, `docs/ADAPTER_SUPPORT_MATRIX.md`, and `HARNESS.md` document the new enforcement surface.
+
+Non-goals:
+
+- No change to `extensions/pi-extension.js` (Pi/AXGA) — it already has its own separate `enforced` mechanism; extending this same gate there is a reasonable follow-up, not done here.
+- No session-id or marker-file-based tracking — the gate is intentionally stateless.
+- No change to the existing `git push`/`.env` write checks.
+
+Deliverables:
+
+- Updated `heli-session-start.mjs` and `heli-pre-tool-use.mjs` in both `claude-plugin` and `codex-plugin`.
+- New smoke assertions and shared test helpers.
+- Updated `adapters.json`, `docs/ADAPTER_SUPPORT_MATRIX.md`, `HARNESS.md`.
+
+Acceptance criteria:
+
+- `npm run check` passes.
+- `git status` shows only the files above (plus this release's version/changelog/roadmap files) changed.
+
+Risks:
+
+- Stateless design means the gate reappears if the underlying condition isn't actually fixed (by design) — an agent that doesn't understand the deny reason could get stuck retrying the same blocked action instead of updating the state file. The deny message names the exact file to update to mitigate this.
 
 ## Post-v0.5 Stabilization
 

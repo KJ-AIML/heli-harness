@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.5.15 - Session Task Gate
+
+### Added
+
+- `SessionStart` in both the Claude Code and Codex native plugins now injects the real content of `.heli-harness/state/current-task.md` (previously only a static reminder to go read it), so carried-over task state actually reaches the next session's context instead of depending on the agent going to look for it.
+- `PreToolUse` in both plugins now blocks `Edit`/`Write`/`apply_patch` calls when that carried-over task is stuck (2+ failed attempts, still not `complete`) or its target repo no longer matches `.heli-harness/workspace/target.json` — until the state file (or `target.json`) is updated to resolve it. Stateless: re-reads both files on every call, no session-id tracking or marker files, and clears itself automatically once the mismatch/stuck condition is fixed.
+- Added 4 new fixture-based smoke assertions per plugin (`scripts/smoke-claude-plugin.mjs`, `scripts/smoke-codex-plugin.mjs`) covering the stuck case, the mismatch case, the healthy pass-through case, and the exemption for edits to `current-task.md`/`target.json` themselves. New shared test helpers (`withFixtureWorkspace`, `assertHookDenyInCwd`, `assertHookAllowInCwd`) added to `scripts/lib/plugin-smoke-helpers.mjs`.
+
+### Changed
+
+- `adapters.json` and `docs/ADAPTER_SUPPORT_MATRIX.md` now list this gate as a new enforcement surface for the `claude` and `codex` adapters.
+- `HARNESS.md`'s Operating Model documents the new enforcement.
+
+### Notes
+
+- Closes a real cross-CLI handoff gap: this workspace's actual usage pattern is switching between Claude Code, Codex, and Pi/AXGA mid-task, and nothing previously stopped a new session in a different CLI from silently working against stale or mismatched task state left by a prior session.
+- Scoped to the Claude Code and Codex native plugins only. Pi/AXGA already has its own separate `enforced` mechanism (`before_agent_start`/`session_start` hooks); extending this same gate there is a reasonable follow-up, not done here.
+- `enforced` status for Claude Code and Codex is unaffected — this adds a new enforcement surface, it doesn't change the taxonomy basis for the existing status.
+
 ## v0.5.14 - Plugin Install Parity
 
 ### Added
