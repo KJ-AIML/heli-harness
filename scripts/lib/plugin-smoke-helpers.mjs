@@ -91,3 +91,14 @@ export function assertHookAllowInCwd(root, relScript, cwd, sample) {
 	const output = result.stdout.trim() ? JSON.parse(result.stdout) : {};
 	assert.notEqual(output?.hookSpecificOutput?.permissionDecision, "deny", result.stdout);
 }
+
+export function sessionContextInCwd(root, relScript, cwd) {
+	const result = spawnSync(process.execPath, [join(root, relScript)], {
+		cwd,
+		encoding: "utf8",
+		stdio: ["ignore", "pipe", "pipe"],
+	});
+	assert.equal(result.status, 0, result.stderr);
+	const output = JSON.parse(result.stdout);
+	return output.hookSpecificOutput.additionalContext;
+}

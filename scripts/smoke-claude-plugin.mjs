@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { assertFile, assertHookDeny, assertHookAllowInCwd, assertHookDenyInCwd, assertSessionContext, json, nodeCheck, read, withFixtureWorkspace } from "./lib/plugin-smoke-helpers.mjs";
+import { assertFile, assertHookDeny, assertHookAllowInCwd, assertHookDenyInCwd, assertSessionContext, json, nodeCheck, read, sessionContextInCwd, withFixtureWorkspace } from "./lib/plugin-smoke-helpers.mjs";
 
 const root = process.cwd();
 const plugin = ".heli-harness/adapters/claude-plugin";
@@ -81,6 +81,25 @@ withFixtureWorkspace({
 		tool_name: "Write",
 		tool_input: { file_path: ".heli-harness/state/current-task.md" },
 	});
+});
+
+const sessionScript = `${plugin}/hooks/heli-session-start.mjs`;
+
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+	".heli-harness/state/decisions.md": "# Decisions\n\n## alpha\n\n- oldest, should be dropped\n\n## bravo\n\n- kept\n\n## charlie\n\n- kept\n\n## delta\n\n- kept\n\n## echo\n\n- kept\n\n## foxtrot\n\n- newest, kept\n",
+}, (cwd) => {
+	const context = sessionContextInCwd(root, sessionScript, cwd);
+	assert.match(context, /Recent durable decisions/);
+	assert.match(context, /foxtrot/);
+	assert.ok(!/alpha/.test(context), "oldest section (6th from newest) should have been dropped");
+});
+
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+}, (cwd) => {
+	const context = sessionContextInCwd(root, sessionScript, cwd);
+	assert.ok(!/Recent durable decisions/.test(context), "no decisions.md present should mean no injection");
 });
 
 const claude = json(join(root, ".heli-harness", "adapters", "adapters.json")).adapters.find((adapter) => adapter.id === "claude");
