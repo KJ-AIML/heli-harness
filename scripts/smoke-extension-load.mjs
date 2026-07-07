@@ -684,5 +684,56 @@ assert.match(contextPrompt.systemPrompt, /Target repo: demo/);
 assert.match(contextPrompt.systemPrompt, /Recent durable decisions/);
 assert.match(contextPrompt.systemPrompt, /foxtrot/);
 assert.ok(!/alpha/.test(contextPrompt.systemPrompt), "oldest decisions.md section should have been dropped");
+assert.ok(!/Active plan:/.test(contextPrompt.systemPrompt), "no plan.md present should mean no injection");
+
+// Per-step plan gate: 2+ failed attempts on the current (first non-complete)
+// step blocks writes, except writes to plan.md itself, and clears once resolved.
+writeFileSync(join(tempDir, ".heli-harness", "state", "plan.md"), `# Plan: Demo ledger
+
+## Step 1: First step
+
+Status: blocked
+
+Attempts: 2
+`);
+assert.deepEqual(await toolCall({ toolName: "write", input: { path: "notes.txt" } }, {}), {
+	block: true,
+	reason: 'Blocked: plan.md step "Step 1: First step" shows 2 failed attempts and status "blocked" — update .heli-harness/state/plan.md to resolve it before continuing.',
+});
+assert.equal(await toolCall({ toolName: "write", input: { path: ".heli-harness/state/plan.md" } }, {}), undefined);
+writeFileSync(join(tempDir, ".heli-harness", "state", "plan.md"), `# Plan: Demo ledger
+
+## Step 1: First step
+
+Status: complete
+
+Attempts: 1
+
+## Step 2: Second step
+
+Status: pending
+
+Attempts: 0
+`);
+assert.equal(await toolCall({ toolName: "write", input: { path: "notes.txt" } }, {}), undefined);
+
+// before_agent_start surfaces a plan.md rollup (title, progress count,
+// current step) rather than the full file.
+const rollupPrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
+assert.match(rollupPrompt.systemPrompt, /Active plan: Demo ledger/);
+assert.match(rollupPrompt.systemPrompt, /Progress: 1\/2 steps complete/);
+assert.match(rollupPrompt.systemPrompt, /Current step: Step 2: Second step — status: pending — attempts: 0/);
+
+writeFileSync(join(tempDir, ".heli-harness", "state", "plan.md"), `# Plan: Demo ledger
+
+## Step 1: Only step
+
+Status: complete
+
+Attempts: 1
+`);
+const completePrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
+assert.match(completePrompt.systemPrompt, /Progress: 1\/1 steps complete/);
+assert.match(completePrompt.systemPrompt, /All steps complete\./);
 
 console.log("extension smoke ok");

@@ -67,6 +67,28 @@ function lastDecisionSections(text, max = 5) {
 	return sections.slice(-max).join("").trim();
 }
 
+function planRollup(text) {
+	if (!text) return "";
+	const sections = text.split(/(?=^## )/m).filter((part) => part.startsWith("## "));
+	if (!sections.length) return "";
+	const titleMatch = /^# Plan: (.+)$/m.exec(text);
+	const title = titleMatch ? titleMatch[1].trim() : "Untitled plan";
+	const total = sections.length;
+	const completeCount = sections.filter((section) => taskField(section, "Status").toLowerCase() === "complete").length;
+	const current = sections.find((section) => taskField(section, "Status").toLowerCase() !== "complete");
+	const lines = [`Active plan: ${title}`, `Progress: ${completeCount}/${total} steps complete`];
+	if (current) {
+		const stepTitleMatch = /^## (.+)$/m.exec(current);
+		const stepTitle = stepTitleMatch ? stepTitleMatch[1].trim() : "current step";
+		const status = taskField(current, "Status") || "(empty)";
+		const attempts = taskField(current, "Attempts") || "0";
+		lines.push(`Current step: ${stepTitle} — status: ${status} — attempts: ${attempts}`);
+	} else {
+		lines.push("All steps complete.");
+	}
+	return lines.join("\n");
+}
+
 function safeListFiles(dir) {
 	try {
 		return readdirSync(dir).sort().map((name) => join(dir, name));
@@ -1402,6 +1424,10 @@ Before non-trivial work:
 		const decisionsContext = recentDecisions
 			? `\n\nRecent durable decisions from .heli-harness/state/decisions.md:\n${recentDecisions}`
 			: "";
+		const planRollupText = planRollup(safeReadText(join(cwd, ".heli-harness", "state", "plan.md")));
+		const planContext = planRollupText
+			? `\n\nRead the full plan file before resuming: .heli-harness/state/plan.md\n${planRollupText}`
+			: "";
 		const probeInstructions = hookProbePromptPending
 			? `
 
@@ -1410,7 +1436,7 @@ For this one test turn only, start your next response with:
 HELI_HOOK_OK`
 			: "";
 		hookProbePromptPending = false;
-		return { systemPrompt: `${existingPrompt}\n\n${heliInstructions}${carriedOverTask}${decisionsContext}${probeInstructions}` };
+		return { systemPrompt: `${existingPrompt}\n\n${heliInstructions}${carriedOverTask}${decisionsContext}${planContext}${probeInstructions}` };
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
@@ -1510,18 +1536,36 @@ HELI_HOOK_OK`
 		}
 
 		if (writePaths.length) {
-			// Only current-task.md is exempted here (unlike the Claude/Codex plugin hooks, which also
-			// exempt target.json): this gate only checks the stuck-task condition, not target-mismatch —
-			// Pi already enforces target boundaries separately via writesAllowedUnder.
+			// current-task.md and plan.md are exempted here (unlike the Claude/Codex plugin hooks,
+			// which also exempt target.json): this gate only checks stuck-task/stuck-step conditions,
+			// not target-mismatch — Pi already enforces target boundaries separately via writesAllowedUnder.
 			const taskStatePath = resolve(cwd, ".heli-harness", "state", "current-task.md");
-			const isTaskStateWrite = writePaths.some((path) => resolve(cwd, path) === taskStatePath);
-			if (!isTaskStateWrite) {
-				const taskText = safeReadText(join(cwd, ".heli-harness", "state", "current-task.md"));
+			const planStatePath = resolve(cwd, ".heli-harness", "state", "plan.md");
+			const isStateWrite = writePaths.some((path) => {
+				const resolvedWritePath = resolve(cwd, path);
+				return resolvedWritePath === taskStatePath || resolvedWritePath === planStatePath;
+			});
+			if (!isStateWrite) {
+				const taskText = safeReadText(taskStatePath);
 				const failedAttempts = parseInt(taskField(taskText, "Failed attempts count") || "0", 10) || 0;
 				const status = taskField(taskText, "Current status");
 				if (failedAttempts >= 2 && status.toLowerCase() !== "complete") {
 					lastToolGuardAt = new Date().toISOString();
 					return { block: true, reason: `Blocked: current-task.md shows ${failedAttempts} failed attempts and status "${status || "(empty)"}" on an incomplete task — update .heli-harness/state/current-task.md to resolve it before continuing.` };
+				}
+
+				const planText = safeReadText(planStatePath);
+				const planSteps = planText.split(/(?=^## )/m).filter((part) => part.startsWith("## "));
+				const currentStep = planSteps.find((section) => taskField(section, "Status").toLowerCase() !== "complete");
+				if (currentStep) {
+					const stepAttempts = parseInt(taskField(currentStep, "Attempts") || "0", 10) || 0;
+					const stepStatus = taskField(currentStep, "Status");
+					if (stepAttempts >= 2 && stepStatus.toLowerCase() !== "complete") {
+						const stepTitleMatch = /^## (.+)$/m.exec(currentStep);
+						const stepTitle = stepTitleMatch ? stepTitleMatch[1].trim() : "current step";
+						lastToolGuardAt = new Date().toISOString();
+						return { block: true, reason: `Blocked: plan.md step "${stepTitle}" shows ${stepAttempts} failed attempts and status "${stepStatus || "(empty)"}" — update .heli-harness/state/plan.md to resolve it before continuing.` };
+					}
 				}
 			}
 		}
