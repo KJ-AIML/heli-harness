@@ -62,6 +62,7 @@
   },
   "state": {
     "current_task": "state/current-task.md",
+    "plan": "state/plan.md",
     "decisions": "state/decisions.md",
     "runs": "state/runs/",
     "reports": "state/reports/"
