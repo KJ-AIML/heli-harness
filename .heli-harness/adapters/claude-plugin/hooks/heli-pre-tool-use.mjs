@@ -54,7 +54,10 @@ function patchPathsFrom(commandText, out = []) {
 // moment the agent updates whichever file is out of sync — no session
 // tracking, no marker files.
 function field(text, label) {
-	const match = new RegExp(`^${label}:\\s*(.*)$`, "m").exec(text);
+	// [ \t]*, not \s*: \s matches newlines, so a blank field value (colon
+	// followed immediately by a line break) would otherwise let this greedily
+	// consume into the next labeled line and capture its label as the value.
+	const match = new RegExp(`^${label}:[ \\t]*(.*)$`, "m").exec(text);
 	return match ? match[1].trim() : "";
 }
 

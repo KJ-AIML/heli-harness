@@ -82,6 +82,16 @@ withFixtureWorkspace({
 	});
 });
 
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+	".heli-harness/state/current-task.md": "# Current Task\n\nTarget repo:\n\nCurrent status: in progress\n\nFailed attempts count: 0\n",
+	".heli-harness/workspace/target.json": JSON.stringify({ targetRepo: "repo-a" }),
+}, (cwd) => {
+	// Regression: an empty "Target repo:" field must not let field()'s regex
+	// greedily consume the blank line and capture the next label as the value.
+	assertHookAllowInCwd(root, hookScript, cwd, writeCall);
+});
+
 const sessionScript = `${plugin}/hooks/heli-session-start.mjs`;
 
 withFixtureWorkspace({

@@ -54,7 +54,10 @@ function safeWriteJson(path, value) {
 }
 
 function taskField(text, label) {
-	const match = new RegExp(`^${label}:\\s*(.*)$`, "m").exec(text || "");
+	// [ \t]*, not \s*: \s matches newlines, so a blank field value (colon
+	// followed immediately by a line break) would otherwise let this greedily
+	// consume into the next labeled line and capture its label as the value.
+	const match = new RegExp(`^${label}:[ \\t]*(.*)$`, "m").exec(text || "");
 	return match ? match[1].trim() : "";
 }
 
