@@ -92,6 +92,30 @@ withFixtureWorkspace({
 	assertHookAllowInCwd(root, hookScript, cwd, writeCall);
 });
 
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+	".heli-harness/state/plan.md": "# Plan: Demo\n\n## Step 1: First step\n\nStatus: blocked\n\nAttempts: 2\n",
+}, (cwd) => {
+	assertHookDenyInCwd(root, hookScript, cwd, writeCall, /plan\.md step "Step 1: First step" shows 2 failed attempts/);
+});
+
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+	".heli-harness/state/plan.md": "# Plan: Demo\n\n## Step 1: First step\n\nStatus: complete\n\nAttempts: 1\n\n## Step 2: Second step\n\nStatus: pending\n\nAttempts: 0\n",
+}, (cwd) => {
+	assertHookAllowInCwd(root, hookScript, cwd, writeCall);
+});
+
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+	".heli-harness/state/plan.md": "# Plan: Demo\n\n## Step 1: First step\n\nStatus: blocked\n\nAttempts: 2\n",
+}, (cwd) => {
+	assertHookAllowInCwd(root, hookScript, cwd, {
+		tool_name: "Write",
+		tool_input: { file_path: ".heli-harness/state/plan.md" },
+	});
+});
+
 const sessionScript = `${plugin}/hooks/heli-session-start.mjs`;
 
 withFixtureWorkspace({
@@ -109,6 +133,32 @@ withFixtureWorkspace({
 }, (cwd) => {
 	const context = sessionContextInCwd(root, sessionScript, cwd);
 	assert.ok(!/Recent durable decisions/.test(context), "no decisions.md present should mean no injection");
+});
+
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+	".heli-harness/state/plan.md": "# Plan: Demo ledger\n\n## Step 1: First step\n\nStatus: complete\n\nAttempts: 1\n\n## Step 2: Second step\n\nStatus: pending\n\nAttempts: 0\n\n## Step 3: Third step\n\nStatus: pending\n\nAttempts: 0\n",
+}, (cwd) => {
+	const context = sessionContextInCwd(root, sessionScript, cwd);
+	assert.match(context, /Active plan: Demo ledger/);
+	assert.match(context, /Progress: 1\/3 steps complete/);
+	assert.match(context, /Current step: Step 2: Second step — status: pending — attempts: 0/);
+});
+
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+}, (cwd) => {
+	const context = sessionContextInCwd(root, sessionScript, cwd);
+	assert.ok(!/Active plan:/.test(context), "no plan.md present should mean no injection");
+});
+
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+	".heli-harness/state/plan.md": "# Plan: Demo ledger\n\n## Step 1: Only step\n\nStatus: complete\n\nAttempts: 1\n",
+}, (cwd) => {
+	const context = sessionContextInCwd(root, sessionScript, cwd);
+	assert.match(context, /Progress: 1\/1 steps complete/);
+	assert.match(context, /All steps complete\./);
 });
 
 assertFile(join(pluginRoot, ".agents", "plugins", "marketplace.json"), "Codex plugin marketplace manifest");

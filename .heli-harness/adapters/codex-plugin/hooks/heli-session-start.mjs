@@ -9,6 +9,33 @@ function lastDecisionSections(text, max = 5) {
 	return sections.slice(-max).join("").trim();
 }
 
+function field(text, label) {
+	const match = new RegExp(`^${label}:[ \\t]*(.*)$`, "m").exec(text);
+	return match ? match[1].trim() : "";
+}
+
+function planRollup(text) {
+	if (!text) return "";
+	const sections = text.split(/(?=^## )/m).filter((part) => part.startsWith("## "));
+	if (!sections.length) return "";
+	const titleMatch = /^# Plan: (.+)$/m.exec(text);
+	const title = titleMatch ? titleMatch[1].trim() : "Untitled plan";
+	const total = sections.length;
+	const completeCount = sections.filter((section) => field(section, "Status").toLowerCase() === "complete").length;
+	const current = sections.find((section) => field(section, "Status").toLowerCase() !== "complete");
+	const lines = [`Active plan: ${title}`, `Progress: ${completeCount}/${total} steps complete`];
+	if (current) {
+		const stepTitleMatch = /^## (.+)$/m.exec(current);
+		const stepTitle = stepTitleMatch ? stepTitleMatch[1].trim() : "current step";
+		const status = field(current, "Status") || "(empty)";
+		const attempts = field(current, "Attempts") || "0";
+		lines.push(`Current step: ${stepTitle} — status: ${status} — attempts: ${attempts}`);
+	} else {
+		lines.push("All steps complete.");
+	}
+	return lines.join("\n");
+}
+
 const cwd = process.cwd();
 const lines = [
 	"Heli-Harness plugin context:",
@@ -40,6 +67,18 @@ if (existsSync(join(cwd, ".heli-harness", "HARNESS.md"))) {
 				"",
 				"Recent durable decisions from .heli-harness/state/decisions.md:",
 				recentDecisions,
+			);
+		}
+	}
+
+	const planPath = join(cwd, ".heli-harness", "state", "plan.md");
+	if (existsSync(planPath)) {
+		const rollup = planRollup(readFileSync(planPath, "utf8"));
+		if (rollup) {
+			lines.push(
+				"",
+				"Read the full plan file before resuming: .heli-harness/state/plan.md",
+				rollup,
 			);
 		}
 	}

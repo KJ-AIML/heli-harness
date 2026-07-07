@@ -89,9 +89,30 @@ function readTaskGate(cwd) {
 	return null;
 }
 
+function readPlanGate(cwd) {
+	if (!existsSync(join(cwd, ".heli-harness", "HARNESS.md"))) return null;
+	const planPath = join(cwd, ".heli-harness", "state", "plan.md");
+	if (!existsSync(planPath)) return null;
+
+	const planText = readFileSync(planPath, "utf8");
+	const sections = planText.split(/(?=^## )/m).filter((part) => part.startsWith("## "));
+	const current = sections.find((section) => field(section, "Status").toLowerCase() !== "complete");
+	if (!current) return null;
+
+	const status = field(current, "Status");
+	const attempts = parseInt(field(current, "Attempts") || "0", 10) || 0;
+	if (attempts >= 2 && status.toLowerCase() !== "complete") {
+		const stepTitleMatch = /^## (.+)$/m.exec(current);
+		const stepTitle = stepTitleMatch ? stepTitleMatch[1].trim() : "current step";
+		return `Heli-Harness: plan.md step "${stepTitle}" shows ${attempts} failed attempts and status "${status || "(empty)"}" — update .heli-harness/state/plan.md to resolve it before continuing.`;
+	}
+	return null;
+}
+
 function isTaskStateWrite(paths) {
 	return paths.some((path) =>
 		path.endsWith(".heli-harness/state/current-task.md") ||
+		path.endsWith(".heli-harness/state/plan.md") ||
 		path.endsWith(".heli-harness/workspace/target.json"));
 }
 
@@ -107,6 +128,6 @@ if (/\bgit\s+push\b/.test(command)) {
 } else if (paths.some((path) => /(^|\/)\.env(\.|$)/.test(path))) {
 	deny("Heli-Harness blocks writes to .env-style secret files.");
 } else if (["Edit", "Write", "apply_patch"].includes(toolName) && !isTaskStateWrite(paths)) {
-	const gateReason = readTaskGate(process.cwd());
+	const gateReason = readTaskGate(process.cwd()) || readPlanGate(process.cwd());
 	if (gateReason) deny(gateReason);
 }
