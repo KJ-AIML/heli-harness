@@ -15,6 +15,10 @@ Heli-Harness is the workspace governance source of truth. Claude Code must treat
 7. For non-trivial edits, update `.heli-harness/state/current-task.md`.
 8. Load only relevant skill docs from `.heli-harness/skills/`.
 
+## Enforcement self-check
+
+Before treating any guardrail here as enforced rather than advisory, check whether the native plugin's `SessionStart` hook actually ran this session: look for injected context starting with "Heli-Harness plugin context:" at the start of the conversation. If it is absent, the plugin is not registered or loaded — `git push`/`.env`-write/task-state-gate denials will not fire, and every rule in this file is advisory only. Say so explicitly to the user before doing S2/S3 work, and rely on discipline rather than enforcement until the plugin is properly installed.
+
 ## Target repo discipline
 
 - Do not modify unrelated repos.

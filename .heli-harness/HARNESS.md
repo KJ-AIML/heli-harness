@@ -9,6 +9,7 @@ Heli-Harness is the source of truth for this parent workspace. It is tool-neutra
 - In multi-repo workspaces, the agent should read `.heli-harness/workspace/index.json` and select a target repo before write workflows begin.
 - The agent should treat `.heli-harness/workspace/target.json` as the active target record when it exists.
 - The agent must read the relevant profile in `.heli-harness/profiles/` when one exists.
+- If no profile exists yet for the identified target repo, the agent should create one from `.heli-harness/templates/repo-profile.md` before S2/S3 work, so branch policy, test commands, and other project-specific facts become durable and discoverable instead of verbal-only for this session.
 - The agent must read policy overlays in `.heli-harness/policies/` when they exist.
 - The agent must read safety overlays in `.heli-harness/safety/` when they exist.
 - The agent must also read repo-local `AGENTS.md`, `CLAUDE.md`, `README*`, package files, build files, and test configuration where relevant.
@@ -42,6 +43,7 @@ Before non-trivial edits, update `.heli-harness/state/current-task.md` with:
 - files expected to change
 - dirty files observed
 - planned verification
+- relevant skills consulted
 - current status
 - failed attempts count
 - next smallest action

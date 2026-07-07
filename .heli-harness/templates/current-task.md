@@ -17,6 +17,9 @@ Dirty files observed:
 Planned verification:
 - 
 
+Relevant skills consulted:
+- 
+
 Current status:
 
 Failed attempts count: 0
