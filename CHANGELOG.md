@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.5.17 - Cross-CLI Plan Ledger
+
+### Added
+
+- New optional state file `.heli-harness/state/plan.md` (template at `.heli-harness/templates/plan.md`): a self-contained, step-by-step plan ledger using `## Step N: <title>` sections with `Files:`/`Verify:`/`Status:`/`Evidence:`/`Attempts:` fields, so a multi-step task can be handed off between CLIs (e.g. a quota-driven Codex-to-Claude switch mid-plan) with each step carrying verifiable evidence and a failed-attempts count, not just a bare checkbox.
+- All three adapters (Claude Code plugin, Codex plugin, Pi/AXGA extension) now surface a compact rollup of `plan.md` (title, "N/M steps complete", current step's title/status/attempts) in session-start context when the file is present, and inject nothing when it's absent.
+- All three adapters extend their existing whole-task stuck-task gate down to step granularity: 2+ failed attempts on the current (first non-complete) step blocks further `Edit`/`Write`/`apply_patch` calls until that step's `Status`/`Attempts` fields are updated, mirroring the v0.5.15 whole-task gate. Writes to `plan.md` itself remain exempt.
+- `HARNESS.md`'s "3+ discrete steps" rule (the same threshold governing the `Relevant skills consulted` field) now also requires writing these steps to `plan.md` before starting, with per-step `Evidence`/`Status` filled in immediately after each step verifies, not batched at the end.
+
+### Changed
+
+- `.heli-harness/templates/current-task.md` and `HARNESS.md`'s Required Task State list gained a `Plan:` field pointing at `.heli-harness/state/plan.md` when one exists.
+- `.heli-harness/manifest.json`'s `state` block now lists `plan.md` alongside `current_task`/`decisions`.
+- `docs/ADAPTER_SUPPORT_MATRIX.md` and `.heli-harness/state/README.md` document the new rollup and per-step gate across all three adapters.
+
+### Notes
+
+- HARNESS.md's Operating Model previously had a gap: an earlier release intended to add a "3+ discrete steps" rule alongside the `Relevant skills consulted` field, but only the field name landed in the Required Task State list — the behavioral rule itself was never written. This release adds that rule for the first time, extended to also cover `plan.md`.
+- Non-goals: no support for multiple simultaneous plans (one `plan.md`, same singular-active-task model as `current-task.md`); no archival mechanism for completed plans beyond whatever git history the workspace keeps; not a replacement for tool-specific planning skills (e.g. superpowers' `writing-plans`) — `plan.md` is the cross-CLI-portable layer, usable alongside a richer tool-specific plan doc if one exists.
+
 ## v0.5.16 - Cross-CLI Context Parity
 
 ### Added

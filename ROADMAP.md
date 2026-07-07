@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.16
+## Current Baseline: v0.5.17
 
-Latest stable release: `v0.5.16`
+Latest stable release: `v0.5.17`
 
-Release commit: pending tag `v0.5.16`
+Release commit: pending tag `v0.5.17`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.16>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.17>
 
 Stable behavior in this baseline:
 
@@ -95,6 +95,11 @@ Stable behavior in this baseline:
   - Claude Code, Codex, and Pi/AXGA all surface the last 5 `## `-headed sections of `.heli-harness/state/decisions.md` at session start
   - Pi/AXGA's `tool_call` hook gained the same stuck-task gate the plugins got in v0.5.15; `before_agent_start` now injects real `current-task.md`/`decisions.md` content instead of a generic reminder
   - fixed a pre-existing `isSuspiciousHarnessRuntimePath` bug that broke the stuck-task gate's own self-exemption
+- Cross-CLI plan ledger:
+  - optional `.heli-harness/state/plan.md` (template at `.heli-harness/templates/plan.md`): self-contained `## Step N: <title>` sections with `Files:`/`Verify:`/`Status:`/`Evidence:`/`Attempts:` fields
+  - all three adapters surface a compact rollup (title, "N/M steps complete", current step) at session start when present, nothing when absent
+  - all three adapters extend the whole-task stuck gate to step granularity: 2+ failed attempts on the current step blocks edits until resolved, mirroring the v0.5.15 gate; writes to `plan.md` itself stay exempt
+  - `current-task.md` gained a `Plan:` field pointing at `plan.md` when one exists
 
 ## Product Positioning
 
@@ -175,6 +180,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.14 | Plugin Install Parity | Port `/heli-install` to the Claude Code and Codex native plugins, with the same safety checks Pi/AXGA's version has around it. |
 | v0.5.15 | Session Task Gate | Close the cross-CLI handoff gap: surface real `current-task.md` content at session start and block edits when carried-over task state is stuck or target-mismatched, until it's resolved. |
 | v0.5.16 | Cross-CLI Context Parity | Bring Pi/AXGA up to the same context-continuity level as Claude/Codex (v0.5.15), and add `decisions.md` surfacing across all three adapters. |
+| v0.5.17 | Cross-CLI Plan Ledger | Add `.heli-harness/state/plan.md`, a self-contained step-by-step plan ledger surfaced and gated identically across all three adapters, closing the remaining gap in cross-CLI mid-task handoff. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -1032,6 +1038,51 @@ Risks:
 
 - Same statelessness tradeoff as v0.5.15's gate: the Pi stuck-task check reappears every call until the underlying condition is actually fixed, by design.
 - The `isSuspiciousHarnessRuntimePath` fix touches shared, undertested code outside this feature's original planned scope — reviewed and verified independently (existing full test suite still passes; the new exemption test now regression-tests it) before merging, rather than deferred, since it directly blocked verifying this release's own correctness.
+
+## v0.5.17 - Cross-CLI Plan Ledger (Implemented)
+
+Goal:
+Add a durable, cross-CLI-readable plan file so a multi-step task can be handed off between Claude, Codex, and Pi/AXGA mid-execution (e.g. a quota-driven CLI switch) with each step carrying verifiable evidence and a failed-attempts count, not just a bare checkbox.
+
+Rationale:
+This harness's motivating use case is switching agent CLIs mid-task. `current-task.md` carries overall task status across that switch, and `decisions.md` carries durable "why" history — but neither carries step-by-step plan progress. A different CLI resuming a partially-done plan had no structured way to know exactly which steps were done, which failed, or what evidence backed a "done" claim. A bare "step 7 done" checkbox from one CLI is exactly as untrustworthy to a different CLI as an unenforced guardrail, unless it carries evidence the next reader can independently verify.
+
+Scope:
+
+- New `.heli-harness/templates/plan.md` template and `.heli-harness/state/plan.md` as the (optional) live file: `## Step N: <title>` sections, reusing the same `## `-header split pattern `decisions.md` already uses, with `Files:`/`Verify:`/`Status:`/`Evidence:`/`Attempts:` fields, reusing the same `field()`/`taskField()` single-line parsing already in place.
+- `current-task.md` template and `HARNESS.md`'s Required Task State list gained a `Plan:` field.
+- `HARNESS.md`'s Operating Model gained the actual "3+ discrete steps" rule (extending the same threshold that already governs the `Relevant skills consulted` field): write steps to `plan.md` before starting, fill `Evidence`/`Status` immediately after each step verifies (not batched at the end), increment `Attempts` on failure.
+- All three adapters (Claude Code plugin, Codex plugin, Pi/AXGA extension) inject a compact rollup (plan title, "N/M steps complete", current step's title/status/attempts) at session start when `plan.md` exists, nothing when it doesn't.
+- All three adapters extend their existing whole-task stuck-task gate to step granularity: 2+ failed attempts on the current (first non-complete) step blocks further `Edit`/`Write`/`apply_patch` calls, identical in shape to the v0.5.15 gate. Writes to `plan.md` itself are exempt, the same way `current-task.md`/`target.json` already are.
+- `.heli-harness/manifest.json`'s `state` block gained a `plan` entry for parity with `current_task`/`decisions`.
+- Documented across `docs/ADAPTER_SUPPORT_MATRIX.md` and `.heli-harness/state/README.md`.
+
+Non-goals:
+
+- No support for multiple simultaneous active plans — one `plan.md`, same singular-active-task model `current-task.md` already uses.
+- No archival/history mechanism for completed plans beyond whatever git history the workspace keeps for `.heli-harness/state/`.
+- Not a replacement for tool-specific planning skills (e.g. superpowers' `writing-plans`) — when a richer tool-specific plan doc exists, `plan.md` can coexist with it; `plan.md` just has to be sufficient on its own, since Codex/Pi cannot read a Claude-superpowers-specific format.
+- No per-file-scoped gate — deliberately coarse (blocks all edits), matching the existing whole-task gate's own scope decision.
+- No version-bump/release automation changes.
+
+Deliverables:
+
+- `.heli-harness/templates/plan.md` (new), `.heli-harness/templates/current-task.md`, `.heli-harness/HARNESS.md`.
+- `heli-session-start.mjs` and `heli-pre-tool-use.mjs` in both plugin copies (Claude, Codex).
+- `extensions/pi-extension.js` (`planRollup()`, `before_agent_start` wiring, `tool_call` per-step gate).
+- New fixture-based smoke coverage in `smoke-claude-plugin.mjs`, `smoke-codex-plugin.mjs`, `smoke-extension-load.mjs`.
+- `.heli-harness/manifest.json`, `docs/ADAPTER_SUPPORT_MATRIX.md`, `.heli-harness/state/README.md`.
+
+Acceptance criteria:
+
+- `npm run check` passes.
+- `git status` shows only the files above (plus this release's version/changelog/roadmap files) changed.
+- A final whole-branch review confirmed cross-adapter consistency (byte-identical Claude/Codex hook changes; Pi's logic identical apart from its own pre-existing naming conventions) before merge.
+
+Risks:
+
+- Same statelessness tradeoff as the v0.5.15/v0.5.16 gates: the check re-reads `plan.md` on every call rather than tracking session state, by design.
+- A stray non-`## Step` section in a hand-edited `plan.md` (e.g. a `## Notes` section) would be counted by the rollup/gate the same as a step section — a known, accepted consequence of reusing `decisions.md`'s generic `## `-header splitter rather than a stricter step-only parser.
 
 ## Post-v0.5 Stabilization
 
