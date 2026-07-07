@@ -9,6 +9,7 @@ desktop.ini
 *.swp
 *.swo
 *~
+.claude/
 
 # Logs and temp
 *.log
