@@ -3,6 +3,7 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { runInstall } from "../lib/cli/install.mjs";
+import { runUpdate } from "../lib/cli/update.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [command, ...args] = process.argv.slice(2);
@@ -18,6 +19,9 @@ try {
 	switch (command) {
 		case "install":
 			runInstall(packageRoot, args);
+			break;
+		case "update":
+			runUpdate(packageRoot, args);
 			break;
 		default:
 			usage();
