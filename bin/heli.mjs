@@ -6,6 +6,7 @@ import { runInstall } from "../lib/cli/install.mjs";
 import { runUpdate } from "../lib/cli/update.mjs";
 import { runUninstall } from "../lib/cli/uninstall.mjs";
 import { runTarget } from "../lib/cli/target.mjs";
+import { runStatus } from "../lib/cli/status.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [command, ...args] = process.argv.slice(2);
@@ -30,6 +31,9 @@ try {
 			break;
 		case "target":
 			runTarget(args);
+			break;
+		case "status":
+			runStatus(args);
 			break;
 		default:
 			usage();
