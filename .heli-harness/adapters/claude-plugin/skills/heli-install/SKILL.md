@@ -18,6 +18,12 @@ This plugin has no JS runtime, so you run those same scripts yourself with your 
 this skill does not reimplement install logic, it just tells you how to drive the existing one
 safely.
 
+**Preferred method:** if Node.js is available, run `npx github:KJ-AIML/heli-harness install <path>`
+instead of steps 3-4 below — one command, no local checkout to clone or clean up, works the same
+with or without any AI tool loaded. Pin to an exact release with
+`npx github:KJ-AIML/heli-harness#vX.Y.Z install <path>`. Steps 1-2 and 5-6 below still apply either
+way. Fall back to steps 3-4's manual checkout-and-run flow only when Node/npx isn't available.
+
 ## 1. Check whether this folder is already a workspace
 
 Check whether `.heli-harness/HARNESS.md` already exists in the current directory.

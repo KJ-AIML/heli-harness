@@ -54,7 +54,7 @@ directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
 
-That's it — one prompt, one workspace. For manual/scripted installs, Pi/AXGA package mode, uninstall, and update, see **[INSTALL.md](INSTALL.md)**.
+That's it — one prompt, one workspace. Prefer a real command instead? `npx github:KJ-AIML/heli-harness install <path>` does the same thing with no AI tool involved (pin a release with `#v0.5.18`). For manual/scripted installs, Pi/AXGA package mode, uninstall, update, and the full CLI reference, see **[INSTALL.md](INSTALL.md)**.
 
 <details>
 <summary>What it feels like day-to-day</summary>

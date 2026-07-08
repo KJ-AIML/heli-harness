@@ -36,8 +36,9 @@
     "README.md"
   ],
   "scripts": {
-    "check": "node --check extensions/pi-extension.js && node scripts/smoke-extension-load.mjs && node scripts/smoke-update-preserves-local-state.mjs && node scripts/smoke-claude-adapter.mjs && node scripts/smoke-codex-adapter.mjs && node scripts/smoke-claude-plugin.mjs && node scripts/smoke-codex-plugin.mjs && node scripts/verify-adapters.mjs && node scripts/validate-release.mjs",
+    "check": "node --check extensions/pi-extension.js && node scripts/smoke-cli-install.mjs && node scripts/smoke-cli-update.mjs && node scripts/smoke-cli-uninstall.mjs && node scripts/smoke-cli-target.mjs && node scripts/smoke-cli-status.mjs && node scripts/smoke-extension-load.mjs && node scripts/smoke-update-preserves-local-state.mjs && node scripts/smoke-claude-adapter.mjs && node scripts/smoke-codex-adapter.mjs && node scripts/smoke-claude-plugin.mjs && node scripts/smoke-codex-plugin.mjs && node scripts/verify-adapters.mjs && node scripts/validate-release.mjs",
     "smoke": "node scripts/smoke-extension-load.mjs",
+    "smoke:cli": "node scripts/smoke-cli-install.mjs && node scripts/smoke-cli-update.mjs && node scripts/smoke-cli-uninstall.mjs && node scripts/smoke-cli-target.mjs && node scripts/smoke-cli-status.mjs",
     "smoke:update": "node scripts/smoke-update-preserves-local-state.mjs",
     "smoke:claude": "node scripts/smoke-claude-adapter.mjs",
     "smoke:codex": "node scripts/smoke-codex-adapter.mjs",

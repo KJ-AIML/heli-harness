@@ -16,6 +16,20 @@ directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
 
+## CLI (recommended if Node.js is available)
+
+```bash
+npx github:KJ-AIML/heli-harness install <path>
+npx github:KJ-AIML/heli-harness update <path>
+npx github:KJ-AIML/heli-harness target list
+npx github:KJ-AIML/heli-harness status
+```
+
+No install step of its own, no npm account, works identically with or without any AI tool loaded.
+Pin to a specific release with `npx github:KJ-AIML/heli-harness#v0.5.18 install <path>`. Everything
+below (manual scripts, per-adapter paths) remains available as an alternative for environments
+without Node.
+
 ## Manual workspace install
 
 ### Windows (PowerShell)
@@ -164,6 +178,12 @@ Agent packages may run with broad local access. Inspect source code before insta
 ## Uninstall
 
 ```bash
+npx github:KJ-AIML/heli-harness uninstall /path/to/workspace
+```
+
+Or with a local checkout:
+
+```bash
 # macOS/Linux
 ./uninstall.sh /path/to/workspace
 
@@ -176,6 +196,12 @@ Then remove adapter pointer files (`AGENTS.md`, `CLAUDE.md`) if no longer needed
 ## Update
 
 ```bash
+npx github:KJ-AIML/heli-harness update /path/to/workspace
+```
+
+Or with a local checkout:
+
+```bash
 # macOS/Linux
 ./update.sh /path/to/workspace
 
@@ -183,4 +209,4 @@ Then remove adapter pointer files (`AGENTS.md`, `CLAUDE.md`) if no longer needed
 .\update.ps1 -Parent "C:\your\workspace"
 ```
 
-State is preserved by default. Use `--reset-state` (bash) or `-ResetState` (PowerShell) to replace state from the repo checkout.
+State is preserved by default. Use `--reset-state` (CLI/bash) or `-ResetState` (PowerShell) to replace state from the repo checkout.

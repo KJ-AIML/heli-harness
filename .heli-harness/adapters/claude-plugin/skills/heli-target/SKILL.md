@@ -17,6 +17,11 @@ known-repo list in `.heli-harness/workspace/index.json`. This mirrors `/heli-tar
 Pi/AXGA extension (`extensions/pi-extension.js`); you perform the same steps yourself with your
 own file tools — there is no command runtime in this plugin.
 
+**Preferred method:** if Node.js is available, `npx github:KJ-AIML/heli-harness target
+list|show|set <repo>|clear` performs the same list/show/set/clear operations as a real,
+deterministic command instead of you replicating the steps below by hand. Fall back to the manual
+steps only when Node/npx isn't available.
+
 Treat `.heli-harness/workspace/index.json` as reviewable metadata and `target.json` as current
 state, not long-term memory. A missing or malformed file is a warning, not a hard failure (see
 `.heli-harness/workspace/README.md`).
