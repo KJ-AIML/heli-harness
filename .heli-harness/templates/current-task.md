@@ -10,6 +10,8 @@ Risk tier:
 
 Plan: n/a
 
+Step count: 0
+
 Files expected to change:
 - 
 

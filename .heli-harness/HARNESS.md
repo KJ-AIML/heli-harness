@@ -11,6 +11,7 @@ Heli-Harness is the source of truth for this parent workspace. It is tool-neutra
 - The agent must read the relevant profile in `.heli-harness/profiles/` when one exists.
 - If no profile exists yet for the identified target repo, the agent should create one from `.heli-harness/templates/repo-profile.md` before S2/S3 work, so branch policy, test commands, and other project-specific facts become durable and discoverable instead of verbal-only for this session.
 - A task that naturally breaks into 3+ discrete steps must have those steps recorded in `.heli-harness/state/plan.md` (from `.heli-harness/templates/plan.md`) before starting, with `Files` and `Verify` filled in per step. Immediately after a step's verification passes — not batched at the end — fill that step's `Evidence` (command + result, or commit SHA) and set `Status: complete` before starting the next step. On a failed verification, increment that step's `Attempts` and record what failed in `Evidence`, mirroring the Done Criteria rule below at step granularity. `current-task.md`'s `Plan:` field should point at `.heli-harness/state/plan.md` when one exists, or read `n/a` otherwise.
+- `current-task.md`'s `Step count` field is a self-reported number of discrete steps in the current task (0 if the task isn't naturally step-shaped). Set it honestly before starting, not as a formality — it is what lets session-start context warn when `Step count` is 3+ but `Plan` is still `n/a`, catching the exact case where a task obviously needed a plan.md and didn't get one. This is a warning, not a blocking gate: it surfaces the gap instead of leaving it silent, but it does not stop you from proceeding.
 - The agent must read policy overlays in `.heli-harness/policies/` when they exist.
 - The agent must read safety overlays in `.heli-harness/safety/` when they exist.
 - The agent must also read repo-local `AGENTS.md`, `CLAUDE.md`, `README*`, package files, build files, and test configuration where relevant.
@@ -42,6 +43,7 @@ Before non-trivial edits, update `.heli-harness/state/current-task.md` with:
 - mode
 - risk tier
 - plan
+- step count
 - files expected to change
 - dirty files observed
 - planned verification

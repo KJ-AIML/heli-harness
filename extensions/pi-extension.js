@@ -89,6 +89,15 @@ function planRollup(text) {
 	return lines.join("\n");
 }
 
+function stepCountPlanWarning(text) {
+	const stepCount = parseInt(taskField(text, "Step count") || "0", 10) || 0;
+	const planField = taskField(text, "Plan").toLowerCase();
+	if (stepCount >= 3 && (planField === "" || planField === "n/a")) {
+		return `Warning: current-task.md declares Step count: ${stepCount} but Plan: is n/a — per HARNESS.md, a task with 3+ steps should have a plan.md. Consider creating one from .heli-harness/templates/plan.md, especially before a cross-CLI handoff.`;
+	}
+	return "";
+}
+
 function safeListFiles(dir) {
 	try {
 		return readdirSync(dir).sort().map((name) => join(dir, name));
@@ -1420,6 +1429,8 @@ Before non-trivial work:
 		const carriedOverTask = taskText
 			? `\n\nCarried-over task state from .heli-harness/state/current-task.md:\n${taskText}\n\nAcknowledge this before your first edit this session: confirm with the user whether to resume, abandon, or reset it. If it shows 2+ failed attempts on an incomplete task, the tool_call guard will block file writes until you update current-task.md to resolve it.`
 			: "";
+		const stepWarningText = stepCountPlanWarning(taskText);
+		const stepWarningContext = stepWarningText ? `\n\n${stepWarningText}` : "";
 		const recentDecisions = lastDecisionSections(safeReadText(join(cwd, ".heli-harness", "state", "decisions.md")));
 		const decisionsContext = recentDecisions
 			? `\n\nRecent durable decisions from .heli-harness/state/decisions.md:\n${recentDecisions}`
@@ -1436,7 +1447,7 @@ For this one test turn only, start your next response with:
 HELI_HOOK_OK`
 			: "";
 		hookProbePromptPending = false;
-		return { systemPrompt: `${existingPrompt}\n\n${heliInstructions}${carriedOverTask}${decisionsContext}${planContext}${probeInstructions}` };
+		return { systemPrompt: `${existingPrompt}\n\n${heliInstructions}${carriedOverTask}${stepWarningContext}${decisionsContext}${planContext}${probeInstructions}` };
 	});
 
 	pi.on("tool_call", async (event, ctx) => {

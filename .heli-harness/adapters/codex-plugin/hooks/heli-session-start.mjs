@@ -14,6 +14,15 @@ function field(text, label) {
 	return match ? match[1].trim() : "";
 }
 
+function stepCountPlanWarning(text) {
+	const stepCount = parseInt(field(text, "Step count") || "0", 10) || 0;
+	const planField = field(text, "Plan").toLowerCase();
+	if (stepCount >= 3 && (planField === "" || planField === "n/a")) {
+		return `Warning: current-task.md declares Step count: ${stepCount} but Plan: is n/a — per HARNESS.md, a task with 3+ steps should have a plan.md. Consider creating one from .heli-harness/templates/plan.md, especially before a cross-CLI handoff.`;
+	}
+	return "";
+}
+
 function planRollup(text) {
 	if (!text) return "";
 	const sections = text.split(/(?=^## )/m).filter((part) => part.startsWith("## "));
@@ -56,6 +65,8 @@ if (existsSync(join(cwd, ".heli-harness", "HARNESS.md"))) {
 				"",
 				"Acknowledge this before your first edit this session: confirm with the user whether to resume, abandon, or reset it. If it shows a target-repo mismatch against workspace/target.json, or 2+ failed attempts on an incomplete task, the PreToolUse hook will block Edit/Write/apply_patch calls until you update current-task.md (or target.json) to resolve it.",
 			);
+			const stepWarning = stepCountPlanWarning(taskText);
+			if (stepWarning) lines.push("", stepWarning);
 		}
 	}
 

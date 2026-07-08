@@ -162,6 +162,30 @@ withFixtureWorkspace({
 	assert.match(context, /All steps complete\./);
 });
 
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+	".heli-harness/state/current-task.md": "# Current Task\n\nTarget repo: demo\n\nPlan: n/a\n\nStep count: 5\n\nCurrent status: in progress\n",
+}, (cwd) => {
+	const context = sessionContextInCwd(root, sessionScript, cwd);
+	assert.match(context, /Warning: current-task\.md declares Step count: 5 but Plan: is n\/a/);
+});
+
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+	".heli-harness/state/current-task.md": "# Current Task\n\nTarget repo: demo\n\nPlan: n/a\n\nStep count: 2\n\nCurrent status: in progress\n",
+}, (cwd) => {
+	const context = sessionContextInCwd(root, sessionScript, cwd);
+	assert.ok(!/Warning: current-task\.md declares Step count/.test(context), "below-threshold step count should not warn");
+});
+
+withFixtureWorkspace({
+	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+	".heli-harness/state/current-task.md": "# Current Task\n\nTarget repo: demo\n\nPlan: .heli-harness/state/plan.md\n\nStep count: 5\n\nCurrent status: in progress\n",
+}, (cwd) => {
+	const context = sessionContextInCwd(root, sessionScript, cwd);
+	assert.ok(!/Warning: current-task\.md declares Step count/.test(context), "a real Plan: value should not warn even at 3+ steps");
+});
+
 const claude = json(join(root, ".heli-harness", "adapters", "adapters.json")).adapters.find((adapter) => adapter.id === "claude");
 assert.equal(claude.status, "enforced");
 assert.ok(claude.evidence.includes(".heli-harness/adapters/claude-plugin/.claude-plugin/plugin.json"));

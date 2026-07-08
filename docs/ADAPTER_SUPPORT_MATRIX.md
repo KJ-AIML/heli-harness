@@ -59,6 +59,8 @@ All three adapters — Claude Code, Codex, and Pi (shared by AXGA) — also surf
 
 All three adapters — Claude Code, Codex, and Pi (shared by AXGA) — also surface a compact progress rollup from `.heli-harness/state/plan.md` (when present) in session-start context: the plan title, "N/M steps complete," and the current (first non-complete) step's title/status/attempts, plus an instruction to read the full file before resuming. The same stuck-task gate concept extends to step granularity: 2+ failed attempts on the current step blocks `Edit`/`Write`/`apply_patch` the same way a stuck whole-task does, until that step's `Status`/`Attempts` fields are updated. See `planRollup()` in `extensions/pi-extension.js` and the equivalent logic in each plugin's `hooks/heli-session-start.mjs` and `hooks/heli-pre-tool-use.mjs`.
 
+All three adapters also warn (session-start only, not a blocking gate) when `current-task.md` declares `Step count: N` at 3 or more but `Plan:` is still `n/a` — the case where a task obviously needed a `plan.md` and never got one, previously invisible anywhere in the system. See `stepCountPlanWarning()` in `extensions/pi-extension.js` and the equivalent logic in each plugin's `hooks/heli-session-start.mjs`.
+
 ## Claims Policy
 
 Claims require evidence.

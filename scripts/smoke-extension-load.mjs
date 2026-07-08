@@ -736,4 +736,45 @@ const completePrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
 assert.match(completePrompt.systemPrompt, /Progress: 1\/1 steps complete/);
 assert.match(completePrompt.systemPrompt, /All steps complete\./);
 
+// Step count / Plan warning: 3+ declared steps with no plan.md should warn;
+// below-threshold or a real Plan: value should not.
+writeFileSync(join(tempDir, ".heli-harness", "state", "current-task.md"), `# Current Task
+
+Target repo: demo
+
+Plan: n/a
+
+Step count: 5
+
+Current status: in progress
+`);
+const warnPrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
+assert.match(warnPrompt.systemPrompt, /Warning: current-task\.md declares Step count: 5 but Plan: is n\/a/);
+
+writeFileSync(join(tempDir, ".heli-harness", "state", "current-task.md"), `# Current Task
+
+Target repo: demo
+
+Plan: n/a
+
+Step count: 2
+
+Current status: in progress
+`);
+const belowThresholdPrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
+assert.ok(!/Warning: current-task\.md declares Step count/.test(belowThresholdPrompt.systemPrompt), "below-threshold step count should not warn");
+
+writeFileSync(join(tempDir, ".heli-harness", "state", "current-task.md"), `# Current Task
+
+Target repo: demo
+
+Plan: .heli-harness/state/plan.md
+
+Step count: 5
+
+Current status: in progress
+`);
+const realPlanPrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
+assert.ok(!/Warning: current-task\.md declares Step count/.test(realPlanPrompt.systemPrompt), "a real Plan: value should not warn even at 3+ steps");
+
 console.log("extension smoke ok");
