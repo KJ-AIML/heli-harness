@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -347,6 +347,10 @@ None.
 
 const tempExtension = join(tempDir, "extensions", "pi-extension.mjs");
 copyFileSync(join(root, "extensions", "pi-extension.js"), tempExtension);
+// pi-extension.js imports ../lib/cli/install.mjs and ../lib/cli/update.mjs;
+// copy the real lib/ tree alongside the copied extension so those relative
+// imports resolve from tempDir the same way they do in the real repo.
+cpSync(join(root, "lib"), join(tempDir, "lib"), { recursive: true });
 process.chdir(tempDir);
 
 const events = [];
@@ -386,6 +390,8 @@ assert.deepEqual(events.map((event) => event.name), [
 assert.deepEqual(commands.map((command) => command.name), [
 	"heli-install",
 	"hh-install",
+	"heli-update",
+	"hh-update",
 	"hh-status",
 	"heli-help",
 	"heli-init",
@@ -776,5 +782,37 @@ Current status: in progress
 `);
 const realPlanPrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
 assert.ok(!/Warning: current-task\.md declares Step count/.test(realPlanPrompt.systemPrompt), "a real Plan: value should not warn even at 3+ steps");
+
+// heli-update is registered and, when confirmed, reaches the shared
+// lib/cli/update.mjs module (already fully tested on its own in
+// scripts/smoke-cli-update.mjs — this only proves the wiring, not the
+// preserve-dirs logic again). In this fixture, process.chdir(tempDir) was
+// called once above and the extension was copied into that same tempDir,
+// so getPackageRoot() and process.cwd() resolve to the identical
+// directory — the same latent gap a maintainer would hit running
+// /heli-update from inside a heli-harness checkout where the package root
+// and workspace are the same directory. That means a full successful
+// round-trip can't be driven through this exact fixture; instead assert
+// that the handler surfaces update()'s new clear same-directory error
+// (proving it calls the real shared module, not a stub) rather than
+// crashing or leaving an unhandled rejection.
+const updateCommand = commands.find((command) => command.name === "heli-update");
+assert.ok(updateCommand, "heli-update should be registered");
+const confirmCtx = {
+	ui: {
+		notify(message, level) { notifications.push({ message, level }); },
+		setStatus() {},
+		async confirm() { return true; },
+	},
+};
+await updateCommand.options.handler({}, confirmCtx);
+assert.ok(
+	notifications.some((item) => item.message === "Update failed" && item.level === "error"),
+	"heli-update handler should report failure when source and target collide in this fixture",
+);
+assert.ok(
+	notifications.some((item) => item.message.includes("Source and target are the same directory") && item.level === "error"),
+	"heli-update handler should surface update()'s clear same-directory error, not a raw fs.cpSync crash",
+);
 
 console.log("extension smoke ok");

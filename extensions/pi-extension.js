@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, dirname, resolve, relative } from "node:path";
-import { execSync } from "node:child_process";
-import { platform } from "node:os";
 import { fileURLToPath } from "node:url";
+import { install } from "../lib/cli/install.mjs";
+import { update } from "../lib/cli/update.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -124,15 +124,18 @@ function isDirectory(path) {
 
 function runInstaller(cwd) {
 	const packageRoot = getPackageRoot();
-	const isWindows = platform() === "win32";
 	try {
-		if (isWindows) {
-			const script = join(packageRoot, "install.ps1");
-			execSync(`powershell -ExecutionPolicy Bypass -File "${script}" -Parent "${cwd}"`, { stdio: "inherit", cwd: packageRoot });
-		} else {
-			const script = join(packageRoot, "install.sh");
-			execSync(`bash "${script}" "${cwd}"`, { stdio: "inherit", cwd: packageRoot });
-		}
+		install(join(packageRoot, ".heli-harness"), cwd);
+		return { success: true };
+	} catch (error) {
+		return { success: false, error: String(error) };
+	}
+}
+
+function runUpdater(cwd) {
+	const packageRoot = getPackageRoot();
+	try {
+		update(join(packageRoot, ".heli-harness"), cwd);
 		return { success: true };
 	} catch (error) {
 		return { success: false, error: String(error) };
@@ -1116,6 +1119,32 @@ export default function heliHarnessExtension(pi) {
 		}
 	};
 
+	const updateHandler = async (_args, ctx) => {
+		const cwd = process.cwd();
+		if (!detectWorkspaceHarness(cwd)) {
+			notify(ctx, "No workspace harness installed in this folder — run /heli-install first", "warning");
+			return;
+		}
+		let confirmed = false;
+		if (canConfirm(ctx)) {
+			confirmed = await getUi(ctx).confirm("Update Heli-Harness workspace harness in current folder?", "This overwrites shipped defaults under .heli-harness/ while preserving profiles/, workspace/, policies/, safety/, and state/.");
+		}
+		if (!confirmed) {
+			notify(ctx, "Update cancelled", "info");
+			return;
+		}
+		notify(ctx, "Updating workspace harness...", "info");
+		const result = runUpdater(cwd);
+		if (result.success) {
+			notify(ctx, "Workspace harness updated successfully", "success");
+			notify(ctx, "Preserved: profiles/, workspace/, policies/, safety/, state/", "info");
+			syncStatus(ctx);
+		} else {
+			notify(ctx, "Update failed", "error");
+			notify(ctx, result.error || "Unknown error", "error");
+		}
+	};
+
 	const statusHandler = async (_args, ctx) => {
 		const cwd = process.cwd();
 		const harnessPath = join(cwd, ".heli-harness");
@@ -1608,6 +1637,8 @@ HELI_HOOK_OK`
 
 	pi.registerCommand("heli-install", { description: "Install Heli-Harness workspace harness into current folder", handler: installHandler });
 	pi.registerCommand("hh-install", { description: "Alias for /heli-install", handler: installHandler });
+	pi.registerCommand("heli-update", { description: "Update Heli-Harness workspace harness in current folder", handler: updateHandler });
+	pi.registerCommand("hh-update", { description: "Alias for /heli-update", handler: updateHandler });
 	pi.registerCommand("hh-status", { description: "Report Heli-Harness status in current folder", handler: statusHandler });
 	pi.registerCommand("heli-help", { description: "Show Heli-Harness commands and what they do", handler: workflowHandler("heli-help", "Heli-Harness help") });
 	pi.registerCommand("heli-init", { description: "Bootstrap a repo profile for a target repo", handler: workflowHandler("heli-init", "repo profile bootstrap") });
