@@ -69,6 +69,10 @@ Do not mark a task complete because "most tests pass" or "it looks right." Run t
 
 ## Skill Routing
 
+Skills live as plain files under `.heli-harness/skills/`. On Claude Code and Codex native plugin installs, these are **not** registered as native Skill-tool entries — the plugin's own skill surface is deliberately limited to `heli-governance`/`heli-target`/`heli-install`. Reading a `.heli-harness/skills/<name>/SKILL.md` file directly with your file-read tool, when its trigger condition below applies, **is** the correct mechanism on those adapters — it is not a workaround, a fallback, or a lesser substitute for a native skill call. Do not skip a matching skill because no Skill-tool entry exists for it.
+
+If a trigger condition applies, this is not optional or discretionary:
+
 - Use `skills/flow` for ambiguous task routing.
 - Use `skills/engineering` for risk tiering and done criteria.
 - Use `skills/verify-premise` before fixing a claimed bug or acting on a disputed premise.
@@ -79,6 +83,18 @@ Do not mark a task complete because "most tests pass" or "it looks right." Run t
 - Use `skills/test-coverage` to identify missing or weak tests.
 - Use `skills/test-validation` to validate repo profile commands, classify failures, and confirm safe non-mutating verification.
 - Use `skills/branch`, `skills/release`, `skills/deps`, `skills/incident`, and `skills/gh-write` only when their scoped operation applies.
+
+Record which skills actually applied (or "none applied" if genuinely none did) in `current-task.md`'s `Relevant skills consulted` field — that field existing is what makes a skipped skill a visible blank instead of a silent omission.
+
+### Red flags — these mean stop and check for a matching skill
+
+| Thought | Reality |
+|---------|---------|
+| "This is a simple question, I don't need the skill" | Simple tasks are exactly where this discipline drifts first. Check anyway. |
+| "I'll just fix this one thing directly" | That is what `skills/fix-loop`/`skills/debug` are for once you're past a first attempt. |
+| "There's no Skill-tool entry for this, so it must not apply here" | It applies. Reading the file directly is the mechanism on this adapter, not a fallback. |
+| "I already know what this skill says" | Skills evolve. Read the current file instead of relying on memory of it. |
+| "This will slow me down" | An unaudited diff, an unverified fix, or a skipped impact check costs more later than reading one file now. |
 
 ## Adapter Boundary
 

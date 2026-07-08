@@ -19,6 +19,8 @@ Heli-Harness is the workspace governance source of truth. Claude Code must treat
 
 Before treating any guardrail here as enforced rather than advisory, check whether the native plugin's `SessionStart` hook actually ran this session: look for injected context starting with "Heli-Harness plugin context:" at the start of the conversation. If it is absent, the plugin is not registered or loaded — `git push`/`.env`-write/task-state-gate denials will not fire, and every rule in this file is advisory only. Say so explicitly to the user before doing S2/S3 work, and rely on discipline rather than enforcement until the plugin is properly installed.
 
+If that marker **is** present, treat the full guardrail surface — including `PreToolUse` denials — as live, even if you never actually see one fire this session. A plugin's hooks load atomically from the same manifest: there is no state where `SessionStart` runs but `PreToolUse` doesn't. Never having triggered a deny condition (no `git push` attempted, no stuck task, no target mismatch) is not evidence that denials are inactive — it only means nothing this session met the condition to test it.
+
 ## Target repo discipline
 
 - Do not modify unrelated repos.

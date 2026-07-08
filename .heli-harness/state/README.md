@@ -10,3 +10,5 @@ This directory holds shared parent-workspace state.
 
 Do not fill `runs/` or `reports/` with fake data.
 
+When the same verification facts (test counts, version numbers, coverage figures) would otherwise get hand-retyped into more than one of `current-task.md`, `plan.md`, and `decisions.md`, reference one canonical location (e.g. "see current-task.md's Planned verification output for the full count") instead of restating the numbers again. Retyping the same facts by hand in multiple places is a real, undetectable drift risk, not just redundant text — nothing catches it if one copy silently goes stale or gets a digit wrong while the others don't.
+
