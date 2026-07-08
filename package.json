@@ -10,6 +10,9 @@
     "multi-agent"
   ],
   "license": "MIT",
+  "bin": {
+    "heli": "bin/heli.mjs"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/KJ-AIML/heli-harness.git"
@@ -18,7 +21,9 @@
     ".heli-harness/",
     "assets/",
     "benchmarks/",
+    "bin/",
     "extensions/",
+    "lib/",
     "scripts/",
     "install.sh",
     "install.ps1",
