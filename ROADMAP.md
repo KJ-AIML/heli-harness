@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.17
+## Current Baseline: v0.5.18
 
-Latest stable release: `v0.5.17`
+Latest stable release: `v0.5.18`
 
-Release commit: pending tag `v0.5.17`
+Release commit: pending tag `v0.5.18`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.17>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.18>
 
 Stable behavior in this baseline:
 
@@ -100,6 +100,10 @@ Stable behavior in this baseline:
   - all three adapters surface a compact rollup (title, "N/M steps complete", current step) at session start when present, nothing when absent
   - all three adapters extend the whole-task stuck gate to step granularity: 2+ failed attempts on the current step blocks edits until resolved, mirroring the v0.5.15 gate; writes to `plan.md` itself stay exempt
   - `current-task.md` gained a `Plan:` field pointing at `plan.md` when one exists
+- Skill discipline & step-count warning:
+  - HARNESS.md's Skill Routing rewritten as mandatory invocation with a Red Flags table; explicitly states that reading `.heli-harness/skills/*/SKILL.md` directly is correct on Claude/Codex plugin installs, not a fallback
+  - `current-task.md` gained a self-reported `Step count: N` field; session-start context warns (not a gate) when `Step count` is 3+ but `Plan:` is still `n/a`
+  - the enforcement self-check now states that `PreToolUse` is equally wired whenever `SessionStart`'s marker fired, since a plugin's hooks load atomically
 
 ## Product Positioning
 
@@ -181,6 +185,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.15 | Session Task Gate | Close the cross-CLI handoff gap: surface real `current-task.md` content at session start and block edits when carried-over task state is stuck or target-mismatched, until it's resolved. |
 | v0.5.16 | Cross-CLI Context Parity | Bring Pi/AXGA up to the same context-continuity level as Claude/Codex (v0.5.15), and add `decisions.md` surfacing across all three adapters. |
 | v0.5.17 | Cross-CLI Plan Ledger | Add `.heli-harness/state/plan.md`, a self-contained step-by-step plan ledger surfaced and gated identically across all three adapters, closing the remaining gap in cross-CLI mid-task handoff. |
+| v0.5.18 | Skill Discipline & Step-Count Warning | Rewrite Skill Routing as mandatory invocation, add a self-reported `Step count` field with a session-start warning when it's 3+ but no plan.md exists, and sharpen the enforcement self-check's inference about `PreToolUse` being wired alongside `SessionStart`. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -1083,6 +1088,47 @@ Risks:
 
 - Same statelessness tradeoff as the v0.5.15/v0.5.16 gates: the check re-reads `plan.md` on every call rather than tracking session state, by design.
 - A stray non-`## Step` section in a hand-edited `plan.md` (e.g. a `## Notes` section) would be counted by the rollup/gate the same as a step section — a known, accepted consequence of reusing `decisions.md`'s generic `## `-header splitter rather than a stricter step-only parser.
+
+## v0.5.18 - Skill Discipline & Step-Count Warning (Implemented)
+
+Goal:
+Close two gaps surfaced by real, evidence-based feedback from two independent projects using Heli-Harness: skills that never get invoked because the plugin adapters don't expose them as native Skill-tool entries, and multi-step tasks that never get a `plan.md` because nothing ever prompted for one — the exact case `readPlanGate()`'s missing-file no-op is architecturally unable to catch.
+
+Rationale:
+The skill-routing gap was independently rediscovered by two unrelated real sessions, not hypothesized — strong enough signal that the fix (already scoped, never implemented) should land now rather than continue being deferred. The `Step count`/`plan.md` gap is the same root problem the whole v0.5.15-v0.5.17 arc has been closing — a documented "must" rule with no forcing function — applied one level earlier than the plan-ledger gate itself: catching the missing declaration, not just a malformed one.
+
+Scope:
+
+- `HARNESS.md`'s Skill Routing section rewritten with mandatory-invocation framing and a Red Flags rationalization table (borrowed from superpowers' `using-superpowers` skill), and states explicitly that reading `.heli-harness/skills/*/SKILL.md` directly is the correct mechanism on Claude/Codex plugin installs, not a workaround.
+- `claude/CLAUDE.md` and `codex/AGENTS.md`'s enforcement self-check extended with the inference that `PreToolUse` is equally wired whenever `SessionStart`'s marker fired, since a plugin's hooks load atomically from the same manifest.
+- `state/README.md` gained a dedup nudge for repeated verification facts across `current-task.md`/`plan.md`/`decisions.md`.
+- `current-task.md` template and HARNESS.md's Required Task State list gained a self-reported `Step count: N` field.
+- All three adapters (Claude-plugin, Codex-plugin, Pi/AXGA) warn at session start — not a blocking gate — when `Step count` is 3+ but `Plan:` is still `n/a`.
+
+Non-goals:
+
+- No hard `PreToolUse`/`tool_call` block on the `Step count`/`Plan` condition — a new, self-reported field with no track record yet; a false-positive block would cost more than the gap it closes.
+- No change to `readPlanGate()`'s existing missing-file behavior (`if (!existsSync(planPath)) return null`) — this remains consistent with `decisions.md`'s own nothing-if-missing precedent; the new warning is additive context, not a gate change.
+- No attempt to make Claude/Codex's plugin skill surface natively expose `.heli-harness/skills/*` as Skill-tool entries — structurally not how those plugins' manifests work; the fix is in the instruction, not the mechanism.
+
+Deliverables:
+
+- `HARNESS.md`, `claude/CLAUDE.md`, `codex/AGENTS.md`, `state/README.md`, `templates/current-task.md`.
+- `heli-session-start.mjs` in both plugin copies (Claude, Codex).
+- `extensions/pi-extension.js` (`stepCountPlanWarning()`, wired into `before_agent_start`).
+- New fixture-based smoke coverage (positive, below-threshold, and real-plan-declared cases) in `smoke-claude-plugin.mjs`, `smoke-codex-plugin.mjs`, `smoke-extension-load.mjs`.
+- `docs/ADAPTER_SUPPORT_MATRIX.md`.
+
+Acceptance criteria:
+
+- `npm run check` passes.
+- `git status` shows only the files above (plus this release's version/changelog/roadmap files) changed.
+- The two plugin hooks' `heli-session-start.mjs` copies remain byte-identical.
+
+Risks:
+
+- The `Step count`/`Plan` warning depends on honest self-reporting with no verification mechanism of its own — an agent that never fills in `Step count` at all defaults to 0 and produces no warning, same as a genuinely single-step task. Accepted: a warning that sometimes under-fires because of missing self-reporting is still strictly better than the previous state, where the condition produced zero signal under any circumstance.
+- Implemented directly by the controller rather than through the worktree/subagent-driven-development pipeline used for v0.5.17, given the meaningfully lower blast radius (no new state file, no `PreToolUse` changes) — reviewed only by the controller's own re-verification, not a second independent reviewer.
 
 ## Post-v0.5 Stabilization
 

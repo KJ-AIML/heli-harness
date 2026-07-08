@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.5.18 - Skill Discipline & Step-Count Warning
+
+### Added
+
+- `current-task.md` gains a self-reported `Step count: N` field, mirroring `Failed attempts count`. Session-start context (Claude-plugin, Codex-plugin, Pi/AXGA) now warns — not a blocking gate — when `Step count` is 3+ but `Plan:` is still `n/a`: the exact case where a task obviously needed a `plan.md` and never got one, previously invisible everywhere in the system.
+- `claude/CLAUDE.md` and `codex/AGENTS.md`'s enforcement self-check now also states the inference that `PreToolUse` is equally wired whenever the `SessionStart` marker fired, since a plugin's hooks load atomically from the same manifest — never having triggered a deny condition isn't evidence the blocking side is inactive.
+
+### Changed
+
+- `HARNESS.md`'s Skill Routing section rewritten with mandatory-invocation framing and a Red Flags rationalization table (borrowed from superpowers' `using-superpowers` skill), and now states explicitly that reading a `.heli-harness/skills/*/SKILL.md` file directly is the correct mechanism on Claude/Codex plugin installs — not a fallback — since those adapters never expose the shared skills directory as native Skill-tool entries.
+- `state/README.md` gains a dedup nudge: cross-reference one canonical location for repeated verification facts (test counts, version numbers) instead of hand-retyping them across `current-task.md`/`plan.md`/`decisions.md`.
+
+### Notes
+
+- All four changes came from evidence-based feedback on two independent real projects using Heli-Harness. The skill-routing gap was found twice, independently, by two unrelated sessions — strong enough signal to fix immediately rather than continue deferring it.
+- The `Step count`/`Plan` warning is deliberately a warning, not a `PreToolUse` deny: it's a new, self-reported field with no track record yet, and a false-positive block would cost more than the gap it closes. `readPlanGate()`'s existing `if (!existsSync(planPath)) return null` (matching `decisions.md`'s own nothing-if-missing precedent) is unchanged — this is additive context, not a new gate.
+- Implemented directly rather than through the worktree/subagent-driven-development pipeline used for v0.5.17: no new state file, no `PreToolUse` changes, just an addition to the existing session-start injection — meaningfully lower-stakes than the plan-ledger feature itself.
+
 ## v0.5.17 - Cross-CLI Plan Ledger
 
 ### Added
