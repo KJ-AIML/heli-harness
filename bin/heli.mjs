@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { runInstall } from "../lib/cli/install.mjs";
 import { runUpdate } from "../lib/cli/update.mjs";
 import { runUninstall } from "../lib/cli/uninstall.mjs";
+import { runTarget } from "../lib/cli/target.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [command, ...args] = process.argv.slice(2);
@@ -26,6 +27,9 @@ try {
 			break;
 		case "uninstall":
 			runUninstall(args);
+			break;
+		case "target":
+			runTarget(args);
 			break;
 		default:
 			usage();
