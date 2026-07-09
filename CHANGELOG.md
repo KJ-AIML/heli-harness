@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.5.19 - Standalone `heli` CLI
+
+### Added
+
+- New standalone `heli` CLI (`bin/heli.mjs` + `lib/cli/{install,update,uninstall,target,status}.mjs`), distributed via `npx github:KJ-AIML/heli-harness <command> <path>` — no npm registry publish, no new dependencies, hand-rolled argv dispatch. Covers `install`, `update` (with `--reset-state`), `uninstall`, `target list|show|set|clear` (`set` gates on `--confirm` when switching an already-selected target, replacing the skill's conversational confirmation step), and a new read-only `status` command with no prior equivalent.
+- This is the one real, tested implementation each surface now points at, replacing what were previously N independently drifting copies of the same install/update logic: Pi/AXGA's extension (which had install but, until now, no update command at all), Claude/Codex's prose skills (manual steps for an agent to replicate by hand), and the raw `.ps1`/`.sh` scripts.
+- `extensions/pi-extension.js`'s `/heli-install` now calls the CLI's `install()` directly instead of shelling out to `install.ps1`/`.sh`; a new `/heli-update` command (`/hh-update` alias) calls `update()` the same way, closing the "Pi has no update command" gap.
+- Both `heli-install`/`heli-target` skill pairs (Claude, Codex plugins), `README.md`, and `INSTALL.md` document the CLI as the preferred method, keeping the existing manual/script-based instructions as the documented fallback for Node-less environments.
+- Subprocess-level smoke test (`scripts/smoke-cli-entry.mjs`) spawns the real `bin/heli.mjs` binary to prove its argv dispatch and self-location (`fileURLToPath(import.meta.url)`) work end-to-end, distinct from the 5 module-level smoke tests which exercise `lib/cli/*.mjs` directly; `bin/heli.mjs` is now covered by `node --check` in the `check` script.
+
+### Fixed
+
+- `install()`/`update()` now guard against a self-collision case (the package root and the install target resolving to the same directory — e.g. running the CLI from inside a local heli-harness checkout as its own target) with a clear, specific error instead of letting Node's raw `fs.cpSync` `ERR_FS_CP_EINVAL` surface.
+
+### Notes
+
+- Distribution is git-URL/npx only, deliberately not published to the npm registry, to avoid the ongoing maintenance cost of npm publishing (account, 2FA, a publish step every release).
+- Every low-level `lib/cli/*.mjs` function takes explicit paths and never reads `process.cwd()` internally — only the `run*(packageRoot, args)`/`run*(args)` CLI-facing wrappers touch argv/cwd defaults. `extensions/pi-extension.js` importing directly from `../lib/cli/*.mjs` is a deliberate exception to this codebase's usual small-duplicated-pure-function convention, since both live in the same repo checkout Pi loads directly.
+- Existing `.ps1`/`.sh` scripts are completely untouched and remain the documented fallback; this release is purely additive.
+- A pre-existing, out-of-scope gap found during this work: Pi's `/heli-target set` handler still overwrites `target.json` unconditionally with no mismatch confirmation, unlike this new CLI's `--confirm` gate and the documented Claude/Codex skill behavior — tracked as a separate future follow-up, not fixed here.
+
 ## v0.5.18 - Skill Discipline & Step-Count Warning
 
 ### Added
