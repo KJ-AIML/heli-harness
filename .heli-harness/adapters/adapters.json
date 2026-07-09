@@ -1,5 +1,5 @@
 {
-  "version": "0.5.20",
+  "version": "0.5.21",
   "taxonomy": {
     "enforced": "Runtime hook/tool-call guard is verified and tested. Smoke test or interactive test exists.",
     "verified-plugin-wired": "Native plugin artifacts are shipped and smoke-tested, but runtime enforcement is not proven.",
@@ -188,15 +188,139 @@
       ]
     },
     {
+      "id": "grok",
+      "name": "Grok Build",
+      "status": "enforced",
+      "evidence": [
+        ".heli-harness/adapters/grok/GROK.md",
+        ".heli-harness/adapters/grok/install.md",
+        ".heli-harness/adapters/grok-plugin/.claude-plugin/plugin.json",
+        ".heli-harness/adapters/grok-plugin/.grok-plugin/plugin.json",
+        ".heli-harness/adapters/grok-plugin/hooks/hooks.json",
+        ".heli-harness/adapters/grok-plugin/hooks/heli-pre-tool-use.mjs",
+        ".heli-harness/adapters/grok-plugin/hooks/heli-session-start.mjs",
+        ".heli-harness/adapters/grok-plugin/install-user-hooks.mjs",
+        "scripts/smoke-grok-adapter.mjs",
+        "scripts/smoke-grok-plugin.mjs",
+        "scripts/live-verify-grok-hooks.mjs"
+      ],
+      "verification": [
+        "node scripts/smoke-grok-adapter.mjs",
+        "node scripts/smoke-grok-plugin.mjs",
+        "node scripts/live-verify-grok-hooks.mjs",
+        "node scripts/verify-adapters.mjs"
+      ],
+      "enforcementSurfaces": [
+        "User hooks in ~/.grok/hooks/heli-harness.json via install-user-hooks.mjs",
+        "Live-verified: real grok -p denies git push (debug-file shows pre_tool_use deny)",
+        "Plugin install for skills (grok plugin install --trust)",
+        "Synthetic PreToolUse smokes"
+      ],
+      "limitations": [
+        "Plugin has_hooks inventory does not wire runtime PreToolUse on Grok 0.2.x — user hooks are required for enforcement",
+        "SessionStart hooks must not set matcher (Grok v0)",
+        "Guard rules cover git push, .env writes, stuck/mismatched task gates",
+        "Not a sandbox"
+      ]
+    },
+    {
       "id": "opencode",
       "name": "OpenCode",
-      "status": "planned",
-      "evidence": [],
-      "verification": [],
-      "enforcementSurfaces": [],
+      "status": "enforced",
+      "evidence": [
+        ".heli-harness/adapters/opencode/OPENCODE.md",
+        ".heli-harness/adapters/opencode/install.md",
+        ".heli-harness/adapters/opencode-plugin/plugin.json",
+        ".heli-harness/adapters/opencode-plugin/hooks/hooks.json",
+        ".heli-harness/adapters/opencode-plugin/heli-harness.mjs",
+        "scripts/smoke-opencode-adapter.mjs",
+        "scripts/smoke-opencode-plugin.mjs",
+        "scripts/live-verify-opencode-plugin.mjs"
+      ],
+      "verification": [
+        "node scripts/smoke-opencode-adapter.mjs",
+        "node scripts/smoke-opencode-plugin.mjs",
+        "node scripts/live-verify-opencode-plugin.mjs",
+        "node scripts/verify-adapters.mjs"
+      ],
+      "enforcementSurfaces": [
+        "Local JS plugin tool.execute.before throws to block",
+        "Live-verified: opencode run loads plugin and reports Heli-Harness blocks git push",
+        "opencode.json plugin array registration"
+      ],
       "limitations": [
-        "No implementation yet",
-        "Mentioned in ROADMAP.md as planned"
+        "Must register plugin in opencode.json (auto-scan of .opencode/plugins alone was empty on 1.2.26)",
+        "Not a sandbox",
+        "experimental.session.compacting context only when host supports it"
+      ]
+    },
+    {
+      "id": "kimi",
+      "name": "Kimi Code CLI",
+      "status": "enforced",
+      "evidence": [
+        ".heli-harness/adapters/kimi/KIMI.md",
+        ".heli-harness/adapters/kimi/install.md",
+        ".heli-harness/adapters/kimi-plugin/plugin.json",
+        ".heli-harness/adapters/kimi-plugin/config.toml.example",
+        ".heli-harness/adapters/kimi-plugin/install-user-hooks.mjs",
+        ".heli-harness/adapters/kimi-plugin/hooks/hooks.json",
+        ".heli-harness/adapters/kimi-plugin/hooks/heli-pre-tool-use.mjs",
+        ".heli-harness/adapters/kimi-plugin/hooks/heli-session-start.mjs",
+        "scripts/smoke-kimi-adapter.mjs",
+        "scripts/smoke-kimi-plugin.mjs",
+        "scripts/live-verify-kimi-hooks.mjs"
+      ],
+      "verification": [
+        "node scripts/smoke-kimi-adapter.mjs",
+        "node scripts/smoke-kimi-plugin.mjs",
+        "node scripts/live-verify-kimi-hooks.mjs",
+        "node scripts/verify-adapters.mjs"
+      ],
+      "enforcementSurfaces": [
+        "config.toml [[hooks]] PreToolUse via install-user-hooks.mjs",
+        "Live-verified: kimi -p reports Heli-Harness blocks git push",
+        "kimi doctor config validates TOML"
+      ],
+      "limitations": [
+        "Requires install-user-hooks.mjs (or manual merge) into ~/.kimi-code/config.toml",
+        "kimi -p cannot combine with --yolo/--auto on current CLI",
+        "Not a sandbox"
+      ]
+    },
+    {
+      "id": "antigravity",
+      "name": "Antigravity CLI",
+      "status": "verified-plugin-wired",
+      "evidence": [
+        ".heli-harness/adapters/antigravity/ANTIGRAVITY.md",
+        ".heli-harness/adapters/antigravity/README.md",
+        ".heli-harness/adapters/antigravity/install.md",
+        ".heli-harness/adapters/antigravity-plugin/plugin.json",
+        ".heli-harness/adapters/antigravity-plugin/hooks.json",
+        ".heli-harness/adapters/antigravity-plugin/hooks/hooks.json",
+        ".heli-harness/adapters/antigravity-plugin/hooks/heli-pre-tool-use.mjs",
+        ".heli-harness/adapters/antigravity-plugin/hooks/heli-session-start.mjs",
+        ".heli-harness/adapters/shared/claude-style-pre-tool-use.mjs",
+        ".heli-harness/adapters/shared/claude-style-session-start.mjs",
+        "scripts/smoke-antigravity-adapter.mjs",
+        "scripts/smoke-antigravity-plugin.mjs"
+      ],
+      "verification": [
+        "node scripts/smoke-antigravity-adapter.mjs",
+        "node scripts/smoke-antigravity-plugin.mjs",
+        "node scripts/verify-adapters.mjs"
+      ],
+      "enforcementSurfaces": [
+        "Pointer adapter ANTIGRAVITY.md",
+        "Plugin marker plugin.json + hooks.json",
+        "Synthetic PreToolUse/SessionStart smokes using Antigravity tool names"
+      ],
+      "limitations": [
+        "No live agy CLI denial proof yet — status is verified-plugin-wired, not enforced",
+        "Plugin staging path depends on Antigravity install layout",
+        "Hooks invoke workspace-relative shared scripts (run from parent workspace)",
+        "Not a sandbox"
       ]
     },
     {

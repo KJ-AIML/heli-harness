@@ -18,10 +18,14 @@ These expose harness rules/skills to a specific agent host. They do not replace 
 
 | Host | Command | Status | What it installs | Notes |
 |------|---------|--------|------------------|-------|
-| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.20` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.20` | **supported** | 23 skills + lightweight extension (startup status, `/heli-install`, `/hh-install`, `/hh-status`, `/heli-target`, `/heli-lock`, `/heli-hooks`, `/heli-validate lint`, command-rule guard, safety classifier) | Does not auto-create `.heli-harness/`. Use `/heli-install` or `/hh-install` to set up workspace. Use the v0.5.20 tag after release |
-| Codex | Workspace `AGENTS.md` -> `.heli-harness/adapters/codex/AGENTS.md`; plugin artifacts in `.heli-harness/adapters/codex-plugin/` | **verified-plugin-wired** | Pointer adapter plus `.codex-plugin/plugin.json`, hooks, skills, plugin `AGENTS.md`, and smoke tests | No live runtime hook enforcement proven. Plugin install/trust remains host-controlled |
-| Claude Code | Workspace `CLAUDE.md` -> `.heli-harness/adapters/claude/CLAUDE.md`; plugin artifacts in `.heli-harness/adapters/claude-plugin/` | **verified-plugin-wired** | Pointer adapter plus `.claude-plugin/plugin.json`, hooks, skills, and smoke tests | No live runtime hook enforcement proven. Plugin install/trust remains host-controlled |
-| Cursor | Workspace `.cursor/rules/` â†’ `.heli-harness/adapters/cursor/CURSOR.md` | **supported** | Adapter created by workspace installer | Requires workspace install first |
+| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.21` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.21` | **supported** | 23 skills + lightweight extension (startup status, `/heli-install`, `/hh-install`, `/hh-status`, `/heli-target`, `/heli-lock`, `/heli-hooks`, `/heli-validate lint`, command-rule guard, safety classifier) | Does not auto-create `.heli-harness/`. Use `/heli-install` or `/hh-install` to set up workspace. Use the v0.5.21 tag after release |
+| Cursor | Workspace `.cursor/rules/` → `.heli-harness/adapters/cursor/CURSOR.md` | **supported** | Adapter created by workspace installer | Requires workspace install first |
+| Grok Build | `node adapters/grok-plugin/install-user-hooks.mjs` (+ optional `grok plugin install … --trust`) | **enforced** | User hooks block git push live; plugin skills optional | User hooks required — plugin inventory hooks alone do not fire on Grok 0.2.x |
+| OpenCode | Copy plugin + list in `opencode.json` `plugin` array | **enforced** | Self-contained JS plugin; live `opencode run` deny | Directory auto-scan alone may not load plugins |
+| Kimi Code CLI | `node adapters/kimi-plugin/install-user-hooks.mjs` | **enforced** | `~/.kimi-code/config.toml` hooks; live `kimi -p` deny | Installer is idempotent; validate with `kimi doctor config` |
+| Antigravity CLI | Stage `adapters/antigravity-plugin/` into Antigravity plugins dir | **verified-plugin-wired** | Artifacts + synthetic smokes only | No live `agy` proof yet |
+| Codex | Workspace `AGENTS.md` + `codex-plugin/` | **enforced** | Live PreToolUse deny | See INSTALL.md |
+| Claude Code | Workspace `CLAUDE.md` + `claude-plugin/` | **enforced** | Live PreToolUse deny | See INSTALL.md |
 | Generic agents | `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md` | **supported** | Adapter instructions for any local coding agent | Requires workspace install first |
 
 ## Planned Adapters
@@ -33,7 +37,6 @@ These adapters are planned but not yet implemented.
 | Windsurf | planned | No timeline |
 | Cline | planned | No timeline |
 | Gemini | planned | No timeline |
-| OpenCode | planned | No timeline |
 | OpenClaw | planned | No timeline |
 
 ## Install comparison
@@ -51,7 +54,7 @@ To inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.5.20
+git checkout v0.5.21
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```

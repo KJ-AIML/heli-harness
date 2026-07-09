@@ -60,9 +60,18 @@ export function withFixtureWorkspace(files, fn) {
 			mkdirSync(dirname(full), { recursive: true });
 			writeFileSync(full, content);
 		}
-		return fn(dir);
-	} finally {
+		const result = fn(dir);
+		// Async callers get a Promise that cleans up after completion.
+		if (result && typeof result.then === "function") {
+			return Promise.resolve(result).finally(() => {
+				rmSync(dir, { recursive: true, force: true });
+			});
+		}
 		rmSync(dir, { recursive: true, force: true });
+		return result;
+	} catch (err) {
+		rmSync(dir, { recursive: true, force: true });
+		throw err;
 	}
 }
 
@@ -101,4 +110,45 @@ export function sessionContextInCwd(root, relScript, cwd) {
 	assert.equal(result.status, 0, result.stderr);
 	const output = JSON.parse(result.stdout);
 	return output.hookSpecificOutput.additionalContext;
+}
+
+/** Grok PreToolUse: exit 2 + { decision: "deny", reason } (also Claude-compat fields). */
+export function assertGrokHookDeny(root, relScript, sample, expectedReason) {
+	const result = spawnSync(process.execPath, [join(root, relScript)], {
+		cwd: root,
+		input: JSON.stringify(sample),
+		encoding: "utf8",
+		stdio: ["pipe", "pipe", "pipe"],
+	});
+	assert.equal(result.status, 2, `expected exit 2, got ${result.status}: ${result.stderr}`);
+	const output = JSON.parse(result.stdout);
+	assert.equal(output.decision, "deny");
+	assert.match(output.reason, expectedReason);
+}
+
+export function assertGrokHookDenyInCwd(root, relScript, cwd, sample, expectedReason) {
+	const result = spawnSync(process.execPath, [join(root, relScript)], {
+		cwd,
+		input: JSON.stringify(sample),
+		encoding: "utf8",
+		stdio: ["pipe", "pipe", "pipe"],
+	});
+	assert.equal(result.status, 2, `expected exit 2, got ${result.status}: ${result.stderr}`);
+	const output = JSON.parse(result.stdout);
+	assert.equal(output.decision, "deny");
+	assert.match(output.reason, expectedReason);
+}
+
+export function assertGrokHookAllowInCwd(root, relScript, cwd, sample) {
+	const result = spawnSync(process.execPath, [join(root, relScript)], {
+		cwd,
+		input: JSON.stringify(sample),
+		encoding: "utf8",
+		stdio: ["pipe", "pipe", "pipe"],
+	});
+	assert.equal(result.status, 0, result.stderr);
+	if (result.stdout.trim()) {
+		const output = JSON.parse(result.stdout);
+		assert.notEqual(output.decision, "deny", result.stdout);
+	}
 }

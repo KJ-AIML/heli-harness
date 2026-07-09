@@ -1,0 +1,8 @@
+{
+  "name": "heli-harness",
+  "version": "0.5.21",
+  "description": "Heli-Harness workspace governance for Antigravity CLI.",
+  "author": "KJ-AIML",
+  "homepage": "https://github.com/KJ-AIML/heli-harness",
+  "license": "MIT"
+}

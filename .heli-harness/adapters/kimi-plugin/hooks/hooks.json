@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .heli-harness/adapters/kimi-plugin/hooks/heli-session-start.mjs",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .heli-harness/adapters/kimi-plugin/hooks/heli-pre-tool-use.mjs",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

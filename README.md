@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.5.20-informational"></a>
+  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.5.21-informational"></a>
   <a href="https://github.com/KJ-AIML/heli-harness/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/KJ-AIML/heli-harness/ci.yml?branch=main&label=CI"></a>
   <a href="docs/ADAPTER_SUPPORT_MATRIX.md"><img alt="Adapters" src="https://img.shields.io/badge/adapters-Pi%20%C2%B7%20Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20Cursor-8A2BE2"></a>
 </p>
@@ -49,12 +49,12 @@ Install this repo into the current folder as a parent-workspace harness:
 
 https://github.com/KJ-AIML/heli-harness
 
-Use the latest stable tag (v0.5.20). Do not install globally. Treat the current
+Use the latest stable tag (v0.5.21). Do not install globally. Treat the current
 directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
 
-That's it — one prompt, one workspace. Prefer a real command instead? `npx github:KJ-AIML/heli-harness install <path>` does the same thing with no AI tool involved (pin a release with `#v0.5.20`). For manual/scripted installs, Pi/AXGA package mode, uninstall, update, and the full CLI reference, see **[INSTALL.md](INSTALL.md)**.
+That's it — one prompt, one workspace. Prefer a real command instead? `npx github:KJ-AIML/heli-harness install <path>` does the same thing with no AI tool involved (pin a release with `#v0.5.21`). For manual/scripted installs, Pi/AXGA package mode, uninstall, update, and the full CLI reference, see **[INSTALL.md](INSTALL.md)**.
 
 <details>
 <summary>What it feels like day-to-day</summary>
@@ -109,8 +109,8 @@ Live-verified: a real `codex exec` turn denies `git push` and `.env` writes via 
 ### Pi / AXGA — `enforced` (Pi) / `documented` (AXGA)
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.20
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.20
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.21
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.21
 ```
 
 Loads 23 skills plus the Pi extension (hooks/guards). Then run `/heli-install` inside Pi/AXGA to set up the workspace harness — see [.heli-harness/adapters/pi/README.md](.heli-harness/adapters/pi/README.md).
@@ -119,11 +119,42 @@ Loads 23 skills plus the Pi extension (hooks/guards). Then run `/heli-install` i
 
 No plugin mechanism. After the workspace install (Quickstart above), Cursor reads `.heli-harness/adapters/cursor/CURSOR.md` on its own.
 
+### Grok Build — `enforced`
+
+```bash
+node .heli-harness/adapters/grok-plugin/install-user-hooks.mjs   # required for blocking
+grok plugin install .heli-harness/adapters/grok-plugin --trust   # optional skills
+```
+
+Live-verified: a real `grok -p` turn denies `git push` via PreToolUse (user hooks). Plugin install alone is not enough for hooks on Grok 0.2.x — run the installer. See `adapters/grok/install.md`.
+
+### OpenCode — `enforced`
+
+```bash
+cp .heli-harness/adapters/opencode-plugin/heli-harness.mjs .opencode/plugins/
+# opencode.json: { "plugin": ["./opencode/plugins/heli-harness.mjs"] }
+```
+
+Live-verified: `opencode run` loads the plugin and reports `Heli-Harness blocks git push`.
+
+### Kimi Code CLI — `enforced`
+
+```bash
+node .heli-harness/adapters/kimi-plugin/install-user-hooks.mjs
+kimi doctor config
+```
+
+Live-verified: `kimi -p` reports the Heli git-push denial text.
+
+### Antigravity CLI — `verified-plugin-wired`
+
+Stage `.heli-harness/adapters/antigravity-plugin/` into the Antigravity plugins directory. Synthetic smokes only — **not** live-verified (no `agy` CLI in the verification environment).
+
 ### Generic agents — `documented`
 
 After the workspace install, point any other agent at `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md`.
 
-**OpenCode/Windsurf/Cline/Gemini/OpenClaw**: `planned` — no implementation yet.
+**Windsurf/Cline/Gemini/OpenClaw**: `planned` — no implementation yet.
 
 Every claim above has to point at real evidence — see **[docs/ADAPTER_SUPPORT_MATRIX.md](docs/ADAPTER_SUPPORT_MATRIX.md)** for the file paths, verification commands, and limitations behind each status. Per-adapter install paths (pointer vs. native plugin) live in **[INSTALL.md](INSTALL.md)**.
 

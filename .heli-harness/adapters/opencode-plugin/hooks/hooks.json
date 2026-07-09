@@ -1,0 +1,8 @@
+{
+  "_note": "OpenCode does not use Claude-style hooks.json command hooks. This file documents the equivalent plugin surfaces for harness evidence and humans.",
+  "opencodePlugin": "heli-harness.mjs",
+  "hooks": {
+    "tool.execute.before": "blocks git push, .env writes, stuck/mismatched task gates",
+    "experimental.session.compacting": "injects Heli session context when supported"
+  }
+}

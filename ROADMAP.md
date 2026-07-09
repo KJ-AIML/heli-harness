@@ -1,12 +1,14 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.20
+## Current Baseline: v0.5.21
 
-Latest stable release: `v0.5.20`
+Latest stable release: `v0.5.21`
 
-Release commit: pending tag `v0.5.20`
+Release commit: (set on tag)
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.20>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.21>
+
+Implemented in this baseline: multi-host adapters for **Grok Build**, **OpenCode**, and **Kimi Code CLI** (`enforced`, with installers + live-verify scripts), plus **Antigravity CLI** (`verified-plugin-wired`, synthetic only). See `CHANGELOG.md` v0.5.21.
 
 Stable behavior in this baseline:
 
@@ -75,8 +77,10 @@ Stable behavior in this baseline:
 - Adapter verification:
   - adapter manifest and support matrix validate evidence-backed claims
   - Pi remains `enforced`
-  - Claude Code is `verified-plugin-wired`: pointer adapter plus native plugin manifest, hook config, skill, and synthetic hook smoke tests are validated
-  - Codex is `verified-plugin-wired`: pointer adapter plus native plugin manifest, hook config, skill, plugin AGENTS.md, and synthetic hook smoke tests are validated
+  - Claude Code is `enforced` (live PreToolUse deny)
+  - Codex is `enforced` (live PreToolUse deny)
+  - Grok Build / OpenCode / Kimi Code CLI are `enforced` with host installers + live-verify scripts (see Unreleased changelog)
+  - Antigravity remains `verified-plugin-wired` (synthetic only)
   - Cursor remains `wired`
   - runtime enforcement is not claimed without tested hook evidence
 - Plugin target parity:

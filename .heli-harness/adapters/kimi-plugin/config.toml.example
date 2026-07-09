@@ -1,0 +1,14 @@
+# Example Heli hooks for Kimi Code CLI (~/.kimi-code/config.toml).
+# Prefer: node .heli-harness/adapters/kimi-plugin/install-user-hooks.mjs
+# TOML single-quoted strings: use double quotes inside for the node path.
+
+[[hooks]]
+event = "PreToolUse"
+matcher = ".*"
+command = 'node "C:/path/to/workspace/.heli-harness/adapters/kimi-plugin/hooks/heli-pre-tool-use.mjs"'
+timeout = 10
+
+[[hooks]]
+event = "SessionStart"
+command = 'node "C:/path/to/workspace/.heli-harness/adapters/kimi-plugin/hooks/heli-session-start.mjs"'
+timeout = 10

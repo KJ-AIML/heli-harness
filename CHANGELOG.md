@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.5.21 - Multi-Host Adapters (Grok / OpenCode / Kimi / Antigravity)
+
+### Added
+
+- First-class adapters for **Grok Build**, **OpenCode**, **Kimi Code CLI**, and **Antigravity CLI**:
+  - Pointer + plugin/hooks packs under `.heli-harness/adapters/{grok,opencode,kimi,antigravity}(-plugin)/`
+  - One-command installers: `grok-plugin/install-user-hooks.mjs`, `kimi-plugin/install-user-hooks.mjs`
+  - Synthetic smokes + live-verify scripts for Grok/OpenCode/Kimi
+  - Adversarial strictness suite: `node scripts/quality-guard-strictness.mjs`
+- **Grok (`enforced`)**: live `grok -p` PreToolUse deny of `git push` via user hooks (`~/.grok/hooks/heli-harness.json`). Valid `grok plugin validate/install` for skills. Important: Grok 0.2.x does not execute plugin-inventory hooks at runtime — user hooks are required.
+- **OpenCode (`enforced`)**: self-contained `heli-harness.mjs`; live `opencode run` loads plugin and blocks git push. Register in `opencode.json` `plugin` array.
+- **Kimi (`enforced`)**: live `kimi -p` prints Heli git-push denial after `install-user-hooks.mjs` + valid `kimi doctor config`.
+- **Antigravity (`verified-plugin-wired`)**: artifacts + synthetic smokes only (no live `agy` on verification host).
+
+### Fixed
+
+- Grok `plugin.json` now uses Claude/Grok-compatible `author` object + `.claude-plugin` / `.grok-plugin` layouts (previous root manifest failed `grok plugin validate`).
+- Kimi TOML hook examples use single-quoted command strings (Windows path-safe).
+- Docs: INSTALL.md / INSTALL_MATRIX / ADAPTER_SUPPORT_MATRIX / README aligned with proven status (Claude/Codex rows no longer stuck on stale `verified-plugin-wired` in INSTALL_MATRIX).
+
+### Notes
+
+- Live-verify scripts require the host CLI + credentials and are **not** part of `npm run check`.
+- Guards are pattern-based PreToolUse/plugin hooks, not a sandbox: install hooks correctly, and know obfuscation gaps remain.
+
+
 ## v0.5.20 - `heli target` Path Argument Fix
 
 ### Fixed

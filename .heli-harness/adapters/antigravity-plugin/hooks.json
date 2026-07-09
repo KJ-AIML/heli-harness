@@ -1,0 +1,30 @@
+{
+  "heli-harness-session": {
+    "SessionStart": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .heli-harness/adapters/shared/claude-style-session-start.mjs",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+  "heli-harness-pretool": {
+    "PreToolUse": [
+      {
+        "matcher": "run_command|write_to_file|replace_file_content|multi_replace_file_content|Write|Edit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .heli-harness/adapters/shared/claude-style-pre-tool-use.mjs",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
