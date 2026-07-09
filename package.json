@@ -1,6 +1,6 @@
 {
   "name": "heli-harness",
-  "version": "0.5.21",
+  "version": "0.5.22",
   "description": "Parent-workspace AI development harness for multi-repo, multi-agent engineering work.",
   "keywords": [
     "pi-package",
@@ -36,7 +36,7 @@
     "README.md"
   ],
   "scripts": {
-    "check": "node --check extensions/pi-extension.js && node --check bin/heli.mjs && node scripts/smoke-cli-entry.mjs && node scripts/smoke-cli-install.mjs && node scripts/smoke-cli-update.mjs && node scripts/smoke-cli-uninstall.mjs && node scripts/smoke-cli-target.mjs && node scripts/smoke-cli-status.mjs && node scripts/smoke-extension-load.mjs && node scripts/smoke-update-preserves-local-state.mjs && node scripts/smoke-claude-adapter.mjs && node scripts/smoke-codex-adapter.mjs && node scripts/smoke-claude-plugin.mjs && node scripts/smoke-codex-plugin.mjs && node scripts/smoke-grok-adapter.mjs && node scripts/smoke-grok-plugin.mjs && node scripts/smoke-opencode-adapter.mjs && node scripts/smoke-opencode-plugin.mjs && node scripts/smoke-kimi-adapter.mjs && node scripts/smoke-kimi-plugin.mjs && node scripts/smoke-antigravity-adapter.mjs && node scripts/smoke-antigravity-plugin.mjs && node scripts/verify-adapters.mjs && node scripts/validate-release.mjs",
+    "check": "node --check extensions/pi-extension.js && node --check bin/heli.mjs && node scripts/smoke-cli-entry.mjs && node scripts/smoke-cli-install.mjs && node scripts/smoke-cli-update.mjs && node scripts/smoke-cli-uninstall.mjs && node scripts/smoke-cli-target.mjs && node scripts/smoke-cli-status.mjs && node scripts/smoke-extension-load.mjs && node scripts/smoke-update-preserves-local-state.mjs && node scripts/smoke-claude-adapter.mjs && node scripts/smoke-codex-adapter.mjs && node scripts/smoke-claude-plugin.mjs && node scripts/smoke-codex-plugin.mjs && node scripts/smoke-grok-adapter.mjs && node scripts/smoke-grok-plugin.mjs && node scripts/smoke-opencode-adapter.mjs && node scripts/smoke-opencode-plugin.mjs && node scripts/smoke-kimi-adapter.mjs && node scripts/smoke-kimi-plugin.mjs && node scripts/smoke-antigravity-adapter.mjs && node scripts/smoke-antigravity-plugin.mjs && node scripts/smoke-yolo-mode.mjs && node scripts/verify-adapters.mjs && node scripts/validate-release.mjs",
     "smoke": "node scripts/smoke-extension-load.mjs",
     "smoke:cli": "node scripts/smoke-cli-entry.mjs && node scripts/smoke-cli-install.mjs && node scripts/smoke-cli-update.mjs && node scripts/smoke-cli-uninstall.mjs && node scripts/smoke-cli-target.mjs && node scripts/smoke-cli-status.mjs",
     "smoke:update": "node scripts/smoke-update-preserves-local-state.mjs",
@@ -52,6 +52,7 @@
     "smoke:kimi-plugin": "node scripts/smoke-kimi-plugin.mjs",
     "smoke:antigravity": "node scripts/smoke-antigravity-adapter.mjs",
     "smoke:antigravity-plugin": "node scripts/smoke-antigravity-plugin.mjs",
+    "smoke:yolo": "node scripts/smoke-yolo-mode.mjs",
     "live-verify:claude-plugin": "node scripts/live-verify-claude-plugin.mjs",
     "live-verify:codex-plugin-install": "node scripts/live-verify-codex-plugin-install.mjs",
     "live-verify:codex-plugin-hook": "node scripts/live-verify-codex-plugin-hook.mjs",

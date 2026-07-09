@@ -17,7 +17,7 @@ assertFile(join(pluginRoot, "AGENTS.md"), "Codex plugin AGENTS.md");
 
 const manifest = json(join(pluginRoot, ".codex-plugin", "plugin.json"));
 assert.equal(manifest.name, "heli-harness");
-assert.equal(manifest.version, "0.5.21");
+assert.equal(manifest.version, "0.5.22");
 assert.equal(manifest.skills, "./skills/");
 assert.equal(manifest.hooks, "./hooks/hooks.json");
 

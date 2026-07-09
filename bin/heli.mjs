@@ -7,12 +7,14 @@ import { runUpdate } from "../lib/cli/update.mjs";
 import { runUninstall } from "../lib/cli/uninstall.mjs";
 import { runTarget } from "../lib/cli/target.mjs";
 import { runStatus } from "../lib/cli/status.mjs";
+import { runYolo } from "../lib/cli/yolo.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [command, ...args] = process.argv.slice(2);
 
 function usage() {
-	console.error("Usage: heli <install|update|uninstall|target|status> [args]");
+	console.error("Usage: heli <install|update|uninstall|target|status|yolo> [args]");
+	console.error("  heli yolo on|off|status [path] [--hours N]");
 	process.exit(1);
 }
 
@@ -34,6 +36,9 @@ try {
 			break;
 		case "status":
 			runStatus(args);
+			break;
+		case "yolo":
+			runYolo(args);
 			break;
 		default:
 			usage();

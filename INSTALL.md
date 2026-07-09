@@ -11,7 +11,7 @@ Install this repo into the current folder as a parent-workspace harness:
 
 https://github.com/KJ-AIML/heli-harness
 
-Use the latest stable tag (v0.5.21). Do not install globally. Treat the current
+Use the latest stable tag (v0.5.22). Do not install globally. Treat the current
 directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
 and CLAUDE.md exist after install.
 ```
@@ -26,7 +26,7 @@ npx github:KJ-AIML/heli-harness status
 ```
 
 No install step of its own, no npm account, works identically with or without any AI tool loaded.
-Pin to a specific release with `npx github:KJ-AIML/heli-harness#v0.5.21 install <path>`. Everything
+Pin to a specific release with `npx github:KJ-AIML/heli-harness#v0.5.22 install <path>`. Everything
 below (manual scripts, per-adapter paths) remains available as an alternative for environments
 without Node.
 
@@ -37,7 +37,7 @@ without Node.
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.21
+git checkout v0.5.22
 .\install.ps1 -Parent "C:\your\workspace"
 cd ..
 # Optional: remove source checkout after install
@@ -49,7 +49,7 @@ Remove-Item -Recurse -Force hh-source
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.21
+git checkout v0.5.22
 ./install.sh /path/to/workspace
 cd ..
 # Optional: remove source checkout after install
@@ -69,7 +69,7 @@ If you want to inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.5.21
+git checkout v0.5.22
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```
@@ -156,6 +156,19 @@ Status: `enforced`. A real `claude -p` session loading the plugin via `--plugin-
 
 No marketplace plugin. No global install.
 
+### YOLO / unguarded mode (opt-in)
+
+Default guards stay strict. To allow remote git write and `.env`-style writes for big autonomous workflows:
+
+```bash
+heli yolo on
+# or: export HELI_YOLO=1
+heli yolo status
+heli yolo off
+```
+
+See `.heli-harness/safety/yolo-mode.md`.
+
 ### Grok Build
 
 1. Install the workspace harness into your parent folder.
@@ -202,8 +215,8 @@ For any other local coding agent:
 ### Pi / AXGA package install
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.21
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.21
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.22
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.22
 ```
 
 This installs the agent package, which loads 23 Heli-Harness skills and a lightweight extension (`extensions/pi-extension.js`) that announces status, exposes workflow commands, and enables hooks/guards where the host adapter supports them. `pi install` does **not** automatically create `.heli-harness/` in every folder — run `/heli-install` inside Pi/AXGA to set up the workspace harness. See [.heli-harness/adapters/pi/README.md](.heli-harness/adapters/pi/README.md) for the full command reference.

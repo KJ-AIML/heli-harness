@@ -36,6 +36,35 @@ function safeReadText(path) {
 	}
 }
 
+function envTruthy(name) {
+	return /^(1|true|yes|on)$/i.test(String(process.env[name] ?? "").trim());
+}
+
+/** Opt-in unguarded mode — skips Heli tool_call blocks when enabled. */
+function isYoloActive(cwd) {
+	if (envTruthy("HELI_YOLO")) return true;
+	if (/^(0|false|off|disabled|yolo|none)$/i.test(String(process.env.HELI_GUARDS ?? "").trim())) return true;
+	const yoloPath = join(cwd, ".heli-harness", "state", "yolo.json");
+	if (existsSync(yoloPath)) {
+		try {
+			const data = JSON.parse(readFileSync(yoloPath, "utf8"));
+			if (data && data.enabled === true) {
+				if (data.expiresAt) {
+					const exp = Date.parse(data.expiresAt);
+					if (!Number.isNaN(exp) && Date.now() > exp) return false;
+				}
+				return true;
+			}
+		} catch (_error) {
+			/* ignore */
+		}
+	}
+	const taskText = safeReadText(join(cwd, ".heli-harness", "state", "current-task.md"));
+	const modeMatch = /^Mode:[ \t]*(.*)$/m.exec(taskText);
+	const mode = modeMatch ? modeMatch[1].trim().toLowerCase() : "";
+	return mode === "yolo" || mode === "unguarded" || mode === "dangerous";
+}
+
 function safeReadJson(path) {
 	try {
 		return JSON.parse(readFileSync(path, "utf8"));
@@ -1483,6 +1512,10 @@ HELI_HOOK_OK`
 		const toolName = event && event.toolName;
 		const input = event && event.input ? event.input : {};
 		const cwd = process.cwd();
+		// Opt-in YOLO: skip all Heli tool_call blocks for this turn.
+		if (isYoloActive(cwd)) {
+			return;
+		}
 		const workspaceRepos = getWorkspaceRepos(cwd);
 		const targetState = readTargetState(cwd);
 		const hasMultiRepoIndex = workspaceRepos.length > 1;

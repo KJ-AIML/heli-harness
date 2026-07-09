@@ -1,14 +1,14 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.21
+## Current Baseline: v0.5.22
 
-Latest stable release: `v0.5.21`
+Latest stable release: `v0.5.22`
 
 Release commit: (set on tag)
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.21>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.22>
 
-Implemented in this baseline: multi-host adapters for **Grok Build**, **OpenCode**, and **Kimi Code CLI** (`enforced`, with installers + live-verify scripts), plus **Antigravity CLI** (`verified-plugin-wired`, synthetic only). See `CHANGELOG.md` v0.5.21.
+Implemented in this baseline (v0.5.22): YOLO/unguarded opt-in mode + multi-host adapters for **Grok Build**, **OpenCode**, and **Kimi Code CLI** (`enforced`, with installers + live-verify scripts), plus **Antigravity CLI** (`verified-plugin-wired`, synthetic only). See `CHANGELOG.md` v0.5.21.
 
 Stable behavior in this baseline:
 

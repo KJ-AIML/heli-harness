@@ -76,24 +76,56 @@ function isTaskStateWrite(paths) {
 	return paths.some((path) =>
 		path.endsWith(".heli-harness/state/current-task.md") ||
 		path.endsWith(".heli-harness/state/plan.md") ||
-		path.endsWith(".heli-harness/workspace/target.json"));
+		path.endsWith(".heli-harness/workspace/target.json") ||
+		path.endsWith(".heli-harness/state/yolo.json"));
+}
+
+function envTruthy(name) {
+	return /^(1|true|yes|on)$/i.test(String(process.env[name] ?? "").trim());
+}
+
+function isYoloActive(cwd) {
+	if (envTruthy("HELI_YOLO")) return true;
+	if (/^(0|false|off|disabled|yolo|none)$/i.test(String(process.env.HELI_GUARDS ?? "").trim())) return true;
+	const yoloPath = join(cwd, ".heli-harness", "state", "yolo.json");
+	if (existsSync(yoloPath)) {
+		try {
+			const data = JSON.parse(readFileSync(yoloPath, "utf8"));
+			if (data && data.enabled === true) {
+				if (data.expiresAt) {
+					const exp = Date.parse(data.expiresAt);
+					if (!Number.isNaN(exp) && Date.now() > exp) return false;
+				}
+				return true;
+			}
+		} catch { /* ignore */ }
+	}
+	const taskPath = join(cwd, ".heli-harness", "state", "current-task.md");
+	if (existsSync(taskPath)) {
+		const m = /^Mode:[ \t]*(.*)$/m.exec(readFileSync(taskPath, "utf8"));
+		const mode = m ? m[1].trim().toLowerCase() : "";
+		if (mode === "yolo" || mode === "unguarded" || mode === "dangerous") return true;
+	}
+	return false;
 }
 
 function evaluate({ cwd, toolName, toolInput }) {
+	if (isYoloActive(cwd)) return { deny: false, yolo: true };
+
 	const rawCommand = String(toolInput?.command ?? toolInput?.cmd ?? toolInput?.description ?? "");
 	const command = rawCommand.replace(/\s+/g, " ").trim().toLowerCase();
 	const paths = [...pathsFrom(toolInput), ...patchPathsFrom(rawCommand)]
 		.map((p) => String(p).replaceAll("\\", "/").toLowerCase());
 	const name = String(toolName || "");
 
-	if (/\bgit\s+push\b/.test(command)) {
+	if (/\bgit\s+push\b/.test(command) && !envTruthy("HELI_ALLOW_GIT_PUSH")) {
 		return {
 			deny: true,
-			reason: "Heli-Harness blocks git push in agent sessions — push manually outside the session if needed.",
+			reason: "Heli-Harness blocks git push. Opt-in: HELI_YOLO=1 or heli yolo on.",
 		};
 	}
-	if (paths.some((path) => /(^|\/)\.env(\.|$)/.test(path))) {
-		return { deny: true, reason: "Heli-Harness blocks writes to .env-style secret files." };
+	if (paths.some((path) => /(^|\/)\.env(\.|$)/.test(path)) && !envTruthy("HELI_ALLOW_ENV_WRITE")) {
+		return { deny: true, reason: "Heli-Harness blocks .env-style writes. Opt-in: HELI_YOLO=1 or heli yolo on." };
 	}
 	const isWrite = /write|edit|replace|strreplace|apply_patch|multi_replace/i.test(name);
 	if (isWrite && !isTaskStateWrite(paths)) {

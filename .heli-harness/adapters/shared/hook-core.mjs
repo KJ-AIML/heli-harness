@@ -175,7 +175,72 @@ export function isTaskStateWrite(paths) {
 	return paths.some((path) =>
 		path.endsWith(".heli-harness/state/current-task.md") ||
 		path.endsWith(".heli-harness/state/plan.md") ||
-		path.endsWith(".heli-harness/workspace/target.json"));
+		path.endsWith(".heli-harness/workspace/target.json") ||
+		path.endsWith(".heli-harness/state/yolo.json"));
+}
+
+function envTruthy(name) {
+	return /^(1|true|yes|on)$/i.test(String(process.env[name] ?? "").trim());
+}
+
+function envGuardsOff() {
+	return /^(0|false|off|disabled|yolo|none)$/i.test(String(process.env.HELI_GUARDS ?? "").trim());
+}
+
+/**
+ * Opt-in unguarded ("yolo") mode. Default is always strict.
+ *
+ * Enable with any of:
+ * - HELI_YOLO=1|true|yes|on
+ * - HELI_GUARDS=off|0|false|disabled|yolo
+ * - .heli-harness/state/yolo.json  { "enabled": true, "expiresAt"?: ISO }
+ * - current-task.md  Mode: yolo | unguarded | dangerous
+ *
+ * Granular (when full yolo is off):
+ * - HELI_ALLOW_GIT_PUSH=1
+ * - HELI_ALLOW_ENV_WRITE=1
+ *
+ * @returns {{ active: boolean, source?: string }}
+ */
+export function isYoloActive(cwd = process.cwd()) {
+	if (envTruthy("HELI_YOLO")) return { active: true, source: "env:HELI_YOLO" };
+	if (envGuardsOff()) return { active: true, source: "env:HELI_GUARDS" };
+
+	const yoloPath = join(cwd, ".heli-harness", "state", "yolo.json");
+	if (existsSync(yoloPath)) {
+		try {
+			const data = JSON.parse(readFileSync(yoloPath, "utf8"));
+			if (data && data.enabled === true) {
+				if (data.expiresAt) {
+					const exp = Date.parse(data.expiresAt);
+					if (!Number.isNaN(exp) && Date.now() > exp) {
+						return { active: false };
+					}
+				}
+				return { active: true, source: "state/yolo.json" };
+			}
+		} catch {
+			/* ignore malformed yolo.json */
+		}
+	}
+
+	const taskPath = join(cwd, ".heli-harness", "state", "current-task.md");
+	if (existsSync(taskPath)) {
+		const mode = field(readFileSync(taskPath, "utf8"), "Mode").toLowerCase();
+		if (mode === "yolo" || mode === "unguarded" || mode === "dangerous") {
+			return { active: true, source: `current-task.md Mode: ${mode}` };
+		}
+	}
+
+	return { active: false };
+}
+
+export function allowGitPush(cwd = process.cwd()) {
+	return isYoloActive(cwd).active || envTruthy("HELI_ALLOW_GIT_PUSH");
+}
+
+export function allowEnvWrite(cwd = process.cwd()) {
+	return isYoloActive(cwd).active || envTruthy("HELI_ALLOW_ENV_WRITE");
 }
 
 /**
@@ -184,7 +249,7 @@ export function isTaskStateWrite(paths) {
  * @param {string} [opts.toolName]
  * @param {object} [opts.toolInput]
  * @param {string[]} [opts.writeToolNames] tools that should trigger task/plan gates
- * @returns {{ deny: boolean, reason?: string }}
+ * @returns {{ deny: boolean, reason?: string, yolo?: boolean, yoloSource?: string }}
  */
 export function evaluatePreToolUse({
 	cwd,
@@ -192,22 +257,27 @@ export function evaluatePreToolUse({
 	toolInput = {},
 	writeToolNames = ["Edit", "Write", "apply_patch", "write", "edit", "WriteFile", "StrReplaceFile", "write_to_file", "replace_file_content", "multi_replace_file_content"],
 }) {
+	const yolo = isYoloActive(cwd);
+	if (yolo.active) {
+		return { deny: false, yolo: true, yoloSource: yolo.source };
+	}
+
 	const rawCommand = String(toolInput?.command ?? toolInput?.description ?? "");
 	const command = rawCommand.replace(/\s+/g, " ").trim().toLowerCase();
 	const paths = [...pathsFrom(toolInput), ...patchPathsFrom(rawCommand)]
 		.map((path) => path.replaceAll("\\", "/").toLowerCase());
 	const name = String(toolName);
 
-	if (/\bgit\s+push\b/.test(command)) {
+	if (/\bgit\s+push\b/.test(command) && !allowGitPush(cwd)) {
 		return {
 			deny: true,
-			reason: "Heli-Harness blocks git push in agent sessions — this is a blanket rule, not gated on release approval. Push manually outside the session if needed.",
+			reason: "Heli-Harness blocks git push in agent sessions — this is a blanket rule, not gated on release approval. Push manually outside the session if needed. Opt-in: HELI_YOLO=1, HELI_ALLOW_GIT_PUSH=1, or `heli yolo on`.",
 		};
 	}
-	if (paths.some((path) => /(^|\/)\.env(\.|$)/.test(path))) {
+	if (paths.some((path) => /(^|\/)\.env(\.|$)/.test(path)) && !allowEnvWrite(cwd)) {
 		return {
 			deny: true,
-			reason: "Heli-Harness blocks writes to .env-style secret files.",
+			reason: "Heli-Harness blocks writes to .env-style secret files. Opt-in: HELI_YOLO=1, HELI_ALLOW_ENV_WRITE=1, or `heli yolo on`.",
 		};
 	}
 

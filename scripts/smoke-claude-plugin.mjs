@@ -18,7 +18,7 @@ assertFile(join(pluginRoot, "skills", "heli-install", "SKILL.md"), "Claude plugi
 
 const manifest = json(join(pluginRoot, ".claude-plugin", "plugin.json"));
 assert.equal(manifest.name, "heli-harness");
-assert.equal(manifest.version, "0.5.21");
+assert.equal(manifest.version, "0.5.22");
 
 const hooks = json(join(pluginRoot, "hooks", "hooks.json"));
 assert.ok(hooks.hooks.SessionStart, "Claude plugin should define SessionStart");

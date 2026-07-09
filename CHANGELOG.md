@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.5.22 - YOLO / unguarded mode (opt-in)
+
+### Added
+
+- **YOLO / unguarded mode** (opt-in only): skip Heli PreToolUse blocks for remote git write, `.env`-style secrets, and stuck-task gates when the user explicitly enables it.
+  - `heli yolo on|off|status [path] [--hours N]`
+  - Env: `HELI_YOLO=1` or `HELI_GUARDS=off`
+  - File: `.heli-harness/state/yolo.json` `{ "enabled": true }`
+  - Task: `Mode: yolo` (or `unguarded` / `dangerous`)
+  - Granular: `HELI_ALLOW_GIT_PUSH=1`, `HELI_ALLOW_ENV_WRITE=1`
+  - Wired across Claude/Codex/Grok/Kimi/OpenCode hooks + Pi `tool_call` guard
+  - Docs: `.heli-harness/safety/yolo-mode.md`
+  - Smoke: `node scripts/smoke-yolo-mode.mjs`
+- Default remains **strict**. YOLO never turns on by itself.
+
+### Notes
+
+- YOLO is not a host sandbox bypass. It only disables Heli's own guard denials.
+- Use for large autonomous workflows that intentionally need remote push or secret-file writes; turn off when finished.
+
 ## v0.5.21 - Multi-Host Adapters (Grok / OpenCode / Kimi / Antigravity)
 
 ### Added

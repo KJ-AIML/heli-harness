@@ -18,7 +18,7 @@ These expose harness rules/skills to a specific agent host. They do not replace 
 
 | Host | Command | Status | What it installs | Notes |
 |------|---------|--------|------------------|-------|
-| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.21` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.21` | **supported** | 23 skills + lightweight extension (startup status, `/heli-install`, `/hh-install`, `/hh-status`, `/heli-target`, `/heli-lock`, `/heli-hooks`, `/heli-validate lint`, command-rule guard, safety classifier) | Does not auto-create `.heli-harness/`. Use `/heli-install` or `/hh-install` to set up workspace. Use the v0.5.21 tag after release |
+| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.22` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.22` | **supported** | 23 skills + lightweight extension (startup status, `/heli-install`, `/hh-install`, `/hh-status`, `/heli-target`, `/heli-lock`, `/heli-hooks`, `/heli-validate lint`, command-rule guard, safety classifier) | Does not auto-create `.heli-harness/`. Use `/heli-install` or `/hh-install` to set up workspace. Use the v0.5.22 tag after release |
 | Cursor | Workspace `.cursor/rules/` → `.heli-harness/adapters/cursor/CURSOR.md` | **supported** | Adapter created by workspace installer | Requires workspace install first |
 | Grok Build | `node adapters/grok-plugin/install-user-hooks.mjs` (+ optional `grok plugin install … --trust`) | **enforced** | User hooks block git push live; plugin skills optional | User hooks required — plugin inventory hooks alone do not fire on Grok 0.2.x |
 | OpenCode | Copy plugin + list in `opencode.json` `plugin` array | **enforced** | Self-contained JS plugin; live `opencode run` deny | Directory auto-scan alone may not load plugins |
@@ -54,7 +54,7 @@ To inspect before installing:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git
 cd heli-harness
-git checkout v0.5.21
+git checkout v0.5.22
 # Review install.sh / install.ps1 before running
 ./install.sh /path/to/workspace
 ```
