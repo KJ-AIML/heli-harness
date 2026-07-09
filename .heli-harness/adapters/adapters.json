@@ -1,5 +1,5 @@
 {
-  "version": "0.5.19",
+  "version": "0.5.20",
   "taxonomy": {
     "enforced": "Runtime hook/tool-call guard is verified and tested. Smoke test or interactive test exists.",
     "verified-plugin-wired": "Native plugin artifacts are shipped and smoke-tested, but runtime enforcement is not proven.",

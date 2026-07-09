@@ -1,12 +1,12 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.19
+## Current Baseline: v0.5.20
 
-Latest stable release: `v0.5.19`
+Latest stable release: `v0.5.20`
 
-Release commit: pending tag `v0.5.19`
+Release commit: pending tag `v0.5.20`
 
-Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.19>
+Release URL: <https://github.com/KJ-AIML/heli-harness/releases/tag/v0.5.20>
 
 Stable behavior in this baseline:
 
@@ -110,6 +110,10 @@ Stable behavior in this baseline:
   - Pi/AXGA's `/heli-install` now calls the CLI directly; new `/heli-update` command closes Pi's prior missing-update gap
   - `heli-install`/`heli-target` skills, `README.md`, and `INSTALL.md` document the CLI as the preferred method
   - subprocess-level smoke test proves `bin/heli.mjs`'s real argv dispatch and self-location, distinct from the module-level test suite
+- `heli target` path argument fix:
+  - `heli target list|show|set|clear` now honor an optional trailing path argument instead of silently operating on `process.cwd()` regardless of what was passed
+  - matches `heli status`'s existing `args[0] || process.cwd()` pattern; no-path invocations are unchanged
+  - found via real `npx`-distributed dogfooding, not synthetic testing
 
 ## Product Positioning
 
@@ -191,7 +195,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 | v0.5.15 | Session Task Gate | Close the cross-CLI handoff gap: surface real `current-task.md` content at session start and block edits when carried-over task state is stuck or target-mismatched, until it's resolved. |
 | v0.5.16 | Cross-CLI Context Parity | Bring Pi/AXGA up to the same context-continuity level as Claude/Codex (v0.5.15), and add `decisions.md` surfacing across all three adapters. |
 | v0.5.17 | Cross-CLI Plan Ledger | Add `.heli-harness/state/plan.md`, a self-contained step-by-step plan ledger surfaced and gated identically across all three adapters, closing the remaining gap in cross-CLI mid-task handoff. |
-| v0.5.19 | Skill Discipline & Step-Count Warning | Rewrite Skill Routing as mandatory invocation, add a self-reported `Step count` field with a session-start warning when it's 3+ but no plan.md exists, and sharpen the enforcement self-check's inference about `PreToolUse` being wired alongside `SessionStart`. |
+| v0.5.20 | Skill Discipline & Step-Count Warning | Rewrite Skill Routing as mandatory invocation, add a self-reported `Step count` field with a session-start warning when it's 3+ but no plan.md exists, and sharpen the enforcement self-check's inference about `PreToolUse` being wired alongside `SessionStart`. |
 | Post-v0.5 | Stabilization before expansion | Defer runtime, orchestration, storage, marketplace, and hosted features. |
 
 ## v0.3.x - Trust and Observability
@@ -1095,7 +1099,7 @@ Risks:
 - Same statelessness tradeoff as the v0.5.15/v0.5.16 gates: the check re-reads `plan.md` on every call rather than tracking session state, by design.
 - A stray non-`## Step` section in a hand-edited `plan.md` (e.g. a `## Notes` section) would be counted by the rollup/gate the same as a step section — a known, accepted consequence of reusing `decisions.md`'s generic `## `-header splitter rather than a stricter step-only parser.
 
-## v0.5.19 - Skill Discipline & Step-Count Warning (Implemented)
+## v0.5.20 - Skill Discipline & Step-Count Warning (Implemented)
 
 Goal:
 Close two gaps surfaced by real, evidence-based feedback from two independent projects using Heli-Harness: skills that never get invoked because the plugin adapters don't expose them as native Skill-tool entries, and multi-step tasks that never get a `plan.md` because nothing ever prompted for one — the exact case `readPlanGate()`'s missing-file no-op is architecturally unable to catch.

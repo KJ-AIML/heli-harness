@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.5.20 - `heli target` Path Argument Fix
+
+### Fixed
+
+- `heli target list|show|set|clear` previously always operated on `process.cwd()` and silently ignored any path argument, unlike `heli status`'s existing `args[0] || process.cwd()` support for the same kind of override. Pointing the CLI at a different workspace (e.g. `heli target list /some/other/workspace`) silently returned the caller's own current-directory data instead of erroring, warning, or reading the given path — a silent-wrong-answer footgun, not just an inconsistency. Found via real `npx`-distributed dogfooding against a workspace other than the shell's cwd.
+- `runTarget()` now threads an optional trailing path argument through all four subcommands (`list [path]`, `show [path]`, `set <repo> [--confirm] [path]`, `clear [path]`), matching `status.mjs`'s pattern exactly. No-path invocations (the overwhelmingly common case) are byte-for-byte unchanged.
+
+### Notes
+
+- The underlying pure functions (`listRepos`/`showTarget`/`setTarget`/`clearTarget`) were never the problem — they already took `cwd` as an explicit parameter and never read `process.cwd()` themselves, per the CLI's Global Constraint. Only the CLI-facing `runTarget` wrapper had never threaded a path through to begin with.
+- New regression coverage spawns the real `bin/heli.mjs` as a subprocess from one temp directory while passing a second, differently-seeded temp directory as the explicit path argument — proving the path argument, not `process.cwd()`, is honored, for all four subcommands. This is currently the only test in the suite that exercises a `run*()` wrapper's argv/path handling end-to-end; `smoke-cli-{install,update,uninstall,status}.mjs` still only test their underlying pure functions directly, and `smoke-cli-entry.mjs`'s subprocess test only checks generic label presence, not path-correctness. Same root-cause class as the `bin/heli.mjs` coverage gap fixed in v0.5.19 — noted as a follow-up, not fixed here.
+
 ## v0.5.19 - Standalone `heli` CLI
 
 ### Added
