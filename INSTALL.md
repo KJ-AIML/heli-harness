@@ -1,22 +1,16 @@
 # Install
 
-Heli-Harness has two install modes. The **workspace harness** is the primary mode — it installs `.heli-harness/` into your parent workspace and is what most users want. The **agent package** mode exposes harness skills/rules to a specific agent host (Pi, AXGA) without replacing the workspace model.
+The workspace harness is the primary install mode. It installs `.heli-harness/` into a parent workspace, alongside `AGENTS.md` and `CLAUDE.md` pointer files.
 
-## Fast-path (prompt-based)
+## Fast path
 
 Ask your agent:
 
-```
-Install this repo into the current folder as a parent-workspace harness:
-
-https://github.com/KJ-AIML/heli-harness
-
-Use the latest stable tag (v0.5.22). Do not install globally. Treat the current
-directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
-and CLAUDE.md exist after install.
+```text
+Install https://github.com/KJ-AIML/heli-harness into this folder as a parent-workspace harness. Use the latest stable tag, do not install globally, and confirm that .heli-harness/HARNESS.md, AGENTS.md, and CLAUDE.md exist.
 ```
 
-## CLI (recommended if Node.js is available)
+## CLI
 
 ```bash
 npx github:KJ-AIML/heli-harness install <path>
@@ -25,10 +19,7 @@ npx github:KJ-AIML/heli-harness target list
 npx github:KJ-AIML/heli-harness status
 ```
 
-No install step of its own, no npm account, works identically with or without any AI tool loaded.
-Pin to a specific release with `npx github:KJ-AIML/heli-harness#v0.5.22 install <path>`. Everything
-below (manual scripts, per-adapter paths) remains available as an alternative for environments
-without Node.
+Pin a release when needed: `npx github:KJ-AIML/heli-harness#v0.5.22 install <path>`.
 
 ## Manual workspace install
 
@@ -39,9 +30,6 @@ git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
 git checkout v0.5.22
 .\install.ps1 -Parent "C:\your\workspace"
-cd ..
-# Optional: remove source checkout after install
-Remove-Item -Recurse -Force hh-source
 ```
 
 ### macOS / Linux (bash)
@@ -51,195 +39,77 @@ git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
 git checkout v0.5.22
 ./install.sh /path/to/workspace
-cd ..
-# Optional: remove source checkout after install
-rm -rf hh-source
 ```
 
-## What gets installed
+After a successful install, the source checkout can be removed; do not remove the installed `.heli-harness/` directory.
 
-- `.heli-harness/` — the full harness (HARNESS.md, skills, adapters, profiles, state, templates)
-- `AGENTS.md` — pointer file for Codex
-- `CLAUDE.md` — pointer file for Claude Code
+## First use
 
-## Safe install
+Start the agent from the parent workspace. It should read `.heli-harness/HARNESS.md`, identify the target repository, read its profile when present, and update `.heli-harness/state/current-task.md` before non-trivial edits.
 
-If you want to inspect before installing:
+In a multi-repo workspace, map repositories in `.heli-harness/workspace/index.json` and select one with `/heli-target set <repo>` before write workflows.
 
-```bash
-git clone https://github.com/KJ-AIML/heli-harness.git
-cd heli-harness
-git checkout v0.5.22
-# Review install.sh / install.ps1 before running
-./install.sh /path/to/workspace
-```
+## Adapter setup
 
-## Post-install cleanup
-
-After a successful workspace install, you can delete the source checkout folder (e.g., `hh-source/` or `heli-harness/`). The installed `.heli-harness/` folder in your workspace is self-contained.
-
-**Do not delete `.heli-harness/` from your workspace** — that is the installed harness.
-
-## What next after install?
-
-1. **Start your agent** (Codex, Claude Code, Cursor, Pi, or generic) from the parent workspace folder.
-2. **Read HARNESS.md** — the agent should read `.heli-harness/HARNESS.md` as the source of truth.
-3. **Clone or create target repos** inside the parent workspace.
-4. **Map repos in `.heli-harness/workspace/index.json`** so Heli can show known git roots and profile mappings.
-5. **Select the active target repo** with `/heli-target set <repo>` before write workflows in a multi-repo workspace.
-6. **Create a repo profile** — add a profile under `.heli-harness/profiles/<repo>.md` describing the repo's conventions, test commands, and risk areas. Use templates in `.heli-harness/templates/` as a starting point.
-7. **Run test-validation in audit-only mode** — validate that your repo profile's test commands are safe and non-mutating before relying on them.
-
-## First-run prompt
-
-```
-Start from this parent workspace. Read .heli-harness/HARNESS.md, identify the
-target repo, read its profile if present, then inspect repo-local docs. Update
-.heli-harness/state/current-task.md before non-trivial edits.
-
-Task: <describe task>
-```
-
-## Multi-repo targeting
-
-The lightweight workspace model supports parent workspaces with many repos:
-
-- `.heli-harness/workspace/index.json` lists known repos, git roots, and profile mappings
-- `.heli-harness/workspace/target.json` records the active target repo for current work
-- `/heli-target` shows, lists, sets, and clears target state
-- write workflows can be warned or intercepted when no target is selected in a configured multi-repo workspace
-
-This is explicit target identity, not orchestration, dependency solving, or monorepo planning.
-
-## Per-adapter install paths
+Install the workspace harness first. Adapter status, tested scope, and limitations are maintained in [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md).
 
 ### Codex
 
-Pointer adapter path:
+The workspace `AGENTS.md` points to `.heli-harness/adapters/codex/AGENTS.md`. To install the native plugin from the installed workspace:
 
-1. Install the workspace harness into your parent folder (see above).
-2. Codex reads the workspace `AGENTS.md`, which points to `.heli-harness/adapters/codex/AGENTS.md`.
-3. Codex follows the adapter instructions.
-
-Native plugin artifact path:
-
-1. Inspect `.heli-harness/adapters/codex-plugin/`.
-2. The package includes `.codex-plugin/plugin.json`, `hooks/hooks.json`, `skills/heli-governance/SKILL.md`, `.agents/plugins/marketplace.json`, and plugin `AGENTS.md`.
-3. Run `node scripts/smoke-codex-plugin.mjs` to verify local plugin artifacts and synthetic hook decisions.
-4. Run `node scripts/live-verify-codex-plugin-install.mjs` to prove `codex plugin marketplace add` and `codex plugin add` install and trust the plugin against your real, locally installed Codex CLI (isolated `CODEX_HOME`; does not touch your real Codex config).
-5. Run `node scripts/live-verify-codex-plugin-hook.mjs` to prove the PreToolUse hook actually denies `git push` and `.env` writes in a real Codex session (isolated `CODEX_HOME`, `--dangerously-bypass-hook-trust`; makes real API calls; requires `codex login`).
-
-Status: `enforced`. A real `codex exec` turn denies both `git push` and a `.env` write via the PreToolUse hook, confirmed via the CLI's own output and the filesystem. See [docs/ADAPTER_SUPPORT_MATRIX.md](docs/ADAPTER_SUPPORT_MATRIX.md) for full evidence.
+```bash
+codex plugin marketplace add .heli-harness/adapters/codex-plugin
+codex plugin add heli-harness@heli-harness
+```
 
 ### Claude Code
 
-Pointer adapter path:
-
-1. Install the workspace harness into your parent folder (see above).
-2. Claude Code reads the workspace `CLAUDE.md`, which points to `.heli-harness/adapters/claude/CLAUDE.md`.
-3. Claude Code follows the adapter instructions.
-
-Native plugin artifact path:
-
-1. Inspect `.heli-harness/adapters/claude-plugin/`.
-2. The package includes `.claude-plugin/plugin.json`, `hooks/hooks.json`, and `skills/heli-governance/SKILL.md`.
-3. Run `node scripts/smoke-claude-plugin.mjs` to verify local plugin artifacts and synthetic hook decisions. When the local Claude CLI is available, the smoke also runs `claude plugin validate`.
-4. Run `node scripts/live-verify-claude-plugin.mjs` to prove the PreToolUse hook actually denies `git push` and `.env` writes in a real Claude Code session (isolated `--plugin-dir` sandbox; makes real API calls).
-
-Status: `enforced`. A real `claude -p` session loading the plugin via `--plugin-dir` in an isolated sandbox repo denies both `git push` and a `.env` write, confirmed via the session's own `permission_denials` result. This covers `--plugin-dir` session loading, not the marketplace-installed-and-trusted flow (`claude plugin install`). See [docs/ADAPTER_SUPPORT_MATRIX.md](docs/ADAPTER_SUPPORT_MATRIX.md) for full evidence.
-
-### Cursor
-
-1. Install the workspace harness into your parent folder (see above).
-2. Cursor reads `.heli-harness/adapters/cursor/CURSOR.md`.
-3. Cursor follows the adapter instructions.
-
-No marketplace plugin. No global install.
-
-### YOLO / unguarded mode (opt-in)
-
-Default guards stay strict. To allow remote git write and `.env`-style writes for big autonomous workflows:
+The workspace `CLAUDE.md` points to `.heli-harness/adapters/claude/CLAUDE.md`. To install the native plugin from the installed workspace:
 
 ```bash
-heli yolo on
-# or: export HELI_YOLO=1
-heli yolo status
-heli yolo off
+claude plugin install .heli-harness/adapters/claude-plugin
 ```
 
-See `.heli-harness/safety/yolo-mode.md`.
+### Cursor and generic agents
+
+- Cursor reads `.heli-harness/adapters/cursor/CURSOR.md`.
+- Other agents can use `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md`.
 
 ### Grok Build
 
-1. Install the workspace harness into your parent folder.
-2. **Required for blocking:** `node .heli-harness/adapters/grok-plugin/install-user-hooks.mjs` (writes `~/.grok/hooks/heli-harness.json`).
-3. Optional skills: `grok plugin install .heli-harness/adapters/grok-plugin --trust` (after `grok plugin validate` succeeds).
-4. Live check: `node scripts/live-verify-grok-hooks.mjs` (needs `grok` logged in).
+Install user hooks from the installed workspace:
 
-Status: `enforced` via user hooks. Plugin inventory alone does not wire PreToolUse on Grok 0.2.x. See `.heli-harness/adapters/grok/install.md`.
+```bash
+node .heli-harness/adapters/grok-plugin/install-user-hooks.mjs
+```
+
+For optional plugin skills, run `grok plugin install .heli-harness/adapters/grok-plugin --trust`. See `.heli-harness/adapters/grok/install.md`.
 
 ### OpenCode
 
-1. Install the workspace harness.
-2. Copy `.heli-harness/adapters/opencode-plugin/heli-harness.mjs` to `.opencode/plugins/`.
-3. Register in `opencode.json`: `"plugin": ["./opencode/plugins/heli-harness.mjs"]`.
-4. Live check: `node scripts/live-verify-opencode-plugin.mjs`.
-
-Status: `enforced`. See `.heli-harness/adapters/opencode/install.md`.
+Copy `.heli-harness/adapters/opencode-plugin/heli-harness.mjs` to `.opencode/plugins/heli-harness.mjs` and list `./opencode/plugins/heli-harness.mjs` in the `plugin` array in `opencode.json`. See `.heli-harness/adapters/opencode/install.md`.
 
 ### Kimi Code CLI
 
-1. Install the workspace harness.
-2. `node .heli-harness/adapters/kimi-plugin/install-user-hooks.mjs`
-3. `kimi doctor config`
-4. Live check: `node scripts/live-verify-kimi-hooks.mjs`.
+```bash
+node .heli-harness/adapters/kimi-plugin/install-user-hooks.mjs
+kimi doctor config
+```
 
-Status: `enforced`. See `.heli-harness/adapters/kimi/install.md`.
+See `.heli-harness/adapters/kimi/install.md`.
 
 ### Antigravity CLI
 
-1. Install the workspace harness.
-2. Stage `.heli-harness/adapters/antigravity-plugin/` into the host plugin directory (see adapter install notes).
-3. Synthetic smokes only — not live-verified without `agy`.
+Stage `.heli-harness/adapters/antigravity-plugin/` in the host plugin directory. See `.heli-harness/adapters/antigravity/install.md`.
 
-Status: `verified-plugin-wired`.
-
-### Generic agents
-
-For any other local coding agent:
-
-1. Install the workspace harness into your parent folder (see above).
-2. Point your agent at `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md`.
-3. The agent follows the generic instructions.
-
-### Pi / AXGA package install
+### Pi / AXGA package
 
 ```bash
 pi install git:github.com/KJ-AIML/heli-harness@v0.5.22
 axga install git:github.com/KJ-AIML/heli-harness@v0.5.22
 ```
 
-This installs the agent package, which loads 23 Heli-Harness skills and a lightweight extension (`extensions/pi-extension.js`) that announces status, exposes workflow commands, and enables hooks/guards where the host adapter supports them. `pi install` does **not** automatically create `.heli-harness/` in every folder — run `/heli-install` inside Pi/AXGA to set up the workspace harness. See [.heli-harness/adapters/pi/README.md](.heli-harness/adapters/pi/README.md) for the full command reference.
-
-Agent packages may run with broad local access. Inspect source code before installing.
-
-## Uninstall
-
-```bash
-npx github:KJ-AIML/heli-harness uninstall /path/to/workspace
-```
-
-Or with a local checkout:
-
-```bash
-# macOS/Linux
-./uninstall.sh /path/to/workspace
-
-# Windows
-.\uninstall.ps1 -Parent "C:\your\workspace"
-```
-
-Then remove adapter pointer files (`AGENTS.md`, `CLAUDE.md`) if no longer needed.
+This installs the agent package, not a workspace harness. Run `/heli-install` in Pi or AXGA to create the workspace harness.
 
 ## Update
 
@@ -247,14 +117,16 @@ Then remove adapter pointer files (`AGENTS.md`, `CLAUDE.md`) if no longer needed
 npx github:KJ-AIML/heli-harness update /path/to/workspace
 ```
 
-Or with a local checkout:
+Or, from a source checkout, run `./update.sh /path/to/workspace` on macOS/Linux or `.\update.ps1 -Parent "C:\your\workspace"` on Windows.
+
+## Uninstall
 
 ```bash
-# macOS/Linux
-./update.sh /path/to/workspace
-
-# Windows
-.\update.ps1 -Parent "C:\your\workspace"
+npx github:KJ-AIML/heli-harness uninstall /path/to/workspace
 ```
 
-State is preserved by default. Use `--reset-state` (CLI/bash) or `-ResetState` (PowerShell) to replace state from the repo checkout.
+Or, from a source checkout, run `./uninstall.sh /path/to/workspace` on macOS/Linux or `.\uninstall.ps1 -Parent "C:\your\workspace"` on Windows. Remove `AGENTS.md` and `CLAUDE.md` afterwards only if they are no longer needed.
+
+## Maintainer-only live verification
+
+The `scripts/live-verify-*.mjs` commands are release-proof commands, not user setup. Run them only with isolated credentials and disposable workspaces: they may make API calls and consume provider usage. Their evidence and limitations are recorded in [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md).

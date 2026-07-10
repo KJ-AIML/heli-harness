@@ -311,17 +311,7 @@ Adapters should not:
 - hide behavior in unreadable configuration
 - require a hosted service
 
-Adapter status is evidence-based:
-
-- `enforced`: runtime hook/tool-call guard behavior is verified and tested.
-- `verified-plugin-wired`: native plugin artifacts are shipped and smoke-tested, but runtime enforcement is not proven.
-- `plugin-wired`: native plugin artifacts exist but lack smoke tests.
-- `verified-wired`: instruction/pointer adapter files, install/update wiring, generated pointer files, and config examples are smoke-tested, but runtime enforcement is not proven.
-- `wired`: adapter files and installer paths exist, but dedicated generated-artifact smoke coverage may be absent.
-- `documented`: instructions exist without verified wiring.
-- `planned`: roadmap only.
-
-See [Adapter Support Matrix](../ADAPTER_SUPPORT_MATRIX.md) for evidence-based adapter status assessment. Adapter claims require evidence: no adapter is claimed as `enforced` without smoke tests proving runtime enforcement. Claude Code and Codex are `verified-plugin-wired` because local smoke tests validate their pointer adapters, plugin manifests, hook configs, skills, synthetic SessionStart context hooks, and synthetic PreToolUse deny decisions. No live Claude or Codex runtime hook enforcement is proven.
+Adapter status is evidence-based and maintained in the [Adapter Support Matrix](../ADAPTER_SUPPORT_MATRIX.md). Use that matrix for current statuses, verification evidence, and host-specific limitations; no adapter is `enforced` without runtime hook or tool-call proof.
 
 ## Machine-Readable Sidecars
 

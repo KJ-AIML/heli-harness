@@ -6,6 +6,7 @@ desktop.ini
 # Editor and local tooling
 .vscode/
 .idea/
+.worktrees/
 *.swp
 *.swo
 *~
