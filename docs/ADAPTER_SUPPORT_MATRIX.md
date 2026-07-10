@@ -1,78 +1,38 @@
 # Adapter Support Matrix
 
-This document provides an evidence-based assessment of Heli-Harness adapter support.
+This is the authoritative, evidence-based adapter-status reference. Statuses describe tested host behavior, not a security boundary; every hook remains a guardrail rather than a sandbox.
 
-## Adapter Status Taxonomy
+## Status taxonomy
 
-| Status | Meaning | Evidence Required |
-|--------|---------|-------------------|
-| **enforced** | Runtime hook/tool-call guard is verified and tested | Runtime hook proof and smoke or interactive test |
-| **verified-plugin-wired** | Native plugin artifacts are shipped and smoke-tested | Plugin manifest, hook config, plugin smoke test |
-| **plugin-wired** | Native plugin artifacts exist but lack smoke tests | Plugin manifest or host-native package files |
-| **verified-wired** | Instruction/pointer adapter artifacts are smoke-tested | Adapter smoke test validates generated artifacts |
-| **wired** | Instruction/pointer files and install paths exist | Adapter files and install wiring |
-| **documented** | Documentation exists only | README/docs |
-| **planned** | Roadmap only | Roadmap entry |
-| **unsupported** | Explicitly unsupported | Clear non-support statement |
+| Status | Meaning |
+| --- | --- |
+| `enforced` | Runtime hook or tool-call guard behavior has live proof and smoke coverage. |
+| `verified-plugin-wired` | Native plugin artifacts are shipped and smoke-tested; runtime enforcement lacks live proof. |
+| `verified-wired` | Pointer artifacts and install/update wiring are smoke-tested; runtime enforcement is not proven. |
+| `wired` | Adapter files and install wiring exist. |
+| `documented` | Instructions exist without verified wiring. |
+| `planned` | Roadmap only. |
 
-## Current Adapter Status
+## Current support
 
-| Adapter | Status | Evidence | Enforcement Surface | Verification Command | Limitations |
-|---------|--------|----------|---------------------|----------------------|-------------|
-| **Pi** | enforced | `extensions/pi-extension.js`, `scripts/smoke-extension-load.mjs` | `tool_call`, `before_agent_start`, `session_start` hooks | `node scripts/smoke-extension-load.mjs` | Host hook support required; not a sandbox; the `tool_call` hook also blocks writes when `current-task.md` shows a stuck task (2+ failed attempts, incomplete) until the state file is updated — mirroring the Claude/Codex plugin cross-CLI handoff guard, though Pi's gate does not cover target-mismatch, since target enforcement is already handled separately via `writesAllowedUnder`; the same gate extends to `.heli-harness/state/plan.md` steps (2+ failed attempts on the current step blocks writes the same way) |
-| **Claude Code** | enforced | `.heli-harness/adapters/claude/CLAUDE.md`, `.heli-harness/adapters/claude-plugin/.claude-plugin/plugin.json`, `.heli-harness/adapters/claude-plugin/hooks/hooks.json`, `scripts/smoke-claude-plugin.mjs`, `scripts/live-verify-claude-plugin.mjs` | Workspace `CLAUDE.md` pointer; native plugin manifest; synthetic SessionStart/PreToolUse hook smokes; live-verified PreToolUse denial in a real Claude Code session | `node scripts/smoke-claude-adapter.mjs`; `node scripts/smoke-claude-plugin.mjs`; `node scripts/live-verify-claude-plugin.mjs` | Live proof used `--plugin-dir` session loading, not marketplace install/trust; guard rules cover only git push and .env-style writes; not a sandbox; plugin skill surface is heli-governance + heli-target + heli-install only (Pi/AXGA ships 23 skills) |
-| **Codex** | enforced | `.heli-harness/adapters/codex/AGENTS.md`, `.heli-harness/adapters/codex-plugin/.codex-plugin/plugin.json`, `.heli-harness/adapters/codex-plugin/.agents/plugins/marketplace.json`, `.heli-harness/adapters/codex-plugin/hooks/hooks.json`, `scripts/smoke-codex-plugin.mjs`, `scripts/live-verify-codex-plugin-install.mjs`, `scripts/live-verify-codex-plugin-hook.mjs` | Workspace `AGENTS.md` pointer; native plugin manifest; synthetic SessionStart and PreToolUse hook smokes; live-verified marketplace add/install/trust; live-verified PreToolUse denial in a real Codex session | `node scripts/smoke-codex-adapter.mjs`; `node scripts/smoke-codex-plugin.mjs`; `node scripts/live-verify-codex-plugin-install.mjs`; `node scripts/live-verify-codex-plugin-hook.mjs` | Live proof requires `--dangerously-bypass-hook-trust`; normal interactive hook-trust prompt flow not separately verified; guard rules cover only git push and .env-style writes; plugin skill surface is heli-governance + heli-target + heli-install only (Pi/AXGA ships 23 skills) |
-| **Cursor** | wired | `.heli-harness/adapters/cursor/CURSOR.md`, `install.sh`, `install.ps1` | Workspace `.cursorrules` or `.cursor/rules/` pointer | `node scripts/verify-adapters.mjs` | No runtime hook enforcement |
-| **Grok Build** | enforced | `adapters/grok/`, `adapters/grok-plugin/` (valid plugin manifests + `install-user-hooks.mjs`), `scripts/smoke-grok-*.mjs`, `scripts/live-verify-grok-hooks.mjs` | User hooks in `~/.grok/hooks/heli-harness.json`; live `grok -p` PreToolUse deny of `git push` (debug-file evidence); plugin install for skills | `node scripts/smoke-grok-adapter.mjs`; `node scripts/smoke-grok-plugin.mjs`; `node scripts/live-verify-grok-hooks.mjs` | Plugin inventory hooks alone do not fire PreToolUse on Grok 0.2.x — run `install-user-hooks.mjs`; SessionStart must not use matchers |
-| **OpenCode** | enforced | `adapters/opencode/`, `adapters/opencode-plugin/heli-harness.mjs`, smokes + `live-verify-opencode-plugin.mjs` | Self-contained JS plugin; `opencode.json` `plugin` entry; live `opencode run` reports Heli git-push block | `node scripts/smoke-opencode-adapter.mjs`; `node scripts/smoke-opencode-plugin.mjs`; `node scripts/live-verify-opencode-plugin.mjs` | Must list plugin in `opencode.json` (directory auto-scan alone was empty on 1.2.26) |
-| **Kimi Code CLI** | enforced | `adapters/kimi/`, `adapters/kimi-plugin/install-user-hooks.mjs` + self-contained hooks, smokes + `live-verify-kimi-hooks.mjs` | `~/.kimi-code/config.toml` `[[hooks]]`; live `kimi -p` prints Heli git-push block | `node scripts/smoke-kimi-adapter.mjs`; `node scripts/smoke-kimi-plugin.mjs`; `node scripts/live-verify-kimi-hooks.mjs` | Run installer into Kimi config; `kimi -p` cannot combine with `--yolo`/`--auto` |
-| **Antigravity CLI** | verified-plugin-wired | `adapters/antigravity/`, `adapters/antigravity-plugin/`, synthetic smokes | plugin.json + hooks.json artifacts only | `node scripts/smoke-antigravity-adapter.mjs`; `node scripts/smoke-antigravity-plugin.mjs` | No `agy` CLI on verification host; not live-proven — do not treat as enforced |
-| **AXGA** | documented | `.heli-harness/adapters/pi/README.md` | Shares Pi extension if compatible | Manual verification | No dedicated AXGA smoke test |
-| **Generic** | documented | `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md` | Manual instructions | `node scripts/verify-adapters.mjs` | No install automation or runtime enforcement |
-| **Windsurf** | planned | Roadmap entry | None | N/A | No implementation |
-| **Cline** | planned | Roadmap entry | None | N/A | No implementation |
-| **Gemini** | planned | Roadmap entry | None | N/A | Analysis only in v0.5.10 |
-| **OpenClaw** | planned | Roadmap entry | None | N/A | No implementation |
+| Adapter | Status | Evidence and verification | Limits |
+| --- | --- | --- | --- |
+| Pi | `enforced` | `extensions/pi-extension.js`; `scripts/smoke-extension-load.mjs` | Requires compatible host hooks; not a sandbox. |
+| Claude Code | `enforced` | `.heli-harness/adapters/claude-plugin/`; `scripts/smoke-claude-plugin.mjs`; `scripts/live-verify-claude-plugin.mjs` | Live proof uses session-scoped `--plugin-dir`, not installed-plugin trust flow; narrow guard scope; not a sandbox. |
+| Codex | `enforced` | `.heli-harness/adapters/codex-plugin/`; `scripts/smoke-codex-plugin.mjs`; `scripts/live-verify-codex-plugin-install.mjs`; `scripts/live-verify-codex-plugin-hook.mjs` | Normal interactive hook-trust flow is not separately verified; narrow guard scope; not a sandbox. |
+| Cursor | `wired` | `.heli-harness/adapters/cursor/`; `scripts/verify-adapters.mjs` | Pointer instructions only; no runtime guard. |
+| Grok Build | `enforced` | `.heli-harness/adapters/grok-plugin/`; smoke scripts; `scripts/live-verify-grok-hooks.mjs` | User-hook installation is required; plugin inventory alone does not wire runtime hooks. |
+| OpenCode | `enforced` | `.heli-harness/adapters/opencode-plugin/`; smoke scripts; `scripts/live-verify-opencode-plugin.mjs` | Must register the plugin in `opencode.json`; not a sandbox. |
+| Kimi Code CLI | `enforced` | `.heli-harness/adapters/kimi-plugin/`; smoke scripts; `scripts/live-verify-kimi-hooks.mjs` | Requires hook installation in Kimi configuration; not a sandbox. |
+| Antigravity CLI | `verified-plugin-wired` | `.heli-harness/adapters/antigravity-plugin/`; synthetic smoke scripts | No live host proof yet. |
+| AXGA | `documented` | `.heli-harness/adapters/pi/README.md` | No dedicated AXGA smoke test. |
+| Generic | `documented` | `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md` | Manual setup; no runtime enforcement. |
+| Windsurf, Cline, Gemini, OpenClaw | `planned` | `ROADMAP.md` | No implementation. |
 
-## Plugin Evidence
+## Hook scope
 
-### Claude Code
+Live checks for supported native hooks exercise remote-push denial and environment-file-write denial in isolated workspaces. They also cover stuck or target-mismatched task-state write gates where listed in the adapter artifacts. This is deliberately limited coverage, not host permission enforcement or sandboxing.
 
-Heli ships `.heli-harness/adapters/claude-plugin/.claude-plugin/plugin.json`, root-level `hooks/hooks.json`, a `skills/heli-governance/SKILL.md`, and a plugin README. `scripts/smoke-claude-plugin.mjs` parses those files, runs `node --check` on hook scripts, invokes synthetic SessionStart input, invokes synthetic PreToolUse input for `git push` and `.env` writes, and runs `claude plugin validate` when the local CLI is available.
+## Maintainer verification
 
-`scripts/live-verify-claude-plugin.mjs` goes further: it copies the plugin into an isolated temp directory, drives a real `claude -p` session (`--plugin-dir`, isolated throwaway git repo, `--dangerously-skip-permissions`), asks it to run `git push origin main` and write a `.env` file, and asserts the session's own `permission_denials` result contains both denials. This is a live proof, not a synthetic one: it uses the actual installed Claude Code CLI, and confirms via the filesystem that neither action took effect. It does not cover the marketplace-installed-and-trusted flow (`claude plugin install`) — only `--plugin-dir` session loading.
-
-The plugin's skill surface is limited to `heli-governance`, `heli-target`, and `heli-install`; it does not port the rest of Pi/AXGA's 23-skill library.
-
-The `PreToolUse` hook also blocks `Edit`/`Write`/`apply_patch` calls when `current-task.md` carries over a stuck or target-mismatched task from a prior session, until the state file is updated — this is the cross-CLI handoff guard; see `scripts/smoke-claude-plugin.mjs` for the fixture-based coverage.
-
-### Codex
-
-Heli ships `.heli-harness/adapters/codex-plugin/.codex-plugin/plugin.json`, root-level `hooks/hooks.json`, `skills/heli-governance/SKILL.md`, `AGENTS.md`, a plugin README, and `.agents/plugins/marketplace.json` (required for `codex plugin marketplace add` to recognize the directory). `scripts/smoke-codex-plugin.mjs` parses those files, runs `node --check` on hook scripts, invokes synthetic SessionStart input, and invokes synthetic PreToolUse input for `git push` and `.env` writes.
-
-`scripts/live-verify-codex-plugin-install.mjs` drives the real `codex` CLI (isolated `CODEX_HOME`) through `codex plugin marketplace add` and `codex plugin add`, then confirms `codex plugin list` reports the plugin installed and enabled. This proves the install/trust path works against the real Codex CLI.
-
-`scripts/live-verify-codex-plugin-hook.mjs` goes further: it drives a real `codex exec` turn (isolated `CODEX_HOME`, throwaway git repo, `--dangerously-bypass-hook-trust`) asking it to run `git push origin main` and write a `.env` file, and asserts the CLI's own output shows the PreToolUse hook denying both — confirmed via the filesystem that `.env` was never created. This live test surfaced a real bug: Codex's `apply_patch` tool embeds the target path inside a patch-format string under `command` (e.g. `*** Add File: .env`), not a `path`/`file` field, so the hook's file-write guard never matched it. Fixed in `heli-pre-tool-use.mjs` for both the Codex and Claude Code plugin copies, with a synthetic regression test added to each plugin smoke test using the real captured payload shape.
-
-The plugin's skill surface is limited to `heli-governance`, `heli-target`, and `heli-install`; it does not port the rest of Pi/AXGA's 23-skill library.
-
-The `PreToolUse` hook also blocks `Edit`/`Write`/`apply_patch` calls when `current-task.md` carries over a stuck or target-mismatched task from a prior session, until the state file is updated — this is the cross-CLI handoff guard; see `scripts/smoke-codex-plugin.mjs` for the fixture-based coverage.
-
-All three adapters — Claude Code, Codex, and Pi (shared by AXGA) — also surface the last 5 `## `-delimited sections of `.heli-harness/state/decisions.md` (when present) in their session-start context, so recent durable decisions carry across CLI switches; see `lastDecisionSections()` in `extensions/pi-extension.js` and the equivalent logic in each plugin's `hooks/heli-session-start.mjs`.
-
-All three adapters — Claude Code, Codex, and Pi (shared by AXGA) — also surface a compact progress rollup from `.heli-harness/state/plan.md` (when present) in session-start context: the plan title, "N/M steps complete," and the current (first non-complete) step's title/status/attempts, plus an instruction to read the full file before resuming. The same stuck-task gate concept extends to step granularity: 2+ failed attempts on the current step blocks `Edit`/`Write`/`apply_patch` the same way a stuck whole-task does, until that step's `Status`/`Attempts` fields are updated. See `planRollup()` in `extensions/pi-extension.js` and the equivalent logic in each plugin's `hooks/heli-session-start.mjs` and `hooks/heli-pre-tool-use.mjs`.
-
-All three adapters also warn (session-start only, not a blocking gate) when `current-task.md` declares `Step count: N` at 3 or more but `Plan:` is still `n/a` — the case where a task obviously needed a `plan.md` and never got one, previously invisible anywhere in the system. See `stepCountPlanWarning()` in `extensions/pi-extension.js` and the equivalent logic in each plugin's `hooks/heli-session-start.mjs`.
-
-## Claims Policy
-
-Claims require evidence.
-
-- Do not claim `enforced` unless runtime hook/tool-call blocking is proven.
-- Use `verified-plugin-wired` only when native plugin files and plugin smoke tests exist.
-- Use `plugin-wired` for native plugin artifacts without smoke tests.
-- Use `verified-wired` for smoke-tested pointer adapters.
-- Use `wired` for pointer files without dedicated smoke coverage.
-- Keep planned hosts planned until artifacts ship.
-
-Run `node scripts/verify-adapters.mjs` and `node scripts/validate-release.mjs` before changing status claims.
+Run local smoke checks before changing evidence claims. The `scripts/live-verify-*.mjs` commands may use isolated credentials, make API calls, and consume provider usage; they are maintainer-only release proof, not user setup.
