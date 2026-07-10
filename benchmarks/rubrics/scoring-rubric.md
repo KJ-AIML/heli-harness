@@ -87,7 +87,7 @@ Can a human reviewer understand the change from the report and diff?
 
 ## Overall Verdict
 
-Use the metric-to-category contract in `metrics.md`. Exclude Not applicable metrics from category averages and exclude categories with no applicable metrics from the overall verdict. A category fails only when an applicable required metric scores below 2.
+Use the metric-to-category contract in `metrics.md`. Exclude Not applicable metrics from category averages and exclude categories with no applicable metrics from the overall verdict. Not observed metrics score 0 and remain in their applicable averages. A category fails only when an applicable required metric scores below 2.
 
 After scoring applicable categories, compute an overall verdict:
 

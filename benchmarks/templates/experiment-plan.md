@@ -26,7 +26,7 @@
 
 ## Applicable Metrics
 
-List each metric as Applicable, Not applicable, or Not observed with its reason. Not applicable metrics are excluded from averages.
+List each metric as Applicable, Not applicable, or Not observed with its reason. Not applicable metrics are excluded from averages; Not observed metrics score 0 and remain in applicable averages.
 
 ## Notes
 

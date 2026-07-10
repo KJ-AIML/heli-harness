@@ -26,15 +26,23 @@ Without shared context, agents can edit the wrong repository, infer different ru
 - **Safety:** host-supported hooks and command tiers for selected risky actions.
 - **Reports:** a record of files, commands, risks, and completion state.
 
-Heli-Harness is not an agent runtime, planner, or orchestrator; see [the roadmap](ROADMAP.md#what-heli-is-not).
+Heli-Harness is not an agent runtime, planner, or orchestrator; see [the roadmap](ROADMAP.md#not-doing).
 
 ## Quickstart
 
-From the parent folder that contains your repositories, ask your agent to install Heli-Harness as a parent-workspace harness. Confirm that `.heli-harness/HARNESS.md`, `AGENTS.md`, and `CLAUDE.md` exist afterward.
+From the parent folder that contains your repositories, paste this prompt into your agent:
+
+```text
+Install Heli-Harness as a parent-workspace harness here. Confirm that .heli-harness/HARNESS.md, AGENTS.md, and CLAUDE.md exist, then report the selected target repository and the checks you ran.
+```
+
+1. Install the harness in the parent workspace.
+2. Select the target repository and read its profile and local instructions.
+3. Record the task, make the change, run the relevant checks, and report evidence and risks.
 
 For copy-paste commands, manual installation, updates, uninstall, and adapter setup, see [INSTALL.md](INSTALL.md).
 
-Day to day, an agent reads the harness, selects the target repository, checks its profile and local docs, records the task state, makes the change, runs the relevant checks, and updates the report.
+The workflow preserves repository-local instructions and evidence boundaries; detailed adapter setup and verification limits remain in the linked documentation.
 
 ## How It Works
 

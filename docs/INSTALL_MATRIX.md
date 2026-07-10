@@ -2,6 +2,8 @@
 
 Use the workspace harness for a parent workspace. Host-specific support status and proof live in [Adapter Support Matrix](ADAPTER_SUPPORT_MATRIX.md).
 
+For copy-paste setup, manual installation, updates, removal, and adapter details, see [INSTALL.md](../INSTALL.md).
+
 ## Workspace harness
 
 | Method | Command | What it installs |

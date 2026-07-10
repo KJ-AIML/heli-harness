@@ -10,7 +10,7 @@ Risk tier: S2
 
 Plan: .heli-harness/state/plan.md
 
-Step count: 5
+Step count: 6
 
 Files expected to change:
 - .gitignore
@@ -31,6 +31,7 @@ Files expected to change:
 - docs/superpowers/plans/2026-07-10-documentation-overhaul.md
 - .heli-harness/state/current-task.md
 - .heli-harness/state/plan.md
+- .superpowers/sdd/whole-branch-fix-report.md
 
 Dirty files observed:
 - none
@@ -48,12 +49,13 @@ Relevant skills consulted:
 - heli-harness/skills/test-validation
 - heli-harness/skills/fix-loop
 - ponytail:ponytail
+- heli-harness/skills/verify-premise
 
 Current status: complete
 
 Failed attempts count: 1
 
-Next smallest action: none — Task 5 complete.
+Next smallest action: none — final whole-branch review repairs complete.
 
 Remaining non-blocking risks:
 - Live verification, tag, push, publish, and other external actions were intentionally not run.

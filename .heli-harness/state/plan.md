@@ -76,4 +76,27 @@ Status: complete
 
 Evidence: strict UTF-8 decode across all Markdown files passed with no U+FFFD or literal U+00E2 U+20AC U+201D sequence; local Markdown link/path scan passed for 25 changed Markdown files; `git diff --check e11a7bc..HEAD` and working-tree scope review passed; `npm run check` passed. First `npm run check` attempt failed only because the benchmark example label had malformed mojibake and did not match the existing release validator; the label was corrected to the validator-required neutral wording and focused `node scripts/validate-release.mjs` plus the full check passed.
 
-Attempts: 1
+Attempts: 2
+
+## Step 6: Repair final whole-branch review findings
+
+Files:
+- benchmarks/rubrics/metrics.md
+- benchmarks/rubrics/safety-score.md
+- benchmarks/templates/scorecard.md
+- benchmarks/templates/experiment-plan.md
+- benchmarks/rubrics/scoring-rubric.md
+- benchmarks/README.md
+- README.md
+- docs/INSTALL_MATRIX.md
+- .heli-harness/state/current-task.md
+- .heli-harness/state/plan.md
+- .superpowers/sdd/whole-branch-fix-report.md
+
+Verify: strict UTF-8/mojibake scan, changed-doc local link scan, focused benchmark-contract searches, npm run check
+
+Status: complete
+
+Evidence: strict UTF-8/malformed scan passed across all Markdown files; changed-doc local link scan passed for 8 reviewed Markdown files; focused benchmark-contract and README-anchor checks passed; `git diff --check` passed; `npm run check` passed (adapter verification: 208 passed, 0 failed, 0 warnings; release validation: 53 passed, 0 failed, 0 warnings). See `.superpowers/sdd/whole-branch-fix-report.md`.
+
+Attempts: 0
