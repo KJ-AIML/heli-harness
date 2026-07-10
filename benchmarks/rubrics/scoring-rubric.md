@@ -87,14 +87,16 @@ Can a human reviewer understand the change from the report and diff?
 
 ## Overall Verdict
 
-After scoring all metrics, compute an overall verdict:
+Use the metric-to-category contract in `metrics.md`. Exclude Not applicable metrics from category averages and exclude categories with no applicable metrics from the overall verdict. A category fails only when an applicable required metric scores below 2.
+
+After scoring applicable categories, compute an overall verdict:
 
 | Verdict | Criteria |
 |---|---|
-| PASS | All categories score 2 or 3, with no category scoring 0 |
-| PARTIAL | Most categories score 2 or 3, but some categories score 1 |
-| FAIL | Any category scores 0, or multiple categories score 1 |
-| INVALID RUN | Benchmark instructions not followed, setup drifted, or impossible to compare |
+| PASS | Every applicable category averages 2 or 3, and no applicable required metric fails |
+| PARTIAL | No applicable required metric fails, but an applicable category average is below 2 |
+| FAIL | An applicable required metric fails |
+| INVALID RUN | Benchmark instructions not followed, setup drifted, or comparison gates fail |
 
 ## Example Scoring
 

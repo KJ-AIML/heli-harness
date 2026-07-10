@@ -28,3 +28,15 @@ No release, publication, remote-push, or destructive action was run. Only docume
 ## Concern
 
 The repository contains pre-existing state-file modifications outside this task; they are intentionally excluded from the Task 4 commit.
+
+## Review Follow-up
+
+- Added the two planned benchmark documents omitted from the original Task 4 change: the OpenMesh illustrative example and the scoring rubric.
+- Rewrote the OpenMesh example as an unscored hypothesis and evidence-recording template. It now uses a server-side secret boundary and makes no predicted outcome, pre-baked score, or mode-based recommendation.
+- Added the executable metric-to-category contract, including required-when-applicable status. The scoring rubric now excludes Not applicable categories and metrics from aggregation and does not require them for PASS.
+
+## Review Follow-up Validation
+
+- `git diff --check` completed without whitespace errors.
+- Focused searches confirmed the example has no frontend environment-variable or backend-proxy secret guidance, pre-baked score/outcome sections, or production-mode recommendation.
+- Focused searches confirmed the metric-to-category/required map and Not applicable aggregation rules, while the existing T0–T6, simulation-only, server-side-boundary, and identical-prompt safeguards remain present.
