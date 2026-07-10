@@ -4,56 +4,31 @@ Thanks for your interest in contributing!
 
 ## Development workflow
 
-1. Fork the repo
-2. Create a feature branch
-3. Make your changes
-4. Test locally (see below)
-5. Submit a pull request
+1. Fork the repository.
+2. Create a feature branch.
+3. Make the smallest relevant change.
+4. Run the validation below.
+5. Submit a pull request.
 
-## Testing locally
+## Validation
 
-Before submitting a PR, validate your changes:
+Run the full repository validation before submitting a pull request:
 
 ```bash
-# JSON parse checks
-python -c "import json; json.load(open('package.json'))"
-python -c "import json; json.load(open('manifest.json'))"
-python -c "import json; json.load(open('.heli-harness/manifest.json'))"
-
-# YAML frontmatter validation
-python -c "
-import yaml, os
-for skill in os.listdir('.heli-harness/skills'):
-    path = f'.heli-harness/skills/{skill}/SKILL.md'
-    if os.path.exists(path):
-        with open(path) as f:
-            content = f.read()
-        if content.startswith('---'):
-            parts = content.split('---', 2)
-            if len(parts) >= 3:
-                yaml.safe_load(parts[1])
-"
-
-# Shell script syntax
-bash -n install.sh
-bash -n update.sh
-bash -n uninstall.sh
-
-# PowerShell syntax (Windows)
-powershell -NoProfile -Command "try { \$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content install.ps1 -Raw), [ref]\$null); Write-Host 'install.ps1: OK' } catch { Write-Host 'install.ps1: FAIL' }"
-
-# JavaScript syntax
-node --check extensions/pi-extension.js
-
-# Test install in a clean folder
-mkdir /tmp/test-install
-./install.sh /tmp/test-install
-ls /tmp/test-install/.heli-harness
+npm run check
 ```
+
+This is the canonical check and requires Node.js with npm. It includes syntax checks, smoke tests, adapter verification, and release-document validation.
+
+Optional checks are for the environments they exercise:
+
+- Run `bash -n install.sh update.sh uninstall.sh` when changing shell scripts; it requires Bash.
+- Run the PowerShell parser check when changing `.ps1` scripts; it requires PowerShell.
+- Run `npm run live-verify:<adapter>` only for maintainer release proof. These commands require the named host CLI and credentials, and may make API calls or consume provider usage.
 
 ## Adding a new skill
 
-1. Create `.heli-harness/skills/<skill-name>/SKILL.md`
+1. Create `.heli-harness/skills/<skill-name>/SKILL.md`.
 2. Add YAML frontmatter:
 
    ```yaml
@@ -63,32 +38,32 @@ ls /tmp/test-install/.heli-harness
    ---
    ```
 
-3. Write the skill content in markdown
-4. Update `.heli-harness/manifest.json` to include the skill in the `skills` array
-5. Test that the skill loads correctly
+3. Write the skill content in Markdown.
+4. Update `.heli-harness/manifest.json` to include the skill in the `skills` array.
+5. Run `npm run check`.
 
 ## Adding a new adapter
 
-1. Create `.heli-harness/adapters/<adapter-name>/`
-2. Add adapter-specific instructions (e.g., `AGENTS.md`, `CLAUDE.md`, etc.)
-3. Update `.heli-harness/manifest.json` to include the adapter in the `adapters` array
-4. Update `README.md` to document the new adapter
-5. Test that the adapter works with the target agent
+1. Create `.heli-harness/adapters/<adapter-name>/`.
+2. Add adapter-specific instructions (for example, `AGENTS.md` or `CLAUDE.md`).
+3. Update `.heli-harness/manifest.json` to include the adapter in the `adapters` array.
+4. Update `README.md` and `docs/ADAPTER_SUPPORT_MATRIX.md` with evidence-backed status and limits.
+5. Run `npm run check`.
 
 ## Code style
 
-- Use consistent naming (heli-harness, not heli-harness)
-- Keep scripts simple and deterministic
-- No auto-install or destructive operations without confirmation
-- Preserve user data (profiles, state) during updates
+- Use the project name consistently: Heli-Harness.
+- Keep scripts simple and deterministic.
+- Do not auto-install or run destructive operations without confirmation.
+- Preserve user data (profiles and state) during updates.
 
 ## Pull request checklist
 
-- [ ] All validation checks pass
-- [ ] Tested install/update/uninstall locally
-- [ ] Updated documentation if needed
-- [ ] No legacy references (heli-harness)
-- [ ] Commit messages are clear and descriptive
+- [ ] `npm run check` passes.
+- [ ] Relevant install, update, or uninstall behavior was tested when changed.
+- [ ] Documentation and adapter evidence were updated when needed.
+- [ ] No stale project-name references remain.
+- [ ] Commit messages are clear and descriptive.
 
 ## Questions?
 
