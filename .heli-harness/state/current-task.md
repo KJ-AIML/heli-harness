@@ -2,34 +2,49 @@
 
 Target repo: heli-harness
 
-Task: Honest-degradation follow-up from real dogfooding feedback (Evokehub/OpenDocument session): add an adapter enforcement self-check (warn when the SessionStart hook didn't actually inject context, meaning guardrails are advisory only), add a "Relevant skills consulted" field to current-task.md/HARNESS.md, and nudge repo-profile creation when none exists. Also found and fixed a real bug in this same file's own gate: heli-pre-tool-use.mjs's/pi-extension.js's field-parsing regex used `\s*` after the label colon, which spans blank lines and greedily captures the next field's label when a field is left empty.
+Task: Overhaul the public documentation: redesign the README for clear sharing and onboarding, repair operational-document drift, and make benchmark guidance safe and methodologically neutral.
 
-Mode: implement
+Mode: design_review
 
-Risk tier: S1
+Risk tier: S2
+
+Plan: n/a
+
+Step count: 5
 
 Files expected to change:
-- .heli-harness/adapters/claude/CLAUDE.md
-- .heli-harness/adapters/codex/AGENTS.md
-- .heli-harness/HARNESS.md
-- .heli-harness/templates/current-task.md
-- .heli-harness/adapters/claude-plugin/hooks/heli-pre-tool-use.mjs
-- .heli-harness/adapters/codex-plugin/hooks/heli-pre-tool-use.mjs
-- extensions/pi-extension.js
-- scripts/smoke-*.mjs (regression coverage for the field-parsing fix)
+- README.md
+- INSTALL.md
+- ROADMAP.md
+- SECURITY.md
+- CONTRIBUTING.md
+- docs/INSTALL_MATRIX.md
+- docs/ADAPTER_SUPPORT_MATRIX.md
+- docs/architecture/governance-model.md
+- benchmarks/README.md
+- benchmarks/scenarios/*.md
+- benchmarks/templates/*.md
+- benchmarks/rubrics/*.md
+- docs/superpowers/specs/2026-07-10-documentation-overhaul-design.md
+- docs/superpowers/plans/2026-07-10-documentation-overhaul.md
 - .heli-harness/state/current-task.md
+- .heli-harness/state/plan.md
 
 Dirty files observed:
 - none
 
 Planned verification:
+- strict UTF-8/mojibake scan across Markdown files
+- local Markdown link/path scan
 - npm run check
 
 Relevant skills consulted:
-- none (plain doc/regex edits, no skills/* routing needed)
+- superpowers:brainstorming
+- heli-harness/skills/engineering
+- heli-harness/skills/impact
 
-Current status: complete
+Current status: in_progress
 
 Failed attempts count: 0
 
-Next smallest action: none — npm run check passes (140+53 assertions, all green including 2 new regression tests for the field-parsing fix); ready to commit and decide on a version release.
+Next smallest action: user reviews the approved design written at docs/superpowers/specs/2026-07-10-documentation-overhaul-design.md before implementation planning.
