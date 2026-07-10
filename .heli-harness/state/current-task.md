@@ -8,11 +8,12 @@ Mode: design_review
 
 Risk tier: S2
 
-Plan: n/a
+Plan: docs/superpowers/plans/2026-07-10-documentation-overhaul.md
 
 Step count: 5
 
 Files expected to change:
+- .gitignore
 - README.md
 - INSTALL.md
 - ROADMAP.md
@@ -47,4 +48,4 @@ Current status: in_progress
 
 Failed attempts count: 0
 
-Next smallest action: user reviews the approved design written at docs/superpowers/specs/2026-07-10-documentation-overhaul-design.md before implementation planning.
+Next smallest action: execute Task 1 from docs/superpowers/plans/2026-07-10-documentation-overhaul.md.
