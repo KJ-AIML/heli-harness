@@ -92,11 +92,12 @@ Files:
 - .heli-harness/state/current-task.md
 - .heli-harness/state/plan.md
 - .superpowers/sdd/whole-branch-fix-report.md
+- .superpowers/sdd/final-link-fix-report.md
 
 Verify: strict UTF-8/mojibake scan, changed-doc local link scan, focused benchmark-contract searches, npm run check
 
 Status: complete
 
-Evidence: strict UTF-8/malformed scan passed across all Markdown files; changed-doc local link scan passed for 8 reviewed Markdown files; focused benchmark-contract and README-anchor checks passed; `git diff --check` passed; `npm run check` passed (adapter verification: 208 passed, 0 failed, 0 warnings; release validation: 53 passed, 0 failed, 0 warnings). See `.superpowers/sdd/whole-branch-fix-report.md`.
+Evidence: strict UTF-8/malformed scan passed across all Markdown files; changed-doc local link scan passed for 8 reviewed Markdown files; focused benchmark-contract and README-anchor checks passed; `git diff --check` passed; `npm run check` passed (adapter verification: 208 passed, 0 failed, 0 warnings; release validation: 53 passed, 0 failed, 0 warnings). Final repair: `docs/ADAPTER_SUPPORT_MATRIX.md` directly links to `../INSTALL.md` and identifies it as the end-user installation guide; focused local-link check, `git diff --check`, and `npm run check` passed. See `.superpowers/sdd/whole-branch-fix-report.md` and `.superpowers/sdd/final-link-fix-report.md`.
 
 Attempts: 0

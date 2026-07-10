@@ -32,6 +32,7 @@ Files expected to change:
 - .heli-harness/state/current-task.md
 - .heli-harness/state/plan.md
 - .superpowers/sdd/whole-branch-fix-report.md
+- .superpowers/sdd/final-link-fix-report.md
 
 Dirty files observed:
 - none
@@ -54,6 +55,9 @@ Relevant skills consulted:
 Current status: complete
 
 Failed attempts count: 1
+
+Completion evidence:
+- `docs/ADAPTER_SUPPORT_MATRIX.md` links directly to `../INSTALL.md` and names it the end-user installation guide; focused local-link check, `git diff --check`, and `npm run check` passed.
 
 Next smallest action: none — final whole-branch review repairs complete.
 
