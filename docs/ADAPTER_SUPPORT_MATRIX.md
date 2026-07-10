@@ -6,7 +6,7 @@ This is the authoritative, evidence-based adapter-status reference. Statuses des
 
 | Status | Meaning |
 | --- | --- |
-| `enforced` | Runtime hook or tool-call guard behavior has live proof and smoke coverage. |
+| `enforced` | Runtime hook or tool-call guard behavior is tested; the row names the available live and/or smoke evidence for that host. |
 | `verified-plugin-wired` | Native plugin artifacts are shipped and smoke-tested; runtime enforcement lacks live proof. |
 | `verified-wired` | Pointer artifacts and install/update wiring are smoke-tested; runtime enforcement is not proven. |
 | `wired` | Adapter files and install wiring exist. |
@@ -17,9 +17,9 @@ This is the authoritative, evidence-based adapter-status reference. Statuses des
 
 | Adapter | Status | Evidence and verification | Limits |
 | --- | --- | --- | --- |
-| Pi | `enforced` | `extensions/pi-extension.js`; `scripts/smoke-extension-load.mjs` | Requires compatible host hooks; not a sandbox. |
-| Claude Code | `enforced` | `.heli-harness/adapters/claude-plugin/`; `scripts/smoke-claude-plugin.mjs`; `scripts/live-verify-claude-plugin.mjs` | Live proof uses session-scoped `--plugin-dir`, not installed-plugin trust flow; narrow guard scope; not a sandbox. |
-| Codex | `enforced` | `.heli-harness/adapters/codex-plugin/`; `scripts/smoke-codex-plugin.mjs`; `scripts/live-verify-codex-plugin-install.mjs`; `scripts/live-verify-codex-plugin-hook.mjs` | Normal interactive hook-trust flow is not separately verified; narrow guard scope; not a sandbox. |
+| **Pi** | `enforced` | `extensions/pi-extension.js`; `node scripts/smoke-extension-load.mjs` | Named evidence is a local smoke; host-specific runtime scope requires compatible hooks; not a sandbox. |
+| **Claude Code** | `enforced` | `.heli-harness/adapters/claude-plugin/`; `node scripts/smoke-claude-adapter.mjs`; `node scripts/smoke-claude-plugin.mjs`; `node scripts/live-verify-claude-plugin.mjs` | Live proof uses session-scoped `--plugin-dir`, not installed-plugin trust flow; narrow guard scope; not a sandbox. |
+| **Codex** | `enforced` | `.heli-harness/adapters/codex-plugin/`; `node scripts/smoke-codex-adapter.mjs`; `node scripts/smoke-codex-plugin.mjs`; `node scripts/live-verify-codex-plugin-install.mjs`; `node scripts/live-verify-codex-plugin-hook.mjs` | Normal interactive hook-trust flow is not separately verified; narrow guard scope; not a sandbox. |
 | Cursor | `wired` | `.heli-harness/adapters/cursor/`; `scripts/verify-adapters.mjs` | Pointer instructions only; no runtime guard. |
 | Grok Build | `enforced` | `.heli-harness/adapters/grok-plugin/`; smoke scripts; `scripts/live-verify-grok-hooks.mjs` | User-hook installation is required; plugin inventory alone does not wire runtime hooks. |
 | OpenCode | `enforced` | `.heli-harness/adapters/opencode-plugin/`; smoke scripts; `scripts/live-verify-opencode-plugin.mjs` | Must register the plugin in `opencode.json`; not a sandbox. |
