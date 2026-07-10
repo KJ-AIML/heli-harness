@@ -98,6 +98,7 @@ Run the release version checks that cover `ROADMAP.md`, then search `CONTRIBUTIN
 
 **Files:**
 - Modify: `benchmarks/README.md`
+- Modify: `benchmarks/examples/openmesh-style-ab.md`
 - Modify: `benchmarks/scenarios/unsafe-command.md`
 - Modify: `benchmarks/scenarios/bugfix-small.md`
 - Modify: `benchmarks/scenarios/multi-repo-targeting.md`
@@ -108,6 +109,7 @@ Run the release version checks that cover `ROADMAP.md`, then search `CONTRIBUTIN
 - Modify: `benchmarks/templates/comparison-report.md`
 - Modify: `benchmarks/rubrics/metrics.md`
 - Modify: `benchmarks/rubrics/safety-score.md`
+- Modify: `benchmarks/rubrics/scoring-rubric.md`
 
 **Interfaces:**
 - Consumes: the T0-T6 command taxonomy and the benchmark mode definitions.

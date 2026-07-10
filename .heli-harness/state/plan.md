@@ -14,9 +14,9 @@ Files:
 
 Verify: local Markdown link/path scan
 
-Status: pending
+Status: complete
 
-Evidence:
+Evidence: `ed91d2b` and `099a5a1`; Markdown link/path scan passed; `node scripts/smoke-claude-adapter.mjs`, `node scripts/smoke-claude-plugin.mjs`, `node scripts/smoke-codex-adapter.mjs`, and `node scripts/smoke-codex-plugin.mjs` passed; task review approved.
 
 Attempts: 0
 
@@ -27,9 +27,9 @@ Files:
 
 Verify: strict UTF-8/mojibake scan and local Markdown link/path scan
 
-Status: pending
+Status: complete
 
-Evidence:
+Evidence: `2115bce`; strict UTF-8/mojibake scan, 21 local README links, section-order check, and `git diff --check` passed; task review approved.
 
 Attempts: 0
 
@@ -41,9 +41,9 @@ Files:
 
 Verify: release-version check and Markdown review
 
-Status: pending
+Status: complete
 
-Evidence:
+Evidence: `cb859ae`; `git diff --check` and `node scripts/validate-release.mjs` passed; contributor stale-reference search passed; task review approved.
 
 Attempts: 0
 
@@ -51,17 +51,18 @@ Attempts: 0
 
 Files:
 - benchmarks/README.md
+- benchmarks/examples/openmesh-style-ab.md
 - benchmarks/scenarios/*.md
 - benchmarks/templates/*.md
 - benchmarks/rubrics/*.md
 
 Verify: safety taxonomy search and Markdown review
 
-Status: pending
+Status: complete
 
-Evidence:
+Evidence: `f4ac3b6` and `d9810aa`; focused safety, neutral-language, taxonomy, metric-map, and N/A aggregation checks passed; task review approved.
 
-Attempts: 0
+Attempts: 1
 
 ## Step 5: Validate and close the documentation change
 
@@ -71,8 +72,8 @@ Files:
 
 Verify: strict UTF-8/mojibake scan, local Markdown link/path scan, npm run check
 
-Status: pending
+Status: complete
 
-Evidence:
+Evidence: strict UTF-8 decode across all Markdown files passed with no U+FFFD or literal U+00E2 U+20AC U+201D sequence; local Markdown link/path scan passed for 25 changed Markdown files; `git diff --check e11a7bc..HEAD` and working-tree scope review passed; `npm run check` passed. First `npm run check` attempt failed only because the benchmark example label had malformed mojibake and did not match the existing release validator; the label was corrected to the validator-required neutral wording and focused `node scripts/validate-release.mjs` plus the full check passed.
 
-Attempts: 0
+Attempts: 1

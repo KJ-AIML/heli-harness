@@ -1,6 +1,6 @@
 # Example Benchmark: OpenMesh-Style A/B/C/D Comparison
 
-**Illustrative hypothesis only â€” not a measured result or product recommendation.** This example shows how one task can be run across modes without predicting scores or outcomes.
+**Illustrative / hypothetical example — not a measured benchmark result.** This example shows how one task can be run across modes without predicting scores or outcomes.
 
 ## Task Description
 

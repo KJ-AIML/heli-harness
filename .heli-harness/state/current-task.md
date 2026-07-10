@@ -4,11 +4,11 @@ Target repo: heli-harness
 
 Task: Overhaul the public documentation: redesign the README for clear sharing and onboarding, repair operational-document drift, and make benchmark guidance safe and methodologically neutral.
 
-Mode: design_review
+Mode: implement
 
 Risk tier: S2
 
-Plan: docs/superpowers/plans/2026-07-10-documentation-overhaul.md
+Plan: .heli-harness/state/plan.md
 
 Step count: 5
 
@@ -23,6 +23,7 @@ Files expected to change:
 - docs/ADAPTER_SUPPORT_MATRIX.md
 - docs/architecture/governance-model.md
 - benchmarks/README.md
+- benchmarks/examples/*.md
 - benchmarks/scenarios/*.md
 - benchmarks/templates/*.md
 - benchmarks/rubrics/*.md
@@ -43,9 +44,17 @@ Relevant skills consulted:
 - superpowers:brainstorming
 - heli-harness/skills/engineering
 - heli-harness/skills/impact
+- heli-harness/skills/audit
+- heli-harness/skills/test-validation
+- heli-harness/skills/fix-loop
+- ponytail:ponytail
 
-Current status: in_progress
+Current status: complete
 
-Failed attempts count: 0
+Failed attempts count: 1
 
-Next smallest action: execute Task 1 from docs/superpowers/plans/2026-07-10-documentation-overhaul.md.
+Next smallest action: none — Task 5 complete.
+
+Remaining non-blocking risks:
+- Live verification, tag, push, publish, and other external actions were intentionally not run.
+- The native Heli enforcement hook was not loaded in this session; local checks and scope discipline were used instead.
