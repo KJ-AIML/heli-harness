@@ -1,7 +1,7 @@
 # Heli-Harness
 
 <p align="center">
-  <img src="assets/heli-harness-hero.png" alt="Heli-Harness mascot hero banner â€” governance for coding agents" width="100%">
+  <img src="assets/heli-harness-hero.png" alt="Heli-Harness: governance for coding agents" width="100%">
 </p>
 
 <p align="center">
@@ -11,171 +11,65 @@
   <a href="docs/ADAPTER_SUPPORT_MATRIX.md"><img alt="Adapters" src="https://img.shields.io/badge/adapters-Pi%20%C2%B7%20Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20Cursor-8A2BE2"></a>
 </p>
 
-**A shared governance layer for coding agents working across many repos.**
+**Shared-workspace governance for coding agents.** Heli-Harness gives every agent working across your repositories the same source of truth for the target, task, policies, and completion report.
 
-Codex, Claude Code, Cursor, Pi â€” drop any of them into a workspace with a dozen repos and they'll each guess differently at where the source of truth is, which repo they're supposed to be editing, and what "done" looks like. Heli-Harness gives them one shared answer instead of a dozen guesses.
+## Why Heli-Harness
 
-The source of truth lives in `.heli-harness/HARNESS.md`. Tool-specific behavior lives only under `.heli-harness/adapters/`. Everything else â€” profiles, policies, state, hooks â€” hangs off that.
+Without shared context, agents can edit the wrong repository, infer different rules, and leave work without evidence. Heli-Harness adds a workspace-level `.heli-harness/HARNESS.md` while preserving each repository's own documentation.
 
-## ðŸ¤” Why this exists
-
-When multiple agents work across many repos in one workspace, they need shared answers to:
-
-- Where's the source of truth?
-- Which repo am I actually supposed to be editing right now?
-- What's the current task, and did the last agent leave notes?
-- Which of the 23 bundled skills actually apply here?
-- What does *this* repo forbid, recommend, or require â€” as opposed to what it merely happens to do today?
-
-Heli-Harness answers all five without replacing your repo-local docs.
-
-## ðŸ§­ How it thinks about the problem
+## What You Get
 
 > Facts describe. Policies decide. Safety enforces. Reports prove.
 
-- **Facts** â€” repo profiles record what exists, evidence-linked, not guessed.
-- **Policies** â€” overlays say what's required, recommended, forbidden, or needs approval.
-- **Safety** â€” hooks and command tiers block or surface risky actions where the host supports it.
-- **Reports** â€” every run has to show its work: files touched, commands run, risks left open.
+- **Facts:** evidence-linked repository profiles.
+- **Policies:** required, recommended, forbidden, and approval-needed work.
+- **Safety:** host-supported hooks and command tiers for selected risky actions.
+- **Reports:** a record of files, commands, risks, and completion state.
 
-It is *not* an agent runtime, a planner, or an orchestrator â€” see [ROADMAP.md](ROADMAP.md#what-heli-is-not) for the full list of things it deliberately isn't.
+Heli-Harness is not an agent runtime, planner, or orchestrator; see [the roadmap](ROADMAP.md#what-heli-is-not).
 
-## ðŸš€ Quickstart
+## Quickstart
 
-Ask your agent, from the parent folder that contains your repos:
+From the parent folder that contains your repositories, ask your agent to install Heli-Harness as a parent-workspace harness. Confirm that `.heli-harness/HARNESS.md`, `AGENTS.md`, and `CLAUDE.md` exist afterward.
 
-```
-Install this repo into the current folder as a parent-workspace harness:
+For copy-paste commands, manual installation, updates, uninstall, and adapter setup, see [INSTALL.md](INSTALL.md).
 
-https://github.com/KJ-AIML/heli-harness
+Day to day, an agent reads the harness, selects the target repository, checks its profile and local docs, records the task state, makes the change, runs the relevant checks, and updates the report.
 
-Use the latest stable tag (v0.5.22). Do not install globally. Treat the current
-directory as the workspace. Verify .heli-harness/HARNESS.md, AGENTS.md,
-and CLAUDE.md exist after install.
-```
+## How It Works
 
-That's it â€” one prompt, one workspace. Prefer a real command instead? `npx github:KJ-AIML/heli-harness install <path>` does the same thing with no AI tool involved (pin a release with `#v0.5.22`). For manual/scripted installs, Pi/AXGA package mode, uninstall, update, and the full CLI reference, see **[INSTALL.md](INSTALL.md)**.
+The workspace harness is the shared layer; tool-specific adapters live under `.heli-harness/adapters/`. Repository profiles capture facts, policy overlays state expectations, supported hooks add guardrails, and task state plus reports make work reviewable across handoffs.
 
-<details>
-<summary>What it feels like day-to-day</summary>
+## Supported Agents
 
-```
-You: Add rate-limiting middleware to the auth service.
+| Adapter | Status |
+| --- | --- |
+| Pi | `enforced` |
+| Claude Code | `enforced` |
+| Codex | `enforced` |
+| Cursor | `wired` |
+| Grok Build | `enforced` |
+| OpenCode | `enforced` |
+| Kimi Code CLI | `enforced` |
+| Antigravity CLI | `verified-plugin-wired` |
+| AXGA and generic agents | `documented` |
+| Windsurf, Cline, Gemini, and OpenClaw | `planned` |
 
-Agent:
-  1. Reads .heli-harness/HARNESS.md
-  2. Identifies target repo: auth-service/
-  3. Reads .heli-harness/profiles/auth-service.md
-  4. Reads auth-service/README.md, package.json, test setup
-  5. Updates .heli-harness/state/current-task.md
-  6. Implements rate-limiting
-  7. Runs tests per profile
-  8. Updates state on completion
-```
+The [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) is the authoritative evidence, verification, and limitation record. Detailed adapter installation commands are in [INSTALL.md](INSTALL.md).
 
-</details>
+## Proof and Boundaries
 
-## ðŸ”Œ Supported agents
+Tested hook rules cover named actions including remote pushes and environment-file writes in isolated workspaces. Coverage is deliberately narrow: it is a guardrail, not host permission enforcement or sandbox isolation. See the [support matrix](docs/ADAPTER_SUPPORT_MATRIX.md) for each adapter's tested scope and limits.
 
-**Adapter status taxonomy:**
-- **enforced** - Runtime hook/tool-call guard is verified and tested
-- **verified-plugin-wired** - Native plugin artifacts are shipped and smoke-tested; runtime enforcement is not proven
-- **plugin-wired** - Native plugin artifacts exist but lack smoke tests
-- **verified-wired** - Instruction/pointer adapter artifacts are smoke-tested; runtime enforcement is not proven
-- **wired** - Files/config/install paths exist and are validated
-- **documented** - Documentation exists, but no verified wiring or runtime enforcement
-- **planned** - Roadmap item exists, but no shipped adapter wiring yet
-- **unsupported** - Explicitly not supported
+## Benchmarks
 
-Every command below is what actually works today against the real, locally installed CLI â€” nothing here needs a published marketplace listing.
+The local, repeatable [benchmark pack](benchmarks/README.md) measures safety, target discipline, report completeness, and implementation quality across governance modes. It includes scenarios, rubrics, templates, and examples; it is not telemetry or a hosted service.
 
-### Claude Code â€” `enforced`
+## Documentation
 
-```bash
-claude --plugin-dir .heli-harness/adapters/claude-plugin
-```
-
-Loads the native plugin for that session. Live-verified: a real session denies `git push` and `.env` writes and reports it in `permission_denials`. For the full workspace harness instead, use the [Quickstart](#-quickstart) above.
-
-### Codex â€” `enforced`
-
-```bash
-codex plugin marketplace add ./.heli-harness/adapters/codex-plugin
-codex plugin add heli-harness@heli-harness
-```
-
-Live-verified: a real `codex exec` turn denies `git push` and `.env` writes via the PreToolUse hook.
-
-### Pi / AXGA â€” `enforced` (Pi) / `documented` (AXGA)
-
-```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.22
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.22
-```
-
-Loads 23 skills plus the Pi extension (hooks/guards). Then run `/heli-install` inside Pi/AXGA to set up the workspace harness â€” see [.heli-harness/adapters/pi/README.md](.heli-harness/adapters/pi/README.md).
-
-### Cursor â€” `wired`
-
-No plugin mechanism. After the workspace install (Quickstart above), Cursor reads `.heli-harness/adapters/cursor/CURSOR.md` on its own.
-
-### Grok Build â€” `enforced`
-
-```bash
-node .heli-harness/adapters/grok-plugin/install-user-hooks.mjs   # required for blocking
-grok plugin install .heli-harness/adapters/grok-plugin --trust   # optional skills
-```
-
-Live-verified: a real `grok -p` turn denies `git push` via PreToolUse (user hooks). Plugin install alone is not enough for hooks on Grok 0.2.x â€” run the installer. See `adapters/grok/install.md`.
-
-### OpenCode â€” `enforced`
-
-```bash
-cp .heli-harness/adapters/opencode-plugin/heli-harness.mjs .opencode/plugins/
-# opencode.json: { "plugin": ["./opencode/plugins/heli-harness.mjs"] }
-```
-
-Live-verified: `opencode run` loads the plugin and reports `Heli-Harness blocks git push`.
-
-### Kimi Code CLI â€” `enforced`
-
-```bash
-node .heli-harness/adapters/kimi-plugin/install-user-hooks.mjs
-kimi doctor config
-```
-
-Live-verified: `kimi -p` reports the Heli git-push denial text.
-
-### Antigravity CLI â€” `verified-plugin-wired`
-
-Stage `.heli-harness/adapters/antigravity-plugin/` into the Antigravity plugins directory. Synthetic smokes only â€” **not** live-verified (no `agy` CLI in the verification environment).
-
-### Generic agents â€” `documented`
-
-After the workspace install, point any other agent at `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md`.
-
-**Windsurf/Cline/Gemini/OpenClaw**: `planned` â€” no implementation yet.
-
-Every claim above has to point at real evidence â€” see **[docs/ADAPTER_SUPPORT_MATRIX.md](docs/ADAPTER_SUPPORT_MATRIX.md)** for the file paths, verification commands, and limitations behind each status. Per-adapter install paths (pointer vs. native plugin) live in **[INSTALL.md](INSTALL.md)**.
-
-## ðŸ“Š Governance benchmarks
-
-`benchmarks/` holds repeatable templates for measuring whether Heli actually improves safety, target discipline, report completeness, and implementation quality â€” not just vibes. No telemetry, no required runner, all local. See **[benchmarks/README.md](benchmarks/README.md)**.
-
-## ðŸ“š Docs
-
-- **[INSTALL.md](INSTALL.md)** â€” full install, uninstall, update, and per-adapter setup
-- **[ROADMAP.md](ROADMAP.md)** â€” what shipped, what's next, what's deliberately out of scope
-- **[docs/ADAPTER_SUPPORT_MATRIX.md](docs/ADAPTER_SUPPORT_MATRIX.md)** â€” evidence behind every adapter status claim
-- **[docs/architecture/governance-model.md](docs/architecture/governance-model.md)** â€” the governance model in depth
-- **[docs/research/agent-governance-research-synthesis.md](docs/research/agent-governance-research-synthesis.md)** â€” research synthesis behind the approach
-- **[docs/decisions/0001-heli-as-governance-harness.md](docs/decisions/0001-heli-as-governance-harness.md)** â€” ADR 0001
-- **[SECURITY.md](SECURITY.md)** â€” security policy
-
-## ðŸ¤ Contributing
-
-See **[CONTRIBUTING.md](CONTRIBUTING.md)**.
-
-## ðŸ“„ License
-
-MIT. See **[LICENSE](LICENSE)**.
+- [INSTALL.md](INSTALL.md) — installation, updates, removal, and adapter setup.
+- [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) — status evidence and limits.
+- [Governance model](docs/architecture/governance-model.md) — the model in depth.
+- [Roadmap](ROADMAP.md) — shipped work, next steps, and non-goals.
+- [Security policy](SECURITY.md) — vulnerability reporting and security guidance.
+- [Contributing](CONTRIBUTING.md) — contribution guidance.
