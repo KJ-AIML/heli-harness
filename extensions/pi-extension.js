@@ -3,6 +3,13 @@ import { join, dirname, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { install } from "../lib/cli/install.mjs";
 import { update } from "../lib/cli/update.mjs";
+import { buildSessionContext } from "../.heli-harness/adapters/shared/hook-core.mjs";
+import {
+	resolveExecutionContext,
+	evaluateOwnershipGate,
+	isTaskStateWriteForContext,
+} from "../.heli-harness/adapters/shared/concurrency/resolve.mjs";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1483,20 +1490,7 @@ Before non-trivial work:
 - Classify commands before running them.
 - Do not run mutating, API-credit, release, publish, push, or destructive commands without explicit user approval.
 - Prefer safe audit-only and non-mutating checks first.`;
-		const taskText = safeReadText(join(cwd, ".heli-harness", "state", "current-task.md")).trim();
-		const carriedOverTask = taskText
-			? `\n\nCarried-over task state from .heli-harness/state/current-task.md:\n${taskText}\n\nAcknowledge this before your first edit this session: confirm with the user whether to resume, abandon, or reset it. If it shows 2+ failed attempts on an incomplete task, the tool_call guard will block file writes until you update current-task.md to resolve it.`
-			: "";
-		const stepWarningText = stepCountPlanWarning(taskText);
-		const stepWarningContext = stepWarningText ? `\n\n${stepWarningText}` : "";
-		const recentDecisions = lastDecisionSections(safeReadText(join(cwd, ".heli-harness", "state", "decisions.md")));
-		const decisionsContext = recentDecisions
-			? `\n\nRecent durable decisions from .heli-harness/state/decisions.md:\n${recentDecisions}`
-			: "";
-		const planRollupText = planRollup(safeReadText(join(cwd, ".heli-harness", "state", "plan.md")));
-		const planContext = planRollupText
-			? `\n\nRead the full plan file before resuming: .heli-harness/state/plan.md\n${planRollupText}`
-			: "";
+		const sharedContext = buildSessionContext(cwd, { host: "pi" });
 		const probeInstructions = hookProbePromptPending
 			? `
 
@@ -1505,14 +1499,30 @@ For this one test turn only, start your next response with:
 HELI_HOOK_OK`
 			: "";
 		hookProbePromptPending = false;
-		return { systemPrompt: `${existingPrompt}\n\n${heliInstructions}${carriedOverTask}${stepWarningContext}${decisionsContext}${planContext}${probeInstructions}` };
+		return { systemPrompt: `${existingPrompt}\n\n${heliInstructions}\n\n${sharedContext}${probeInstructions}` };
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
 		const toolName = event && event.toolName;
 		const input = event && event.input ? event.input : {};
 		const cwd = process.cwd();
-		// Opt-in YOLO: skip all Heli tool_call blocks for this turn.
+		// Concurrent ownership/lease gates (never bypassed by YOLO). Pi keeps local safety guards below.
+		const execCtx = resolveExecutionContext({
+			cwd,
+			host: "pi",
+			hookPayload: { tool_name: toolName, tool_input: input },
+			createIfMissing: true,
+		});
+		const writePathsEarly = FILE_WRITE_TOOL_NAMES.has(String(toolName || "")) ? getFileWritePaths(input) : [];
+		const isWriteTool = writePathsEarly.length > 0 || /write|edit|replace|apply_patch/i.test(String(toolName || ""));
+		if (isWriteTool && !isTaskStateWriteForContext(execCtx, writePathsEarly.map((p) => String(p).replaceAll("\\", "/")))) {
+			const ownership = evaluateOwnershipGate(execCtx, { isWrite: true });
+			if (ownership.deny) {
+				lastToolGuardAt = new Date().toISOString();
+				return { block: true, reason: ownership.reason };
+			}
+		}
+		// Opt-in YOLO: skip remaining Pi-local tool_call blocks for this turn (safety only).
 		if (isYoloActive(cwd)) {
 			return;
 		}

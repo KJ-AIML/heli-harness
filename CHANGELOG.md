@@ -1,6 +1,38 @@
 # Changelog
 
+## v0.5.24 - Concurrent Session Foundation
+
+### Added
+
+- **Concurrent Session Foundation** for multi-session local coordination without becoming an agent orchestrator:
+  - Durable tasks under `.heli-harness/tasks/<task-id>/` (`task.json`, task-local plan/decisions/reports/evidence/events)
+  - Heli-generated sessions under `.heli-harness/sessions/<session-id>.json` with optional `externalHostSessionId`
+  - Worktree bindings under `.heli-harness/bindings/worktrees/`
+  - Single-writer task leases via exclusive lock directories `locks/tasks/<task-id>.write.lock/`
+  - Shared execution resolver used by Claude, Codex, Grok, Kimi, OpenCode, Antigravity hooks and Pi
+  - Workspace schema `.heli-harness/workspace/schema.json` with `mode: legacy | concurrent`
+  - CLI: `heli task`, `heli session`, `heli conflicts`
+  - Task-scoped YOLO (global `yolo.json` does not bleed across tasks in concurrent mode)
+  - Task-authoritative targets in concurrent mode
+  - Duplicate work-item detection on task create
+  - Advisory path-claim conflict detection
+  - `heli task migrate-legacy` one-way import from singular state files
+  - Regression suite: `node scripts/smoke-concurrency-foundation.mjs` (included in `npm run check`)
+
+### Changed
+
+- `heli status` reports concurrent multi-task summaries when schema mode is concurrent.
+- `heli update` preserves `tasks/`, `sessions/`, `bindings/`, and `locks/` by default.
+- Plugin hooks are thin wrappers over shared `adapters/shared/hook-core.mjs` + `adapters/shared/concurrency/`.
+
+### Notes
+
+- Local workspace coordination only — not a distributed lock service, scheduler, agent runtime, or merge orchestrator.
+- YOLO never bypasses ownership, lease, or wrong-task gates.
+- Legacy singular `state/current-task.md` workspaces continue to work until concurrent mode is initialized.
+
 ## v0.5.23 - Cursor Marketplace and OpenCode Discovery
+
 
 ### Added
 

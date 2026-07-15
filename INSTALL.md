@@ -23,7 +23,7 @@ npx github:KJ-AIML/heli-harness status
 
 From a clean `main` worktree, run `npm run release -- <x.y.z> "summary"`. The command updates current version surfaces, runs `npm run check`, stages only release-managed paths, creates the commit and annotated tag, and refuses unrelated dirty files. Add `--push` to push `main` and the new tag.
 
-Pin a release when needed: `npx github:KJ-AIML/heli-harness#v0.5.23 install <path>`.
+Pin a release when needed: `npx github:KJ-AIML/heli-harness#v0.5.24 install <path>`.
 
 ## Manual workspace install
 
@@ -32,7 +32,7 @@ Pin a release when needed: `npx github:KJ-AIML/heli-harness#v0.5.23 install <pat
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.23
+git checkout v0.5.24
 .\install.ps1 -Parent "C:\your\workspace"
 ```
 
@@ -41,7 +41,7 @@ git checkout v0.5.23
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.23
+git checkout v0.5.24
 ./install.sh /path/to/workspace
 ```
 
@@ -115,8 +115,8 @@ Stage `.heli-harness/adapters/antigravity-plugin/` in the host plugin directory.
 ### Pi / AXGA package
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.23
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.23
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.24
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.24
 ```
 
 This installs the agent package, not a workspace harness. Run `/heli-install` in Pi or AXGA to create the workspace harness.

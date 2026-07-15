@@ -1,14 +1,26 @@
 /**
  * Shared Heli-Harness guard logic for adapter hooks/plugins.
  * Host wrappers handle stdin/stdout protocol differences; this module stays pure.
+ *
+ * v0.5.24: concurrent session foundation via ./concurrency/*
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import {
+	resolveExecutionContext,
+	evaluateOwnershipGate,
+	buildConcurrentSessionContext,
+	readTaskGateForContext,
+	readPlanGateForContext,
+	isTaskStateWriteForContext,
+} from "./concurrency/resolve.mjs";
+import { resolveYolo, allowGitPushScoped, allowEnvWriteScoped } from "./concurrency/yolo-scope.mjs";
+import { sessionHoldsWriteLease, refreshLease } from "./concurrency/lease.mjs";
+import { findWorkspaceRoot } from "./concurrency/paths.mjs";
+
 export function field(text, label) {
-	// [ \t]*, not \s*: \s matches newlines, so a blank field value would
-	// greedily capture the next labeled line's label as the value.
 	const match = new RegExp(`^${label}:[ \\t]*(.*)$`, "m").exec(text);
 	return match ? match[1].trim() : "";
 }
@@ -50,19 +62,35 @@ export function planRollup(text) {
 	return lines.join("\n");
 }
 
-export function buildSessionContext(cwd) {
+export function buildSessionContext(cwd, { host = "unknown", hookPayload = null, env = process.env } = {}) {
+	const ctx = resolveExecutionContext({
+		cwd,
+		environment: env,
+		hookPayload,
+		host,
+		createIfMissing: true,
+		refreshLeaseOnResolve: true,
+	});
+
+	if (ctx.concurrentMode) {
+		return buildConcurrentSessionContext(ctx);
+	}
+
 	const lines = [
 		"Heli-Harness plugin context:",
 		"Read .heli-harness/HARNESS.md before substantive work.",
 		"Identify the active target repo from .heli-harness/workspace/target.json when present.",
 		"Instruction files are not a sandbox; plugin hooks are guardrails only.",
+		"",
+		"Workspace mode: legacy",
 	];
 
-	if (!existsSync(join(cwd, ".heli-harness", "HARNESS.md"))) {
+	const root = ctx.workspaceRoot || cwd;
+	if (!existsSync(join(root, ".heli-harness", "HARNESS.md"))) {
 		return lines.join("\n");
 	}
 
-	const taskPath = join(cwd, ".heli-harness", "state", "current-task.md");
+	const taskPath = join(root, ".heli-harness", "state", "current-task.md");
 	if (existsSync(taskPath)) {
 		const taskText = readFileSync(taskPath, "utf8").trim();
 		if (taskText) {
@@ -78,27 +106,19 @@ export function buildSessionContext(cwd) {
 		}
 	}
 
-	const decisionsPath = join(cwd, ".heli-harness", "state", "decisions.md");
+	const decisionsPath = join(root, ".heli-harness", "state", "decisions.md");
 	if (existsSync(decisionsPath)) {
 		const recentDecisions = lastDecisionSections(readFileSync(decisionsPath, "utf8"));
 		if (recentDecisions) {
-			lines.push(
-				"",
-				"Recent durable decisions from .heli-harness/state/decisions.md:",
-				recentDecisions,
-			);
+			lines.push("", "Recent durable decisions from .heli-harness/state/decisions.md:", recentDecisions);
 		}
 	}
 
-	const planPath = join(cwd, ".heli-harness", "state", "plan.md");
+	const planPath = join(root, ".heli-harness", "state", "plan.md");
 	if (existsSync(planPath)) {
 		const rollup = planRollup(readFileSync(planPath, "utf8"));
 		if (rollup) {
-			lines.push(
-				"",
-				"Read the full plan file before resuming: .heli-harness/state/plan.md",
-				rollup,
-			);
+			lines.push("", "Read the full plan file before resuming: .heli-harness/state/plan.md", rollup);
 		}
 	}
 
@@ -124,169 +144,192 @@ export function patchPathsFrom(commandText, out = []) {
 }
 
 export function readTaskGate(cwd) {
-	if (!existsSync(join(cwd, ".heli-harness", "HARNESS.md"))) return null;
-	const taskPath = join(cwd, ".heli-harness", "state", "current-task.md");
-	if (!existsSync(taskPath)) return null;
-
-	const taskText = readFileSync(taskPath, "utf8");
-	const taskTarget = field(taskText, "Target repo");
-	const status = field(taskText, "Current status");
-	const failedAttempts = parseInt(field(taskText, "Failed attempts count") || "0", 10) || 0;
-
-	if (failedAttempts >= 2 && status.toLowerCase() !== "complete") {
-		return `Heli-Harness: current-task.md shows ${failedAttempts} failed attempts and status "${status || "(empty)"}" on an incomplete task — this looks carried over from a previous session. Read .heli-harness/state/current-task.md, diagnose or reset it, and update the file before continuing.`;
+	const ctx = resolveExecutionContext({ cwd, createIfMissing: false, host: "legacy-gate" });
+	if (!ctx.workspaceRoot && !existsSync(join(cwd, ".heli-harness", "HARNESS.md"))) return null;
+	if (!ctx.workspaceRoot) {
+		return null;
 	}
-
-	const targetPath = join(cwd, ".heli-harness", "workspace", "target.json");
-	if (taskTarget && existsSync(targetPath)) {
-		let workspaceTarget = "";
-		try {
-			workspaceTarget = JSON.parse(readFileSync(targetPath, "utf8")).targetRepo || "";
-		} catch { /* malformed target.json */ }
-		if (workspaceTarget && workspaceTarget.toLowerCase() !== taskTarget.toLowerCase()) {
-			return `Heli-Harness: current-task.md says target repo "${taskTarget}" but .heli-harness/workspace/target.json is set to "${workspaceTarget}" — confirm which repo you're working in and update current-task.md before continuing.`;
-		}
-	}
-
-	return null;
+	return readTaskGateForContext(ctx);
 }
 
 export function readPlanGate(cwd) {
-	if (!existsSync(join(cwd, ".heli-harness", "HARNESS.md"))) return null;
-	const planPath = join(cwd, ".heli-harness", "state", "plan.md");
-	if (!existsSync(planPath)) return null;
-
-	const planText = readFileSync(planPath, "utf8");
-	const sections = planText.split(/(?=^## )/m).filter((part) => part.startsWith("## "));
-	const current = sections.find((section) => field(section, "Status").toLowerCase() !== "complete");
-	if (!current) return null;
-
-	const status = field(current, "Status");
-	const attempts = parseInt(field(current, "Attempts") || "0", 10) || 0;
-	if (attempts >= 2 && status.toLowerCase() !== "complete") {
-		const stepTitleMatch = /^## (.+)$/m.exec(current);
-		const stepTitle = stepTitleMatch ? stepTitleMatch[1].trim() : "current step";
-		return `Heli-Harness: plan.md step "${stepTitle}" shows ${attempts} failed attempts and status "${status || "(empty)"}" — update .heli-harness/state/plan.md to resolve it before continuing.`;
-	}
-	return null;
+	const ctx = resolveExecutionContext({ cwd, createIfMissing: false, host: "legacy-gate" });
+	if (!ctx.workspaceRoot) return null;
+	return readPlanGateForContext(ctx);
 }
 
 export function isTaskStateWrite(paths) {
-	return paths.some((path) =>
-		path.endsWith(".heli-harness/state/current-task.md") ||
-		path.endsWith(".heli-harness/state/plan.md") ||
-		path.endsWith(".heli-harness/workspace/target.json") ||
-		path.endsWith(".heli-harness/state/yolo.json"));
+	return paths.some(
+		(path) =>
+			path.endsWith(".heli-harness/state/current-task.md") ||
+			path.endsWith(".heli-harness/state/plan.md") ||
+			path.endsWith(".heli-harness/workspace/target.json") ||
+			path.endsWith(".heli-harness/state/yolo.json") ||
+			path.includes(".heli-harness/tasks/") ||
+			path.includes(".heli-harness/sessions/") ||
+			path.includes(".heli-harness/locks/") ||
+			path.includes(".heli-harness/bindings/"),
+	);
 }
 
-function envTruthy(name) {
-	return /^(1|true|yes|on)$/i.test(String(process.env[name] ?? "").trim());
+export function isYoloActive(cwd = process.cwd(), env = process.env) {
+	const ctx = resolveExecutionContext({
+		cwd,
+		environment: env,
+		createIfMissing: false,
+		host: "yolo-check",
+	});
+	return resolveYolo({
+		workspaceRoot: ctx.workspaceRoot || findWorkspaceRoot(cwd) || cwd,
+		cwd,
+		taskId: ctx.taskId,
+		sessionId: ctx.sessionId,
+		env,
+		legacyMode: ctx.legacyMode,
+	});
 }
 
-function envGuardsOff() {
-	return /^(0|false|off|disabled|yolo|none)$/i.test(String(process.env.HELI_GUARDS ?? "").trim());
+export function allowGitPush(cwd = process.cwd(), env = process.env) {
+	const ctx = resolveExecutionContext({ cwd, environment: env, createIfMissing: false, host: "yolo-check" });
+	return allowGitPushScoped({
+		workspaceRoot: ctx.workspaceRoot || cwd,
+		cwd,
+		taskId: ctx.taskId,
+		sessionId: ctx.sessionId,
+		env,
+		legacyMode: ctx.legacyMode,
+	});
 }
 
-/**
- * Opt-in unguarded ("yolo") mode. Default is always strict.
- *
- * Enable with any of:
- * - HELI_YOLO=1|true|yes|on
- * - HELI_GUARDS=off|0|false|disabled|yolo
- * - .heli-harness/state/yolo.json  { "enabled": true, "expiresAt"?: ISO }
- * - current-task.md  Mode: yolo | unguarded | dangerous
- *
- * Granular (when full yolo is off):
- * - HELI_ALLOW_GIT_PUSH=1
- * - HELI_ALLOW_ENV_WRITE=1
- *
- * @returns {{ active: boolean, source?: string }}
- */
-export function isYoloActive(cwd = process.cwd()) {
-	if (envTruthy("HELI_YOLO")) return { active: true, source: "env:HELI_YOLO" };
-	if (envGuardsOff()) return { active: true, source: "env:HELI_GUARDS" };
-
-	const yoloPath = join(cwd, ".heli-harness", "state", "yolo.json");
-	if (existsSync(yoloPath)) {
-		try {
-			const data = JSON.parse(readFileSync(yoloPath, "utf8"));
-			if (data && data.enabled === true) {
-				if (data.expiresAt) {
-					const exp = Date.parse(data.expiresAt);
-					if (!Number.isNaN(exp) && Date.now() > exp) {
-						return { active: false };
-					}
-				}
-				return { active: true, source: "state/yolo.json" };
-			}
-		} catch {
-			/* ignore malformed yolo.json */
-		}
-	}
-
-	const taskPath = join(cwd, ".heli-harness", "state", "current-task.md");
-	if (existsSync(taskPath)) {
-		const mode = field(readFileSync(taskPath, "utf8"), "Mode").toLowerCase();
-		if (mode === "yolo" || mode === "unguarded" || mode === "dangerous") {
-			return { active: true, source: `current-task.md Mode: ${mode}` };
-		}
-	}
-
-	return { active: false };
+export function allowEnvWrite(cwd = process.cwd(), env = process.env) {
+	const ctx = resolveExecutionContext({ cwd, environment: env, createIfMissing: false, host: "yolo-check" });
+	return allowEnvWriteScoped({
+		workspaceRoot: ctx.workspaceRoot || cwd,
+		cwd,
+		taskId: ctx.taskId,
+		sessionId: ctx.sessionId,
+		env,
+		legacyMode: ctx.legacyMode,
+	});
 }
 
-export function allowGitPush(cwd = process.cwd()) {
-	return isYoloActive(cwd).active || envTruthy("HELI_ALLOW_GIT_PUSH");
-}
-
-export function allowEnvWrite(cwd = process.cwd()) {
-	return isYoloActive(cwd).active || envTruthy("HELI_ALLOW_ENV_WRITE");
-}
-
-/**
- * @param {object} opts
- * @param {string} opts.cwd
- * @param {string} [opts.toolName]
- * @param {object} [opts.toolInput]
- * @param {string[]} [opts.writeToolNames] tools that should trigger task/plan gates
- * @returns {{ deny: boolean, reason?: string, yolo?: boolean, yoloSource?: string }}
- */
 export function evaluatePreToolUse({
 	cwd,
 	toolName = "",
 	toolInput = {},
-	writeToolNames = ["Edit", "Write", "apply_patch", "write", "edit", "WriteFile", "StrReplaceFile", "write_to_file", "replace_file_content", "multi_replace_file_content"],
-}) {
-	const yolo = isYoloActive(cwd);
-	if (yolo.active) {
-		return { deny: false, yolo: true, yoloSource: yolo.source };
-	}
+	writeToolNames = [
+		"Edit",
+		"Write",
+		"apply_patch",
+		"write",
+		"edit",
+		"WriteFile",
+		"StrReplaceFile",
+		"write_to_file",
+		"replace_file_content",
+		"multi_replace_file_content",
+	],
+	host = "unknown",
+	hookPayload = null,
+	env = process.env,
+} = {}) {
+	const ctx = resolveExecutionContext({
+		cwd,
+		environment: env,
+		hookPayload: hookPayload || { tool_name: toolName, tool_input: toolInput },
+		host,
+		createIfMissing: true,
+		refreshLeaseOnResolve: false,
+	});
 
 	const rawCommand = String(toolInput?.command ?? toolInput?.description ?? "");
 	const command = rawCommand.replace(/\s+/g, " ").trim().toLowerCase();
-	const paths = [...pathsFrom(toolInput), ...patchPathsFrom(rawCommand)]
-		.map((path) => path.replaceAll("\\", "/").toLowerCase());
+	const paths = [...pathsFrom(toolInput), ...patchPathsFrom(rawCommand)].map((path) =>
+		path.replaceAll("\\", "/").toLowerCase(),
+	);
 	const name = String(toolName);
 
-	if (/\bgit\s+push\b/.test(command) && !allowGitPush(cwd)) {
+	const isWrite =
+		writeToolNames.some((t) => t.toLowerCase() === name.toLowerCase()) ||
+		/write|edit|replace|strreplace|apply_patch|multi_replace/i.test(name);
+
+	// Ownership gates — NEVER bypassed by YOLO
+	if (isWrite && !isTaskStateWriteForContext(ctx, paths) && !isTaskStateWrite(paths)) {
+		const ownership = evaluateOwnershipGate(ctx, { isWrite: true });
+		if (ownership.deny) {
+			return { deny: true, reason: ownership.reason, code: ownership.code, ctx };
+		}
+	}
+
+	if (
+		isWrite &&
+		ctx.concurrentMode &&
+		ctx.taskId &&
+		ctx.sessionId &&
+		sessionHoldsWriteLease(ctx.workspaceRoot, ctx.taskId, ctx.sessionId)
+	) {
+		try {
+			refreshLease(ctx.workspaceRoot, ctx.taskId, { sessionId: ctx.sessionId });
+		} catch {
+			/* ignore */
+		}
+	}
+
+	const yolo = resolveYolo({
+		workspaceRoot: ctx.workspaceRoot || cwd,
+		cwd,
+		taskId: ctx.taskId,
+		sessionId: ctx.sessionId,
+		env,
+		legacyMode: ctx.legacyMode,
+	});
+	if (yolo.active) {
+		return { deny: false, yolo: true, yoloSource: yolo.source, ctx };
+	}
+
+	if (
+		/\bgit\s+push\b/.test(command) &&
+		!allowGitPushScoped({
+			workspaceRoot: ctx.workspaceRoot || cwd,
+			cwd,
+			taskId: ctx.taskId,
+			sessionId: ctx.sessionId,
+			env,
+			legacyMode: ctx.legacyMode,
+		})
+	) {
 		return {
 			deny: true,
-			reason: "Heli-Harness blocks git push in agent sessions — this is a blanket rule, not gated on release approval. Push manually outside the session if needed. Opt-in: HELI_YOLO=1, HELI_ALLOW_GIT_PUSH=1, or `heli yolo on`.",
+			reason:
+				"Heli-Harness blocks git push in agent sessions — this is a blanket rule, not gated on release approval. Push manually outside the session if needed. Opt-in: HELI_YOLO=1, HELI_ALLOW_GIT_PUSH=1, or `heli yolo on`.",
+			ctx,
 		};
 	}
-	if (paths.some((path) => /(^|\/)\.env(\.|$)/.test(path)) && !allowEnvWrite(cwd)) {
+	if (
+		paths.some((path) => /(^|\/)\.env(\.|$)/.test(path)) &&
+		!allowEnvWriteScoped({
+			workspaceRoot: ctx.workspaceRoot || cwd,
+			cwd,
+			taskId: ctx.taskId,
+			sessionId: ctx.sessionId,
+			env,
+			legacyMode: ctx.legacyMode,
+		})
+	) {
 		return {
 			deny: true,
-			reason: "Heli-Harness blocks writes to .env-style secret files. Opt-in: HELI_YOLO=1, HELI_ALLOW_ENV_WRITE=1, or `heli yolo on`.",
+			reason:
+				"Heli-Harness blocks writes to .env-style secret files. Opt-in: HELI_YOLO=1, HELI_ALLOW_ENV_WRITE=1, or `heli yolo on`.",
+			ctx,
 		};
 	}
 
-	const isWrite = writeToolNames.some((t) => t.toLowerCase() === name.toLowerCase())
-		|| /write|edit|replace|strreplace|apply_patch|multi_replace/i.test(name);
-	if (isWrite && !isTaskStateWrite(paths)) {
-		const gateReason = readTaskGate(cwd) || readPlanGate(cwd);
-		if (gateReason) return { deny: true, reason: gateReason };
+	if (isWrite && !isTaskStateWriteForContext(ctx, paths) && !isTaskStateWrite(paths)) {
+		const gateReason = readTaskGateForContext(ctx) || readPlanGateForContext(ctx);
+		if (gateReason) return { deny: true, reason: gateReason, ctx };
 	}
 
-	return { deny: false };
+	return { deny: false, ctx };
 }
+
+export { resolveExecutionContext };

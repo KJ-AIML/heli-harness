@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "heli-ses-cf8df685-cd0e-4b8a-9bd6-e12d343d7eec",
+  "externalHostSessionId": null,
+  "host": "grok",
+  "taskId": null,
+  "mode": "observe",
+  "worktreePath": "c:/kj/repos/heli-lab/worktrees/heli-harness-v0.5.24-concurrency",
+  "status": "active",
+  "yolo": {
+    "enabled": false
+  },
+  "createdAt": "2026-07-15T16:49:02.432Z",
+  "lastSeenAt": "2026-07-15T16:49:02.435Z",
+  "closedAt": null
+}

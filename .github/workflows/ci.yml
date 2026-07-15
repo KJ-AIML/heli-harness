@@ -6,26 +6,26 @@ on:
   pull_request:
 
 jobs:
-  validate:
-    name: Validate
-    runs-on: ubuntu-latest
+  check:
+    name: Check (${{ matrix.os }}, node-${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: ["20", "22"]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ matrix.node }}
 
-      - name: Syntax check extension
-        run: node --check extensions/pi-extension.js
-
-      - name: Extension smoke test
-        run: node scripts/smoke-extension-load.mjs
-
-      - name: Release validation
-        run: node scripts/validate-release.mjs
+      - name: Full npm check
+        run: npm run check
 
       - name: Bash syntax check
+        if: runner.os != 'Windows'
         run: |
           bash -n install.sh
           bash -n update.sh

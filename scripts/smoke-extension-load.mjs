@@ -347,6 +347,10 @@ None.
 
 const tempExtension = join(tempDir, "extensions", "pi-extension.mjs");
 copyFileSync(join(root, "extensions", "pi-extension.js"), tempExtension);
+// pi-extension imports shared hook-core + concurrency from .heli-harness/adapters/shared
+cpSync(join(root, ".heli-harness", "adapters", "shared"), join(tempDir, ".heli-harness", "adapters", "shared"), {
+	recursive: true,
+});
 // pi-extension.js imports ../lib/cli/install.mjs and ../lib/cli/update.mjs;
 // copy the real lib/ tree alongside the copied extension so those relative
 // imports resolve from tempDir the same way they do in the real repo.

@@ -21,13 +21,27 @@ const sourceHarnessDir = join(root, ".heli-harness");
 		const stateDir = join(parentDir, ".heli-harness", "state");
 		mkdirSync(stateDir, { recursive: true });
 		writeFileSync(join(stateDir, "current-task.md"), "# Current Task\n\nTask: my real task\n");
+		const tasksDir = join(parentDir, ".heli-harness", "tasks", "demo-task");
+		mkdirSync(tasksDir, { recursive: true });
+		writeFileSync(join(tasksDir, "task.json"), JSON.stringify({ taskId: "demo-task" }) + "\n");
 
 		const result = update(sourceHarnessDir, parentDir);
 
 		assert.equal(readFileSync(join(profileDir, "my-repo.md"), "utf8"), "# My Repo\nlocal content\n", "profiles/ must survive update");
 		assert.match(readFileSync(join(stateDir, "current-task.md"), "utf8"), /my real task/, "state/ must survive update by default");
 		assert.ok(existsSync(join(parentDir, ".heli-harness", "HARNESS.md")), "shipped HARNESS.md must still be present");
-		assert.deepEqual(result.preserveDirs, ["profiles", "workspace", "policies", "safety", "state"]);
+		assert.match(readFileSync(join(tasksDir, "task.json"), "utf8"), /demo-task/, "tasks/ must survive update by default");
+		assert.deepEqual(result.preserveDirs, [
+			"profiles",
+			"workspace",
+			"policies",
+			"safety",
+			"state",
+			"tasks",
+			"sessions",
+			"bindings",
+			"locks",
+		]);
 	} finally {
 		rmSync(parentDir, { recursive: true, force: true });
 	}
