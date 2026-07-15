@@ -17,12 +17,12 @@ For copy-paste setup, manual installation, updates, removal, and adapter details
 
 | Host | Command or path | Notes |
 | --- | --- | --- |
-| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.22` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.22` | Package install; run `/heli-install` for a workspace harness |
+| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.23` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.23` | Package install; run `/heli-install` for a workspace harness |
 | Codex | `codex plugin marketplace add .heli-harness/adapters/codex-plugin`; `codex plugin add heli-harness@heli-harness` | `AGENTS.md` remains the workspace pointer |
 | Claude Code | `claude plugin install .heli-harness/adapters/claude-plugin` | `CLAUDE.md` remains the workspace pointer |
-| Cursor | `.heli-harness/adapters/cursor/CURSOR.md` | Requires workspace install first |
+| Cursor | Add `.heli-harness/adapters/cursor-plugin/` as a local marketplace, or copy its `plugins/heli-harness/` child to `~/.cursor/plugins/local/heli-harness/` | Marketplace manifest indexes the plugin; pointer adapter remains the workspace fallback |
 | Grok Build | `node .heli-harness/adapters/grok-plugin/install-user-hooks.mjs` | Optional skills: `grok plugin install .heli-harness/adapters/grok-plugin --trust` |
-| OpenCode | Copy `.heli-harness/adapters/opencode-plugin/heli-harness.mjs` and register it in `opencode.json` | See `.heli-harness/adapters/opencode/install.md` |
+| OpenCode | Copy `.heli-harness/adapters/opencode-plugin/heli-harness.mjs` to `.opencode/plugins/heli-harness.mjs` | Auto-loaded by OpenCode; see `.heli-harness/adapters/opencode/install.md` |
 | Kimi Code CLI | `node .heli-harness/adapters/kimi-plugin/install-user-hooks.mjs` | Then run `kimi doctor config` |
 | Antigravity CLI | Stage `.heli-harness/adapters/antigravity-plugin/` in the host plugin directory | See `.heli-harness/adapters/antigravity/install.md` |
 | Generic agents | `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md` | Requires workspace install first |

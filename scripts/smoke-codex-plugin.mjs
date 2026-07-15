@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { assertFile, assertHookDeny, assertHookAllowInCwd, assertHookDenyInCwd, assertSessionContext, json, nodeCheck, read, sessionContextInCwd, withFixtureWorkspace } from "./lib/plugin-smoke-helpers.mjs";
+import { assertCurrentVersion } from "./lib/release-version.mjs";
 
 const root = process.cwd();
 const plugin = ".heli-harness/adapters/codex-plugin";
@@ -17,7 +18,7 @@ assertFile(join(pluginRoot, "AGENTS.md"), "Codex plugin AGENTS.md");
 
 const manifest = json(join(pluginRoot, ".codex-plugin", "plugin.json"));
 assert.equal(manifest.name, "heli-harness");
-assert.equal(manifest.version, "0.5.22");
+assertCurrentVersion(root, manifest.version, "Codex plugin");
 assert.equal(manifest.skills, "./skills/");
 assert.equal(manifest.hooks, "./hooks/hooks.json");
 

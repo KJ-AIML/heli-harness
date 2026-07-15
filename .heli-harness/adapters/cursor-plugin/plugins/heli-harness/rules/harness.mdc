@@ -1,0 +1,6 @@
+---
+description: Heli-Harness operating protocol
+alwaysApply: true
+---
+
+Read `.heli-harness/adapters/cursor/CURSOR.md` first. Treat `.heli-harness/HARNESS.md` as the source of truth, identify the target repo before edits, preserve dirty work, and verify changes before claiming completion.

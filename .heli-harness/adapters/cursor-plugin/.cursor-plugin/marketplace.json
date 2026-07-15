@@ -1,0 +1,19 @@
+{
+  "name": "heli-harness",
+  "owner": {
+    "name": "KJ-AIML"
+  },
+  "metadata": {
+    "description": "Heli-Harness governance plugins for Cursor.",
+    "version": "0.5.23",
+    "pluginRoot": "plugins"
+  },
+  "plugins": [
+    {
+      "name": "heli-harness",
+      "source": "heli-harness",
+      "description": "Heli-Harness workspace governance for Cursor.",
+      "version": "0.5.23"
+    }
+  ]
+}

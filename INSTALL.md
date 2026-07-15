@@ -19,7 +19,11 @@ npx github:KJ-AIML/heli-harness target list
 npx github:KJ-AIML/heli-harness status
 ```
 
-Pin a release when needed: `npx github:KJ-AIML/heli-harness#v0.5.22 install <path>`.
+## Maintainer release
+
+From a clean `main` worktree, run `npm run release -- <x.y.z> "summary"`. The command updates current version surfaces, runs `npm run check`, stages only release-managed paths, creates the commit and annotated tag, and refuses unrelated dirty files. Add `--push` to push `main` and the new tag.
+
+Pin a release when needed: `npx github:KJ-AIML/heli-harness#v0.5.23 install <path>`.
 
 ## Manual workspace install
 
@@ -28,7 +32,7 @@ Pin a release when needed: `npx github:KJ-AIML/heli-harness#v0.5.22 install <pat
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.22
+git checkout v0.5.23
 .\install.ps1 -Parent "C:\your\workspace"
 ```
 
@@ -37,7 +41,7 @@ git checkout v0.5.22
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.22
+git checkout v0.5.23
 ./install.sh /path/to/workspace
 ```
 
@@ -70,9 +74,15 @@ The workspace `CLAUDE.md` points to `.heli-harness/adapters/claude/CLAUDE.md`. T
 claude plugin install .heli-harness/adapters/claude-plugin
 ```
 
-### Cursor and generic agents
+### Cursor
+
+For local marketplace testing, select `.heli-harness/adapters/cursor-plugin/` in Cursor. It contains `.cursor-plugin/marketplace.json`, which indexes the plugin under `plugins/heli-harness/`. Alternatively, copy `.heli-harness/adapters/cursor-plugin/plugins/heli-harness/` to `~/.cursor/plugins/local/heli-harness/`, then restart Cursor or run `Developer: Reload Window`.
+
+The existing pointer adapter remains available for parent-workspace setup:
 
 - Cursor reads `.heli-harness/adapters/cursor/CURSOR.md`.
+
+### Generic agents
 - Other agents can use `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md`.
 
 ### Grok Build
@@ -87,7 +97,7 @@ For optional plugin skills, run `grok plugin install .heli-harness/adapters/grok
 
 ### OpenCode
 
-Copy `.heli-harness/adapters/opencode-plugin/heli-harness.mjs` to `.opencode/plugins/heli-harness.mjs` and list `./opencode/plugins/heli-harness.mjs` in the `plugin` array in `opencode.json`. See `.heli-harness/adapters/opencode/install.md`.
+Copy `.heli-harness/adapters/opencode-plugin/heli-harness.mjs` to `.opencode/plugins/heli-harness.mjs`; OpenCode auto-loads project plugins from that directory. See `.heli-harness/adapters/opencode/install.md`.
 
 ### Kimi Code CLI
 
@@ -105,8 +115,8 @@ Stage `.heli-harness/adapters/antigravity-plugin/` in the host plugin directory.
 ### Pi / AXGA package
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.22
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.22
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.23
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.23
 ```
 
 This installs the agent package, not a workspace harness. Run `/heli-install` in Pi or AXGA to create the workspace harness.

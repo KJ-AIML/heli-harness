@@ -1,8 +1,8 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.5.22
+## Current Baseline: v0.5.23
 
-Latest stable release: `v0.5.22`
+Latest stable release: `v0.5.23`
 
 Heli-Harness is an instructions-as-code governance harness for coding agents. It gives local coding agents a shared, inspectable operating layer for workspace protocols, repo facts, policies, safety expectations, task state, adapter instructions, observable hooks, and reviewable reports.
 
@@ -33,7 +33,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 
 ## Now
 
-- Maintain the `v0.5.22` baseline and keep release claims aligned with the changelog and adapter support matrix.
+- Maintain the `v0.5.23` baseline and keep release claims aligned with the changelog and adapter support matrix.
 - Stabilize local governance contracts: profiles, policies, safety rules, workspace targeting, task state, and reports.
 - Preserve evidence-backed adapter status; runtime enforcement is only claimed where host behavior has been tested.
 - Keep `npm run check` as the normal repository validation path.

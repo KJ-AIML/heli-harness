@@ -64,7 +64,7 @@ Final reports should include summary, files changed, validation, remaining risks
 
 - This OpenCode adapter is instruction + local plugin based.
 - OpenCode plugins are JS/TS modules (`tool.execute.before` throws to block); they are not Claude-style stdin command hooks.
-- Plugin behavior is smoke-tested synthetically by importing the module; live OpenCode CLI denial proof is not yet shipped (status: `enforced`, not `enforced`).
+- Plugin behavior is smoke-tested synthetically by importing the module; live OpenCode CLI denial proof is not yet shipped.
 - Session context injection uses `experimental.session.compacting` when available; it is not a full SessionStart equivalent.
 
 OpenCode-specific behavior belongs here. Core harness files must remain tool-neutral.

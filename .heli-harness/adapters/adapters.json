@@ -1,5 +1,5 @@
 {
-  "version": "0.5.22",
+  "version": "0.5.23",
   "taxonomy": {
     "enforced": "Runtime hook/tool-call guard is verified and tested. Smoke test or interactive test exists.",
     "verified-plugin-wired": "Native plugin artifacts are shipped and smoke-tested, but runtime enforcement is not proven.",
@@ -149,24 +149,32 @@
     {
       "id": "cursor",
       "name": "Cursor",
-      "status": "wired",
+      "status": "plugin-wired",
       "evidence": [
         ".heli-harness/adapters/cursor/CURSOR.md",
         ".heli-harness/adapters/cursor/README.md",
         ".heli-harness/adapters/cursor/install.md",
+        ".heli-harness/adapters/cursor-plugin/.cursor-plugin/marketplace.json",
+        ".heli-harness/adapters/cursor-plugin/plugins/heli-harness/.cursor-plugin/plugin.json",
+        ".heli-harness/adapters/cursor-plugin/plugins/heli-harness/rules/harness.mdc",
+        ".heli-harness/adapters/cursor-plugin/plugins/heli-harness/skills/heli-governance/SKILL.md",
+        ".heli-harness/adapters/cursor-plugin/plugins/heli-harness/skills/heli-install/SKILL.md",
+        ".heli-harness/adapters/cursor-plugin/plugins/heli-harness/skills/heli-target/SKILL.md",
         "install.sh",
         "install.ps1"
       ],
       "verification": [
+        "node scripts/smoke-cursor-plugin.mjs",
         "node scripts/verify-adapters.mjs"
       ],
       "enforcementSurfaces": [
+        "Cursor plugin rule and skills loaded from .cursor-plugin/plugin.json",
         "Workspace .cursorrules or .cursor/rules/ pointer created by installer"
       ],
       "limitations": [
         "No runtime hook enforcement",
-        "Relies on Cursor reading adapter file voluntarily",
-        "No smoke test proving agents read the pointer file"
+        "Relies on Cursor loading plugin components and agents following governance instructions",
+        "Local plugin testing requires copying the bundle to ~/.cursor/plugins/local/heli-harness/ and reloading Cursor"
       ]
     },
     {

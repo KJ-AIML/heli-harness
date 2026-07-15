@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.5.23 - Cursor Marketplace and OpenCode Discovery
+
+### Added
+
+- Installable Cursor marketplace layout with `.cursor-plugin/marketplace.json` and a nested Heli-Harness plugin package.
+- Cursor marketplace smoke validation covering the marketplace manifest, plugin manifest, rule, and skills.
+
+### Fixed
+
+- OpenCode installation guidance now uses automatic project/global plugin discovery from `.opencode/plugins/` and `~/.config/opencode/plugins/`.
+- Cursor and OpenCode adapter documentation and support metadata now match their host layouts.
+
 ## v0.5.22 - YOLO / unguarded mode (opt-in)
 
 ### Added

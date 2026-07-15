@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { assertFile, assertHookDeny, assertHookAllowInCwd, assertHookDenyInCwd, assertSessionContext, json, nodeCheck, read, sessionContextInCwd, withFixtureWorkspace } from "./lib/plugin-smoke-helpers.mjs";
+import { assertCurrentVersion } from "./lib/release-version.mjs";
 
 const root = process.cwd();
 const plugin = ".heli-harness/adapters/claude-plugin";
@@ -18,7 +19,7 @@ assertFile(join(pluginRoot, "skills", "heli-install", "SKILL.md"), "Claude plugi
 
 const manifest = json(join(pluginRoot, ".claude-plugin", "plugin.json"));
 assert.equal(manifest.name, "heli-harness");
-assert.equal(manifest.version, "0.5.22");
+assertCurrentVersion(root, manifest.version, "Claude plugin");
 
 const hooks = json(join(pluginRoot, "hooks", "hooks.json"));
 assert.ok(hooks.hooks.SessionStart, "Claude plugin should define SessionStart");
