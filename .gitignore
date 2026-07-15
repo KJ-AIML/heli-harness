@@ -26,3 +26,9 @@ temp/
 
 # Do not ignore the harness runtime or templates.
 
+# Runtime concurrent state (user workspace only — never ship in package)
+.heli-harness/sessions/
+.heli-harness/tasks/
+.heli-harness/bindings/
+.heli-harness/locks/
+.heli-harness/workspace/schema.json
