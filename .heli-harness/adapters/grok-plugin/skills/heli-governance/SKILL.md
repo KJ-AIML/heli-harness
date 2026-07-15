@@ -1,4 +1,4 @@
-﻿---
+---
 description: Use when working in a Heli-Harness parent workspace.
 ---
 

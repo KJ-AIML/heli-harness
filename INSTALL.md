@@ -47,11 +47,26 @@ git checkout v0.5.24
 
 After a successful install, the source checkout can be removed; do not remove the installed `.heli-harness/` directory.
 
+### Clean install semantics (v0.5.24+)
+
+`heli install` (and `install.sh` / `install.ps1` / Pi `/heli-install`) copies **distribution assets only** (HARNESS, adapters, skills, policies, safety, templates, manifest) then **constructs** idle operational state. It never copies live package dogfood such as:
+
+- `state/current-task.md` / `plan.md` / `yolo.json` from the source checkout
+- `tasks/`, `sessions/`, `bindings/`, `locks/`, reports, or machine-specific targets
+
+A fresh install always starts **idle**, **no target selected**, and **strict YOLO** (no `yolo.json`).
+
+### Update semantics
+
+`heli update` preserves user operational state (`state/`, `tasks/`, `sessions/`, `bindings/`, `locks/`) and local overlays (`profiles/`, `workspace/`, `policies/`, `safety/`). It updates shipped distribution assets only. Use `heli update --reset-state` to reseed idle operational runtime without importing package dogfood. Package checkout sessions/tasks never land in the destination.
+
 ## First use
 
 Start the agent from the parent workspace. It should read `.heli-harness/HARNESS.md`, identify the target repository, read its profile when present, and update `.heli-harness/state/current-task.md` before non-trivial edits.
 
 In a multi-repo workspace, map repositories in `.heli-harness/workspace/index.json` and select one with `/heli-target set <repo>` before write workflows.
+
+In concurrent mode, `heli status` shows each active task’s **live** writer session, worktree (from write lease → session → binding → task metadata), lease expiry, target, mode, and reviewer/observer counts.
 
 ## Adapter setup
 

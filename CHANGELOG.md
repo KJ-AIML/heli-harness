@@ -18,18 +18,32 @@
   - Advisory path-claim conflict detection
   - `heli task migrate-legacy` one-way import from singular state files
   - Regression suite: `node scripts/smoke-concurrency-foundation.mjs` (included in `npm run check`)
+  - Canonical clean-install seed: `lib/cli/seed-workspace.mjs` (distribution assets only + explicit idle operational seed)
+  - Pollution-proof install smokes: `scripts/smoke-clean-install.mjs`
+  - Status worktree projection smokes: `scripts/smoke-status-worktree.mjs`
+  - Live concurrent host proofs (not in `npm run check`): `scripts/live-verify-codex-concurrency.mjs`, `scripts/live-verify-claude-concurrency.mjs`
+  - Plugin-local `shared/` copies for host cache installs + `scripts/sync-plugin-shared.mjs`
 
 ### Changed
 
-- `heli status` reports concurrent multi-task summaries when schema mode is concurrent.
-- `heli update` preserves `tasks/`, `sessions/`, `bindings/`, and `locks/` by default.
-- Plugin hooks are thin wrappers over shared `adapters/shared/hook-core.mjs` + `adapters/shared/concurrency/`.
+- `heli status` reports concurrent multi-task summaries when schema mode is concurrent, projecting **live** worktree from write lease → writer session → binding → task metadata (with conflict warnings).
+- `heli install` / `install.sh` / `install.ps1` / Pi `/heli-install` all use one clean seed path — never copy package checkout dogfood (tasks, sessions, live current-task, YOLO, selected target).
+- `heli update` updates distribution assets only; preserves user tasks/sessions/bindings/locks/state/targets/YOLO; `--reset-state` reseeds idle operational state without importing package dogfood.
+- Plugin hooks import embedded `../shared/` so Codex marketplace cache and Claude `--plugin-dir` copies are self-contained.
+
+### Fixed
+
+- Clean installs no longer inherit operational state from a dogfooded source package tree.
+- Codex/Claude plugin packages no longer fail hook module resolution when hosts cache only the plugin directory (missing sibling `adapters/shared`).
+- UTF-8 BOM stripped from packaged skill frontmatter so Codex can parse `SKILL.md`.
 
 ### Notes
 
 - Local workspace coordination only — not a distributed lock service, scheduler, agent runtime, or merge orchestrator.
 - YOLO never bypasses ownership, lease, or wrong-task gates.
 - Legacy singular `state/current-task.md` workspaces continue to work until concurrent mode is initialized.
+- Live v0.5.24 plugin runtime proof (this release): **Codex** isolated `CODEX_HOME` + real `codex exec` — marketplace install, SessionStart Completed, PreToolUse denials for `git push` and `.env` honored. Claude Code SessionStart + concurrent context proven via `--plugin-dir`; full Claude PreToolUse enforcement requires a working host API key on the verification machine.
+- After editing `adapters/shared`, run `npm run sync:plugin-shared` before commit.
 
 ## v0.5.23 - Cursor Marketplace and OpenCode Discovery
 

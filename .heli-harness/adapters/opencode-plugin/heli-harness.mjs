@@ -6,7 +6,7 @@
  * (prefer loading from .heli-harness/adapters/opencode-plugin when possible)
  */
 
-import { evaluatePreToolUse, buildSessionContext } from "../shared/hook-core.mjs";
+import { evaluatePreToolUse, buildSessionContext } from "./shared/hook-core.mjs";
 
 export const HeliHarness = async (ctx) => {
 	const directory = ctx?.directory || process.cwd();
