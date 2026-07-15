@@ -18,7 +18,7 @@ import {
 	touchSession,
 	writeSession,
 } from "./session.mjs";
-import { readBinding } from "./binding.mjs";
+import { readBinding, writeBinding } from "./binding.mjs";
 import { readLease, sessionHoldsWriteLease, refreshLease, isLeaseExpired } from "./lease.mjs";
 import { resolveYolo } from "./yolo-scope.mjs";
 
@@ -99,11 +99,12 @@ export function resolveExecutionContext({
 		};
 	}
 
-	// 1. Explicit HELI_SESSION_ID
+	// 1. Explicit HELI_SESSION_ID (authoritative when set — never invent a different id)
 	if (sessionId) {
 		session = readSession(workspaceRoot, sessionId);
 		identitySource = "env:HELI_SESSION_ID";
 		if (!session && createIfMissing) {
+			// Resume/create with the exact caller-supplied id — not a new random session.
 			session = createSession(workspaceRoot, {
 				sessionId,
 				externalHostSessionId,
@@ -111,15 +112,38 @@ export function resolveExecutionContext({
 				worktreePath: worktreeRoot,
 				mode: "observe",
 			});
+			writeBinding(workspaceRoot, {
+				worktreePath: worktreeRoot,
+				sessionId,
+				host,
+				mode: "observe",
+			});
 		}
 	}
 
-	// 2. Documented external host session id
+	// 2. Documented external host session id (metadata mapping only)
 	if (!session && externalHostSessionId) {
 		session = findSessionByExternalId(workspaceRoot, externalHostSessionId);
 		if (session) {
 			sessionId = session.sessionId;
 			identitySource = "externalHostSessionId";
+		} else if (createIfMissing) {
+			// One Heli session per external host id when starting; do not mint on every PreToolUse
+			// (callers should set createIfMissing only for SessionStart).
+			session = createSession(workspaceRoot, {
+				externalHostSessionId,
+				host,
+				worktreePath: worktreeRoot,
+				mode: "observe",
+			});
+			sessionId = session.sessionId;
+			identitySource = "externalHostSessionId-created";
+			writeBinding(workspaceRoot, {
+				worktreePath: worktreeRoot,
+				sessionId,
+				host,
+				mode: "observe",
+			});
 		}
 	}
 
@@ -136,7 +160,7 @@ export function resolveExecutionContext({
 		}
 	}
 
-	// 4. Newly generated unbound Heli session
+	// 4. Newly generated unbound Heli session (SessionStart / explicit only)
 	if (!session && createIfMissing) {
 		session = createSession(workspaceRoot, {
 			externalHostSessionId,
@@ -146,6 +170,13 @@ export function resolveExecutionContext({
 		});
 		sessionId = session.sessionId;
 		identitySource = "generated";
+		// Bind so subsequent PreToolUse (createIfMissing=false) resumes the same session.
+		writeBinding(workspaceRoot, {
+			worktreePath: worktreeRoot,
+			sessionId,
+			host,
+			mode: "observe",
+		});
 	}
 
 	if (session) {
@@ -154,18 +185,25 @@ export function resolveExecutionContext({
 			session.externalHostSessionId = externalHostSessionId;
 			writeSession(workspaceRoot, session);
 		}
-		touchSession(workspaceRoot, sessionId);
-		session = readSession(workspaceRoot, sessionId);
+		// Do not silently re-activate closed sessions for writers; leave as-is for status.
+		if (session.status === "active") {
+			touchSession(workspaceRoot, sessionId);
+			session = readSession(workspaceRoot, sessionId);
+		}
 	}
 
 	const taskId = session?.taskId || null;
 	const task = taskId ? readTask(workspaceRoot, taskId) : null;
 	const tp = taskId ? taskPaths(workspaceRoot, taskId) : null;
-	const lease = taskId ? readLease(workspaceRoot, taskId) : null;
+	let lease = taskId ? readLease(workspaceRoot, taskId) : null;
+	if (lease?.invalid) {
+		warnings.push(`malformed lease for task ${taskId}: ${lease.reason}`);
+		lease = { ...lease, stale: true };
+	}
 
 	if (refreshLeaseOnResolve && taskId && sessionId && sessionHoldsWriteLease(workspaceRoot, taskId, sessionId)) {
 		try {
-			refreshLease(workspaceRoot, taskId, { sessionId });
+			lease = refreshLease(workspaceRoot, taskId, { sessionId });
 		} catch {
 			/* ignore refresh failures on resolve */
 		}
@@ -271,6 +309,13 @@ export function evaluateOwnershipGate(ctx, { isWrite = false } = {}) {
 	}
 	if (!sessionHoldsWriteLease(ctx.workspaceRoot, ctx.taskId, ctx.sessionId)) {
 		const lease = readLease(ctx.workspaceRoot, ctx.taskId);
+		if (lease?.invalid) {
+			return {
+				deny: true,
+				reason: `Heli-Harness concurrent mode: malformed write lease for task ${ctx.taskId} (${lease.reason}). Inspect the lock directory, then re-claim or \`heli task takeover ${ctx.taskId} --confirm\`.`,
+				code: "MALFORMED_LEASE",
+			};
+		}
 		if (lease && isLeaseExpired(lease)) {
 			return {
 				deny: true,

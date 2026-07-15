@@ -179,14 +179,14 @@ export function isDirectory(path) {
 export function matchGlob(pattern, filePath) {
 	const p = String(pattern || "").replace(/\\/g, "/");
 	const f = String(filePath || "").replace(/\\/g, "/");
-	// escape regex specials except * 
+	// escape regex specials except *
 	let re = "";
 	for (let i = 0; i < p.length; i++) {
 		const c = p[i];
 		if (c === "*" && p[i + 1] === "*") {
 			re += ".*";
 			i++;
-			if (p[i + 1] === "/") i++; // **/ 
+			if (p[i + 1] === "/") i++; // skip slash after **
 		} else if (c === "*") {
 			re += "[^/]*";
 		} else if (/[.+^${}()|[\]\\]/.test(c)) {

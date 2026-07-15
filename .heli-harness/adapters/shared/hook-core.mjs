@@ -233,12 +233,15 @@ export function evaluatePreToolUse({
 	hookPayload = null,
 	env = process.env,
 } = {}) {
+	// PreToolUse must NOT mint a new session on every call — that recreates
+	// global last-writer pollution via session spam. Resume via HELI_SESSION_ID,
+	// external host id mapping, or worktree binding only.
 	const ctx = resolveExecutionContext({
 		cwd,
 		environment: env,
 		hookPayload: hookPayload || { tool_name: toolName, tool_input: toolInput },
 		host,
-		createIfMissing: true,
+		createIfMissing: false,
 		refreshLeaseOnResolve: false,
 	});
 

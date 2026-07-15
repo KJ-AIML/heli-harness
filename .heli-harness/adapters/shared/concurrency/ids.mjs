@@ -31,12 +31,16 @@ export function slugTaskId(raw) {
 	return s;
 }
 
-export function fingerprintSource({ planPath, workItemKey, repositoryId, title }) {
+/**
+ * Work-item fingerprint for duplicate detection.
+ * Intentionally excludes free-text title so title-only similarity cannot
+ * produce false positives; identity is plan path + work-item key + repository.
+ */
+export function fingerprintSource({ planPath, workItemKey, repositoryId }) {
 	const parts = [
 		String(planPath || "").toLowerCase(),
 		String(workItemKey || "").toLowerCase(),
 		String(repositoryId || "").toLowerCase(),
-		String(title || "").toLowerCase().trim(),
 	];
 	return createHash("sha256").update(parts.join("|")).digest("hex").slice(0, 32);
 }

@@ -1511,7 +1511,8 @@ HELI_HOOK_OK`
 			cwd,
 			host: "pi",
 			hookPayload: { tool_name: toolName, tool_input: input },
-			createIfMissing: true,
+			// Never mint sessions on tool_call — resume via HELI_SESSION_ID / binding only.
+			createIfMissing: false,
 		});
 		const writePathsEarly = FILE_WRITE_TOOL_NAMES.has(String(toolName || "")) ? getFileWritePaths(input) : [];
 		const isWriteTool = writePathsEarly.length > 0 || /write|edit|replace|apply_patch/i.test(String(toolName || ""));

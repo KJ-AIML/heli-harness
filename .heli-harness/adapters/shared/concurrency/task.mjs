@@ -60,13 +60,13 @@ Plan: ${task.source?.planPath || "n/a"}
 Step count: 0
 
 Files expected to change:
-- 
+- (none yet)
 
 Dirty files observed:
-- 
+- (none yet)
 
 Planned verification:
-- 
+- (none yet)
 
 Relevant skills consulted:
 - none
@@ -84,22 +84,25 @@ Task ID: ${task.taskId}
 /**
  * Find active tasks that look like duplicates of the proposed work item.
  */
-export function findDuplicateTasks(workspaceRoot, { workItemKey, planPath, repositoryId, fingerprint, title }) {
+export function findDuplicateTasks(workspaceRoot, { workItemKey, planPath, repositoryId, fingerprint }) {
 	const fp =
 		fingerprint ||
-		fingerprintSource({ planPath, workItemKey, repositoryId, title });
+		fingerprintSource({ planPath, workItemKey, repositoryId });
 	const key = String(workItemKey || "").toLowerCase();
 	return listActiveTasks(workspaceRoot).filter((t) => {
 		const s = t.source || {};
+		// Exact work-item fingerprint match (plan + key + repo — not title).
 		if (s.fingerprint && s.fingerprint === fp) return true;
+		// Same work-item key in the same repository (and plan when provided).
 		if (key && String(s.workItemKey || "").toLowerCase() === key) {
 			const sameRepo =
-				!repositoryId ||
+				repositoryId &&
 				String(t.target?.repositoryId || "").toLowerCase() === String(repositoryId).toLowerCase();
-			const samePlan =
-				!planPath ||
-				String(s.planPath || "").toLowerCase() === String(planPath).toLowerCase();
-			return sameRepo && samePlan;
+			if (!sameRepo) return false;
+			if (planPath) {
+				return String(s.planPath || "").toLowerCase() === String(planPath).toLowerCase();
+			}
+			return true;
 		}
 		return false;
 	});
@@ -139,14 +142,12 @@ export function createTask(workspaceRoot, {
 		planPath,
 		workItemKey: workItemKey || id,
 		repositoryId,
-		title: title || id,
 	});
 	const dups = findDuplicateTasks(workspaceRoot, {
 		workItemKey: workItemKey || id,
 		planPath,
 		repositoryId,
 		fingerprint: fp,
-		title: title || id,
 	});
 	if (dups.length && !allowDuplicate) {
 		const err = new Error(
@@ -204,6 +205,7 @@ export function createTask(workspaceRoot, {
 		title: task.title,
 		workItemKey: task.source.workItemKey,
 		fingerprint: task.source.fingerprint,
+		allowDuplicate: !!allowDuplicate,
 	});
 
 	return task;

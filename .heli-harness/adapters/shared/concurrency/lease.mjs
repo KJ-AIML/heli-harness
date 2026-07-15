@@ -4,19 +4,51 @@ import {
 	readJson,
 	releaseDir,
 	writeJsonAtomic,
+	listDirNames,
 } from "./fs-atomic.mjs";
 import {
 	DEFAULT_LEASE_TTL_SECONDS,
 	canonicalizePath,
 	leasePath,
 	writeLockDir,
+	pathsFor,
 } from "./paths.mjs";
 import { newLeaseId } from "./ids.mjs";
 import { LEASE_SCHEMA_VERSION } from "./schema.mjs";
 import { appendTaskEvent } from "./events.mjs";
 
+/**
+ * Read and validate a lease. Malformed / partial leases return
+ * { invalid: true, raw } rather than a usable active lease.
+ */
 export function readLease(workspaceRoot, taskId) {
-	return readJson(leasePath(workspaceRoot, taskId), null);
+	const path = leasePath(workspaceRoot, taskId);
+	if (!pathExists(path)) return null;
+	const raw = readJson(path, null);
+	if (!raw || typeof raw !== "object") {
+		return { invalid: true, taskId, path, reason: "unreadable or non-object lease.json" };
+	}
+	if (!raw.sessionId || !raw.leaseId || !raw.taskId || !raw.expiresAt) {
+		return {
+			invalid: true,
+			taskId,
+			path,
+			reason: "lease.json missing required fields (sessionId, leaseId, taskId, expiresAt)",
+			raw,
+		};
+	}
+	return raw;
+}
+
+function assertUsableLease(lease, taskId) {
+	if (lease?.invalid) {
+		const err = new Error(
+			`malformed write lease for task ${taskId}: ${lease.reason}. Inspect or remove ${lease.path} then re-claim or takeover --confirm.`,
+		);
+		err.code = "MALFORMED_LEASE";
+		err.lease = lease;
+		throw err;
+	}
 }
 
 export function isLeaseExpired(lease, now = Date.now()) {
@@ -56,6 +88,29 @@ function buildLease({ taskId, sessionId, worktreePath, ttlSeconds, revision }) {
  * Acquire exclusive write lease via atomic lock directory creation.
  * Never silently steals stale leases — returns STALE_LEASE requiring takeover.
  */
+/**
+ * Deny a second active write lease from the same canonical worktree
+ * (different session), even if the task id differs.
+ */
+export function findActiveWriteLeaseForWorktree(workspaceRoot, worktreePath, { exceptSessionId = null } = {}) {
+	const canonical = canonicalizePath(worktreePath || "");
+	if (!canonical) return null;
+	const { locksDir } = pathsFor(workspaceRoot);
+	if (!pathExists(locksDir)) return null;
+	for (const name of listDirNames(locksDir)) {
+		if (!name.endsWith(".write.lock")) continue;
+		const tid = name.replace(/\.write\.lock$/, "");
+		const lease = readLease(workspaceRoot, tid);
+		if (!lease || lease.invalid) continue;
+		if (isLeaseExpired(lease)) continue;
+		if (exceptSessionId && lease.sessionId === exceptSessionId) continue;
+		if (canonicalizePath(lease.worktreePath || "") === canonical) {
+			return { taskId: tid, lease };
+		}
+	}
+	return null;
+}
+
 export function acquireWriteLease(workspaceRoot, {
 	taskId,
 	sessionId,
@@ -69,6 +124,9 @@ export function acquireWriteLease(workspaceRoot, {
 	}
 	const lockDir = writeLockDir(workspaceRoot, taskId);
 	const existing = readLease(workspaceRoot, taskId);
+	if (existing?.invalid) {
+		assertUsableLease(existing, taskId);
+	}
 	if (existing) {
 		if (existing.sessionId === sessionId && !isLeaseExpired(existing)) {
 			return refreshLease(workspaceRoot, taskId, { sessionId });
@@ -89,6 +147,20 @@ export function acquireWriteLease(workspaceRoot, {
 		throw err;
 	}
 
+	// Same-worktree second writer denial (even for a different task).
+	const conflict = findActiveWriteLeaseForWorktree(workspaceRoot, worktreePath, {
+		exceptSessionId: sessionId,
+	});
+	if (conflict) {
+		const err = new Error(
+			`worktree already has an active write lease (task ${conflict.taskId}, session ${conflict.lease.sessionId}). Use a separate worktree or attach as review/observe.`,
+		);
+		err.code = "WORKTREE_WRITER_HELD";
+		err.lease = conflict.lease;
+		err.taskId = conflict.taskId;
+		throw err;
+	}
+
 	// If lock dir exists without lease.json, treat carefully
 	if (pathExists(lockDir) && !existing) {
 		const err = new Error(`lock directory exists without readable lease for task ${taskId}`);
@@ -101,7 +173,7 @@ export function acquireWriteLease(workspaceRoot, {
 		// race: someone else won
 		const raced = readLease(workspaceRoot, taskId);
 		const err = new Error(
-			`failed to acquire write lease for task ${taskId}${raced ? ` (held by ${raced.sessionId})` : ""}`,
+			`failed to acquire write lease for task ${taskId}${raced && !raced.invalid ? ` (held by ${raced.sessionId})` : ""}`,
 		);
 		err.code = "LEASE_RACE";
 		err.lease = raced;
@@ -131,6 +203,7 @@ export function refreshLease(workspaceRoot, taskId, { sessionId, ttlSeconds } = 
 		err.code = "NO_LEASE";
 		throw err;
 	}
+	assertUsableLease(lease, taskId);
 	if (sessionId && lease.sessionId !== sessionId) {
 		const err = new Error(`session ${sessionId} does not own lease for task ${taskId}`);
 		err.code = "LEASE_NOT_OWNER";
@@ -161,14 +234,39 @@ export function refreshLease(workspaceRoot, taskId, { sessionId, ttlSeconds } = 
 export function releaseWriteLease(workspaceRoot, taskId, { sessionId, force = false } = {}) {
 	const lease = readLease(workspaceRoot, taskId);
 	if (!lease) {
-		releaseDir(writeLockDir(workspaceRoot, taskId));
+		// Only clear orphan lock dir when force is explicit — never as anonymous release.
+		if (force) releaseDir(writeLockDir(workspaceRoot, taskId));
 		return null;
 	}
-	if (!force && sessionId && lease.sessionId !== sessionId) {
-		const err = new Error(`session ${sessionId} cannot release lease owned by ${lease.sessionId}`);
-		err.code = "LEASE_NOT_OWNER";
-		err.lease = lease;
-		throw err;
+	if (lease.invalid) {
+		if (!force) {
+			assertUsableLease(lease, taskId);
+		}
+		// force cleanup of malformed lease
+		appendTaskEvent(workspaceRoot, taskId, "lease_released", {
+			sessionId: sessionId || null,
+			force: true,
+			previous: lease,
+			malformed: true,
+		});
+		releaseDir(writeLockDir(workspaceRoot, taskId));
+		return lease;
+	}
+	if (!force) {
+		if (!sessionId) {
+			const err = new Error(
+				`sessionId required to release write lease on task ${taskId} (pass force:true only for explicit admin cleanup)`,
+			);
+			err.code = "SESSION_REQUIRED";
+			err.lease = lease;
+			throw err;
+		}
+		if (lease.sessionId !== sessionId) {
+			const err = new Error(`session ${sessionId} cannot release lease owned by ${lease.sessionId}`);
+			err.code = "LEASE_NOT_OWNER";
+			err.lease = lease;
+			throw err;
+		}
 	}
 	const lockDir = writeLockDir(workspaceRoot, taskId);
 	// preserve evidence: write released snapshot event before remove
@@ -176,6 +274,7 @@ export function releaseWriteLease(workspaceRoot, taskId, { sessionId, force = fa
 		sessionId: sessionId || lease.sessionId,
 		leaseId: lease.leaseId,
 		previous: lease,
+		force: !!force,
 	});
 	releaseDir(lockDir);
 	return lease;
@@ -203,14 +302,16 @@ export function takeoverWriteLease(workspaceRoot, {
 		previousLease: previous,
 		confirmed: true,
 	});
-	// force release then acquire
+	// force release then acquire (local-first; not a distributed lock)
 	releaseDir(writeLockDir(workspaceRoot, taskId));
+	// Temporarily allow same worktree by acquiring after forced clear of this task's lock.
+	// Other tasks' active leases on this worktree still block via findActiveWriteLeaseForWorktree.
 	return acquireWriteLease(workspaceRoot, { taskId, sessionId, worktreePath, ttlSeconds });
 }
 
 export function sessionHoldsWriteLease(workspaceRoot, taskId, sessionId) {
 	const lease = readLease(workspaceRoot, taskId);
-	if (!lease || !sessionId) return false;
+	if (!lease || lease.invalid || !sessionId) return false;
 	if (lease.sessionId !== sessionId) return false;
 	return !isLeaseExpired(lease);
 }
