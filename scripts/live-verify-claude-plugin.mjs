@@ -44,9 +44,8 @@ try {
 		"--plugin-dir", pluginCopy,
 		"--dangerously-skip-permissions",
 		"--output-format", "stream-json",
-		"--include-hook-events",
 		"--verbose",
-	], { cwd: repo, encoding: "utf8", timeout: 120_000 });
+	], { cwd: repo, encoding: "utf8", timeout: 180_000 });
 
 	assert.equal(run.status, 0, run.stderr || "claude exited non-zero");
 

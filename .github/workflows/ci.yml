@@ -6,26 +6,31 @@ on:
   pull_request:
 
 jobs:
-  validate:
-    name: Validate
-    runs-on: ubuntu-latest
+  check:
+    name: Check (${{ matrix.os }}, node-${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: ["20", "22"]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so whitespace checks can compare against the PR base
+          # (shallow depth-1 merge commits look like root commits and otherwise
+          # re-check the entire tree, including historical trailing blanks).
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ matrix.node }}
 
-      - name: Syntax check extension
-        run: node --check extensions/pi-extension.js
-
-      - name: Extension smoke test
-        run: node scripts/smoke-extension-load.mjs
-
-      - name: Release validation
-        run: node scripts/validate-release.mjs
+      - name: Full npm check
+        run: npm run check
 
       - name: Bash syntax check
+        if: runner.os != 'Windows'
         run: |
           bash -n install.sh
           bash -n update.sh
@@ -44,4 +49,16 @@ jobs:
           }
 
       - name: Git whitespace check
-        run: git diff-tree --check --no-commit-id --root -r HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+            echo "Checking whitespace on PR range $BASE...$HEAD"
+            git diff --check "$BASE...$HEAD"
+          else
+            # Push to main: check the tip commit only
+            echo "Checking whitespace on tip commit $(git rev-parse --short HEAD)"
+            git diff-tree --check --no-commit-id -r HEAD
+          fi

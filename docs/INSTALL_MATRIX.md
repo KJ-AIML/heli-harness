@@ -17,7 +17,7 @@ For copy-paste setup, manual installation, updates, removal, and adapter details
 
 | Host | Command or path | Notes |
 | --- | --- | --- |
-| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.23` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.23` | Package install; run `/heli-install` for a workspace harness |
+| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.5.24` or `axga install git:github.com/KJ-AIML/heli-harness@v0.5.24` | Package install; run `/heli-install` for a workspace harness |
 | Codex | `codex plugin marketplace add .heli-harness/adapters/codex-plugin`; `codex plugin add heli-harness@heli-harness` | `AGENTS.md` remains the workspace pointer |
 | Claude Code | `claude plugin install .heli-harness/adapters/claude-plugin` | `CLAUDE.md` remains the workspace pointer |
 | Cursor | Add `.heli-harness/adapters/cursor-plugin/` as a local marketplace, or copy its `plugins/heli-harness/` child to `~/.cursor/plugins/local/heli-harness/` | Marketplace manifest indexes the plugin; pointer adapter remains the workspace fallback |

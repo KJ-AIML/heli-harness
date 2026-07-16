@@ -1,0 +1,25 @@
+# Operational runtime — never ship in the published tarball
+.heli-harness/sessions/
+.heli-harness/tasks/
+.heli-harness/bindings/
+.heli-harness/locks/
+.heli-harness/workspace/schema.json
+.heli-harness/state/yolo.json
+.heli-harness/state/plan.md
+.heli-harness/state/reports/*
+!.heli-harness/state/reports/.gitkeep
+.heli-harness/state/runs/*
+!.heli-harness/state/runs/.gitkeep
+
+# Dev / CI / tooling (not part of the package files allowlist either)
+.git/
+.github/
+.superpowers/
+docs/
+temp/
+research/
+worktrees/
+*.tgz
+.DS_Store
+Thumbs.db
+*.log

@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.5.23-informational"></a>
+  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.5.24-informational"></a>
   <a href="https://github.com/KJ-AIML/heli-harness/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/KJ-AIML/heli-harness/ci.yml?branch=main&label=CI"></a>
   <a href="docs/ADAPTER_SUPPORT_MATRIX.md"><img alt="Adapters" src="https://img.shields.io/badge/adapters-Pi%20%C2%B7%20Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20Cursor-8A2BE2"></a>
 </p>
@@ -28,6 +28,27 @@ Without shared context, agents can edit the wrong repository, infer different ru
 
 Heli-Harness is not an agent runtime, planner, or orchestrator; see [the roadmap](ROADMAP.md#not-doing).
 
+## Concurrent sessions (v0.5.24)
+
+Multiple agent sessions can work on **different durable tasks and worktrees** in one parent workspace without sharing task, target, plan, report, or YOLO state.
+
+```bash
+heli task create work-3a --work-item 3A --repo repo-a
+heli task claim work-3a --mode write
+export HELI_SESSION_ID=...   # printed by claim/start
+
+# second agent / worktree
+heli task create work-3b --work-item 3B --repo repo-b
+heli task claim work-3b --mode write
+```
+
+- **Task** = durable engineering work (`tasks/<id>/`)
+- **Session** = ephemeral Heli attachment (`sessions/<id>.json`, optional host session metadata)
+- **Lease** = single writer per task (exclusive lock directory; explicit takeover)
+- **Legacy mode** remains default until you create or migrate a task
+
+Local coordination only — not a distributed lock service, scheduler, or multi-agent runtime. See `CHANGELOG.md` and `.heli-harness/state/README.md`.
+
 ## Quickstart
 
 From the parent folder that contains your repositories, paste this prompt into your agent:
@@ -41,6 +62,8 @@ Install Heli-Harness as a parent-workspace harness here. Confirm that .heli-harn
 3. Record the task, make the change, run the relevant checks, and report evidence and risks.
 
 For copy-paste commands, manual installation, updates, uninstall, and adapter setup, see [INSTALL.md](INSTALL.md).
+
+**Workspace install ≠ host skills.** `heli install` places governance files and the skill library on disk. Host-native skill inventory (Codex/Claude/etc.) requires activating the host plugin from the installed adapter tree — see INSTALL.md. SessionStart injects a short skill-usage bootstrap only when the plugin is loaded.
 
 The workflow preserves repository-local instructions and evidence boundaries; detailed adapter setup and verification limits remain in the linked documentation.
 

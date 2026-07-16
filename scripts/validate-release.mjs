@@ -8,19 +8,19 @@
  *   - .heli-harness/safety/command-rules.json parses
  *   - .heli-harness/workspace/index.json parses (if present)
  *   - .heli-harness/workspace/target.json parses (if present)
- *   - 23 bundled skill frontmatters are valid
+ *   - bundled skill frontmatters are valid
  *   - no exact legacy references
  *   - docs current-baseline / install examples use current package version
  *   - no obvious conflict markers
  *   - benchmark pack presence
  *   - adapter wiring verification
  *
- * Dependency-free. Runnable with Node.
+ * Dependency-free. Runnable with Node (no ripgrep/rg required).
  * Exit 0 on pass, 1 on any failure.
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, resolve, dirname } from "node:path";
+import { join, resolve, dirname, relative } from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -87,6 +87,65 @@ function isDir(p) {
 
 function rel(p) {
 	return p.replace(root, "").replace(/^[/\\]/, "").split("\\").join("/");
+}
+
+const SKIP_DIR_NAMES = new Set([
+	".git",
+	"node_modules",
+	"temp",
+	"worktrees",
+	"repos",
+	".heli-harness/sessions",
+	".heli-harness/tasks",
+	".heli-harness/bindings",
+	".heli-harness/locks",
+]);
+
+function shouldSkipDir(absPath) {
+	const relPath = relative(root, absPath).split("\\").join("/");
+	if (!relPath || relPath === ".") return false;
+	if (SKIP_DIR_NAMES.has(relPath) || SKIP_DIR_NAMES.has(relPath.split("/")[0])) return true;
+	return false;
+}
+
+/**
+ * Walk text files under root for content searches (legacy names, conflict markers).
+ * Pure Node — works on CI runners without ripgrep.
+ */
+function walkTextFiles(dir, acc = []) {
+	if (!isDir(dir) || shouldSkipDir(dir)) return acc;
+	for (const name of readdirSync(dir)) {
+		const p = join(dir, name);
+		if (isDir(p)) {
+			walkTextFiles(p, acc);
+			continue;
+		}
+		if (!isFile(p)) continue;
+		// Skip obvious binaries / large assets
+		if (/\.(png|jpg|jpeg|gif|webp|ico|zip|tgz|gz|woff2?|ttf|eot|pdf|sqlite|exe|dll)$/i.test(name)) continue;
+		acc.push(p);
+	}
+	return acc;
+}
+
+function searchRepoForLiteral(pattern, { excludeRelPaths = [] } = {}) {
+	const hits = [];
+	const exclude = new Set(excludeRelPaths.map((p) => p.split("\\").join("/")));
+	for (const file of walkTextFiles(root)) {
+		const relPath = rel(file);
+		if (exclude.has(relPath)) continue;
+		if (relPath === "scripts/validate-release.mjs") continue;
+		const text = safeReadText(file);
+		if (!text || text.includes("\0")) continue;
+		const lines = text.split(/\r?\n/);
+		for (let i = 0; i < lines.length; i++) {
+			if (lines[i].includes(pattern)) {
+				hits.push(`${relPath}:${i + 1}:${lines[i].trim().slice(0, 160)}`);
+				if (hits.length >= 20) return hits;
+			}
+		}
+	}
+	return hits;
 }
 
 function walkFiles(dir, predicate = () => true) {
@@ -285,8 +344,11 @@ if (skillFiles.length === 0) {
 	} else {
 		pass(`${validCount}/${skillFiles.length} skill frontmatters valid`);
 	}
-	if (skillFiles.length !== 23) {
-		warn(`expected 23 bundled skills, found ${skillFiles.length}`);
+	// Canonical library grew with host-plugin packaging (governance trio + using-heli-skills).
+	if (skillFiles.length < 24) {
+		warn(`expected at least 24 bundled skills, found ${skillFiles.length}`);
+	} else {
+		pass(`bundled skill count ${skillFiles.length}`);
 	}
 }
 
@@ -304,25 +366,10 @@ const LEGACY_PATTERNS = [
 
 let legacyFound = false;
 for (const pattern of LEGACY_PATTERNS) {
-	const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-	let output = "";
-	try {
-		output = execSync(`rg -n --glob "!.git" --glob "!scripts/validate-release.mjs" "${escaped}" .`, {
-			cwd: root,
-			encoding: "utf8",
-			stdio: ["pipe", "pipe", "pipe"],
-		}).trim();
-	} catch (error) {
-		// rg exits 1 when this specific pattern has no matches.
-		if (error && error.status === 1) continue;
-		throw error;
-	}
-	if (output) {
+	const hits = searchRepoForLiteral(pattern);
+	if (hits.length) {
 		legacyFound = true;
-		fail(
-			`legacy reference: ${pattern}`,
-			output.split("\n").slice(0, 3).join("; "),
-		);
+		fail(`legacy reference: ${pattern}`, hits.slice(0, 3).join("; "));
 	}
 }
 if (!legacyFound) {
@@ -568,16 +615,89 @@ if (policyFiles.length > 0 && policyWarnings === 0) pass(`${policyFiles.length} 
 const shippedIndex = safeReadJson(join(root, ".heli-harness", "workspace", "index.json"));
 if (!shippedIndex || shippedIndex.schemaVersion !== 1 || !shippedIndex.workspaceRoot || !Array.isArray(shippedIndex.repos)) {
 	fail(".heli-harness/workspace/index.json", "must have schemaVersion, workspaceRoot, and repos array");
+} else if (shippedIndex.repos.length > 0) {
+	fail(
+		".heli-harness/workspace/index.json",
+		"package seed must ship empty repos[] (no selected source repository target metadata)",
+	);
 } else {
-	pass(".heli-harness/workspace/index.json has active schema fields");
+	pass(".heli-harness/workspace/index.json is clean empty-seed");
 }
 
 const shippedTarget = safeReadJson(join(root, ".heli-harness", "workspace", "target.json"));
-if (!shippedTarget || shippedTarget.schemaVersion !== 1 || !shippedTarget.targetRepo || !shippedTarget.targetGitRoot || !shippedTarget.writesAllowedUnder || !shippedTarget.activeProfile) {
-	fail(".heli-harness/workspace/target.json", "must have active target fields for dogfood defaults");
+if (!shippedTarget || shippedTarget.schemaVersion !== 1) {
+	fail(".heli-harness/workspace/target.json", "must parse with schemaVersion 1");
+} else if (shippedTarget.targetRepo || shippedTarget.targetGitRoot || shippedTarget.activeProfile) {
+	fail(
+		".heli-harness/workspace/target.json",
+		"package seed must not select a target (distributable artifact must be idle)",
+	);
 } else {
-	pass(".heli-harness/workspace/target.json has active target fields");
+	pass(".heli-harness/workspace/target.json is clean empty-seed");
 }
+
+section("Package operational seed cleanliness");
+
+const idleTask = safeReadText(join(root, ".heli-harness", "state", "current-task.md")) || "";
+if (!/idle|none — idle|Current status: complete/i.test(idleTask)) {
+	fail(".heli-harness/state/current-task.md", "package seed must be idle");
+} else if (/docs-overhaul|Documentation overhaul|Failed attempts count: [1-9]/i.test(idleTask)) {
+	fail(".heli-harness/state/current-task.md", "package seed contains dogfood operational markers");
+} else {
+	pass(".heli-harness/state/current-task.md is idle package seed");
+}
+
+if (isFile(join(root, ".heli-harness", "state", "plan.md"))) {
+	fail(".heli-harness/state/plan.md", "package must not ship operational plan.md");
+} else {
+	pass("no operational plan.md in package seed");
+}
+
+if (isFile(join(root, ".heli-harness", "state", "yolo.json"))) {
+	fail(".heli-harness/state/yolo.json", "package must not ship yolo.json");
+} else {
+	pass("no yolo.json in package seed");
+}
+
+for (const dirName of ["sessions", "tasks", "bindings", "locks"]) {
+	const dir = join(root, ".heli-harness", dirName);
+	if (isDir(dir)) {
+		const entries = readdirSync(dir).filter((n) => n !== ".gitkeep");
+		if (entries.length > 0) {
+			fail(`.heli-harness/${dirName}/`, `must be empty for packaging (found: ${entries.slice(0, 3).join(", ")})`);
+		} else {
+			pass(`.heli-harness/${dirName}/ empty or absent`);
+		}
+	} else {
+		pass(`.heli-harness/${dirName}/ absent`);
+	}
+}
+
+const pollutionMarkers = [
+	"docs-overhaul",
+	"DOCS_OVERHAUL_POLLUTION_MARKER",
+	"heli-ses-pollution",
+	"heli-lease-pollution",
+	"C:/fake/machine/path/pollution",
+	"Self-dogfood default for this repository checkout",
+];
+const seedScanPaths = [
+	join(root, ".heli-harness", "state", "current-task.md"),
+	join(root, ".heli-harness", "state", "decisions.md"),
+	join(root, ".heli-harness", "workspace", "target.json"),
+	join(root, ".heli-harness", "workspace", "index.json"),
+];
+let seedPollution = 0;
+for (const p of seedScanPaths) {
+	const text = safeReadText(p) || "";
+	for (const marker of pollutionMarkers) {
+		if (text.includes(marker)) {
+			seedPollution++;
+			fail(rel(p), `contains pollution marker: ${marker}`);
+		}
+	}
+}
+if (seedPollution === 0) pass("package operational seed files free of known pollution markers");
 
 section("Benchmark evidence wording");
 
@@ -595,21 +715,33 @@ if (/(^|\n)## Expected Results\b/.test(benchmarkExample) || /\*\*Likely outcome:
 
 section("Conflict markers");
 
-try {
-	const conflictOutput = execSync(
-		`rg -n "<<<<<<<|=======|>>>>>>>" --glob "!.git" --glob "!CHANGELOG.md" --glob "!scripts/validate-release.mjs" --glob "!scripts/benchmark-summary.mjs" .`,
-		{ cwd: root, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] },
-	).trim();
-	if (conflictOutput) {
-		fail(
-			"conflict markers found",
-			conflictOutput.split("\n").slice(0, 5).join("; "),
-		);
+{
+	const conflictHits = [];
+	const conflictExclude = new Set([
+		"CHANGELOG.md",
+		"scripts/validate-release.mjs",
+		"scripts/benchmark-summary.mjs",
+	]);
+	for (const file of walkTextFiles(root)) {
+		const relPath = rel(file);
+		if (conflictExclude.has(relPath)) continue;
+		const text = safeReadText(file);
+		if (!text || text.includes("\0")) continue;
+		const lines = text.split(/\r?\n/);
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			if (line.startsWith("<<<<<<<") || line.startsWith(">>>>>>>") || line === "=======") {
+				conflictHits.push(`${relPath}:${i + 1}:${line.trim().slice(0, 80)}`);
+				if (conflictHits.length >= 10) break;
+			}
+		}
+		if (conflictHits.length >= 10) break;
+	}
+	if (conflictHits.length) {
+		fail("conflict markers found", conflictHits.slice(0, 5).join("; "));
 	} else {
 		pass("no conflict markers found");
 	}
-} catch {
-	pass("no conflict markers found");
 }
 
 // ── 6. Benchmark pack presence ─────────────────────────────────────────────

@@ -23,7 +23,7 @@ npx github:KJ-AIML/heli-harness status
 
 From a clean `main` worktree, run `npm run release -- <x.y.z> "summary"`. The command updates current version surfaces, runs `npm run check`, stages only release-managed paths, creates the commit and annotated tag, and refuses unrelated dirty files. Add `--push` to push `main` and the new tag.
 
-Pin a release when needed: `npx github:KJ-AIML/heli-harness#v0.5.23 install <path>`.
+Pin a release when needed: `npx github:KJ-AIML/heli-harness#v0.5.24 install <path>`.
 
 ## Manual workspace install
 
@@ -32,7 +32,7 @@ Pin a release when needed: `npx github:KJ-AIML/heli-harness#v0.5.23 install <pat
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.23
+git checkout v0.5.24
 .\install.ps1 -Parent "C:\your\workspace"
 ```
 
@@ -41,17 +41,42 @@ git checkout v0.5.23
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.5.23
+git checkout v0.5.24
 ./install.sh /path/to/workspace
 ```
 
 After a successful install, the source checkout can be removed; do not remove the installed `.heli-harness/` directory.
+
+### Clean install semantics (v0.5.24+)
+
+`heli install` (and `install.sh` / `install.ps1` / Pi `/heli-install`) copies **distribution assets only** (HARNESS, adapters, skills, policies, safety, templates, manifest) then **constructs** idle operational state. It never copies live package dogfood such as:
+
+- `state/current-task.md` / `plan.md` / `yolo.json` from the source checkout
+- `tasks/`, `sessions/`, `bindings/`, `locks/`, reports, or machine-specific targets
+
+A fresh install always starts **idle**, **no target selected**, and **strict YOLO** (no `yolo.json`).
+
+### Update semantics
+
+`heli update` preserves user operational state (`state/`, `tasks/`, `sessions/`, `bindings/`, `locks/`) and local overlays (`profiles/`, `workspace/`, `policies/`, `safety/`). It updates shipped distribution assets only. Use `heli update --reset-state` to reseed idle operational runtime without importing package dogfood. Package checkout sessions/tasks never land in the destination.
 
 ## First use
 
 Start the agent from the parent workspace. It should read `.heli-harness/HARNESS.md`, identify the target repository, read its profile when present, and update `.heli-harness/state/current-task.md` before non-trivial edits.
 
 In a multi-repo workspace, map repositories in `.heli-harness/workspace/index.json` and select one with `/heli-target set <repo>` before write workflows.
+
+In concurrent mode, `heli status` shows each active task’s **live** writer session, worktree (from write lease → session → binding → task metadata), lease expiry, target, mode, and reviewer/observer counts.
+
+### Workspace install vs host-native skills
+
+`heli install` installs **workspace governance** (`.heli-harness/`, pointer files, Markdown skill library on disk). It does **not** by itself register host-native skills or hooks with Codex/Claude/other hosts.
+
+Host-native skill inventory requires a second step -- activate the host plugin (see Adapter setup below). Until then:
+
+- skills exist as files under `.heli-harness/skills/` and under adapter plugin trees;
+- SessionStart skill bootstrap and PreToolUse guardrails run only when the host plugin is loaded;
+- `heli status` reports skill packaging counts and `host activation: installed / activation not verifiable` -- file presence is not live activation proof.
 
 ## Adapter setup
 
@@ -115,8 +140,8 @@ Stage `.heli-harness/adapters/antigravity-plugin/` in the host plugin directory.
 ### Pi / AXGA package
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.5.23
-axga install git:github.com/KJ-AIML/heli-harness@v0.5.23
+pi install git:github.com/KJ-AIML/heli-harness@v0.5.24
+axga install git:github.com/KJ-AIML/heli-harness@v0.5.24
 ```
 
 This installs the agent package, not a workspace harness. Run `/heli-install` in Pi or AXGA to create the workspace harness.

@@ -1,6 +1,64 @@
 # Changelog
 
+## v0.5.24 - Concurrent Session Foundation
+
+### Added
+
+- **Concurrent Session Foundation** for multi-session local coordination without becoming an agent orchestrator:
+  - Durable tasks under `.heli-harness/tasks/<task-id>/` (`task.json`, task-local plan/decisions/reports/evidence/events)
+  - Heli-generated sessions under `.heli-harness/sessions/<session-id>.json` with optional `externalHostSessionId`
+  - Worktree bindings under `.heli-harness/bindings/worktrees/`
+  - Single-writer task leases via exclusive lock directories `locks/tasks/<task-id>.write.lock/`
+  - Shared execution resolver used by Claude, Codex, Grok, Kimi, OpenCode, Antigravity hooks and Pi
+  - Workspace schema `.heli-harness/workspace/schema.json` with `mode: legacy | concurrent`
+  - CLI: `heli task`, `heli session`, `heli conflicts`
+  - Task-scoped YOLO (global `yolo.json` does not bleed across tasks in concurrent mode)
+  - Task-authoritative targets in concurrent mode
+  - Duplicate work-item detection on task create
+  - Advisory path-claim conflict detection
+  - `heli task migrate-legacy` one-way import from singular state files
+  - Regression suite: `node scripts/smoke-concurrency-foundation.mjs` (included in `npm run check`)
+  - Canonical clean-install seed: `lib/cli/seed-workspace.mjs` (distribution assets only + explicit idle operational seed)
+  - Pollution-proof install smokes: `scripts/smoke-clean-install.mjs`
+  - Status worktree projection smokes: `scripts/smoke-status-worktree.mjs`
+  - Live concurrent host proofs (not in `npm run check`): `scripts/live-verify-codex-concurrency.mjs`, `scripts/live-verify-claude-concurrency.mjs`
+  - Plugin-local `shared/` copies for host cache installs + `scripts/sync-plugin-shared.mjs`
+  - **Full host-native skill library packaging:** canonical `.heli-harness/skills/` (including `using-heli-skills` meta-skill + governance trio) is mirrored into Codex, Claude, Grok, Antigravity, and Cursor plugin `skills/` trees
+  - `scripts/sync-plugin-skills.mjs` + `npm run sync:plugin-skills` / `--check` for frontmatter validation and plugin parity
+  - Compact SessionStart **skill-usage bootstrap** (distinct from task/session/lease governance context)
+  - `scripts/smoke-plugin-skills.mjs` packaging/discovery smoke (in `npm run check`)
+
+### Changed
+
+- `heli status` reports concurrent multi-task summaries when schema mode is concurrent, projecting **live** worktree from write lease → writer session → binding → task metadata (with conflict warnings).
+- `heli status` reports skill packaging counts and **host activation not verifiable** (file presence ≠ live activation).
+- `heli install` / `install.sh` / `install.ps1` / Pi `/heli-install` all use one clean seed path — never copy package checkout dogfood (tasks, sessions, live current-task, YOLO, selected target).
+- `heli install` stdout clearly separates workspace governance install from host plugin activation commands for native skills.
+- `heli update` updates distribution assets only; preserves user tasks/sessions/bindings/locks/state/targets/YOLO; `--reset-state` reseeds idle operational state without importing package dogfood.
+- Plugin hooks import embedded `../shared/` so Codex marketplace cache and Claude `--plugin-dir` copies are self-contained.
+- Skill frontmatter standardized to unique hyphenated names and “Use when…” trigger descriptions for host semantic discovery.
+- `HARNESS.md` Skill Routing updated for full plugin skill inventory + `using-heli-skills` protocol.
+
+### Fixed
+
+- Clean installs no longer inherit operational state from a dogfooded source package tree.
+- **Published tarball is free of operational dogfood:** package seeds ship idle `current-task.md`, empty `target.json`/`index.json`, no `plan.md`/`yolo.json`, and `.npmignore` excludes `sessions/`/`tasks/`/`bindings/`/`locks/`. Plugin SessionStart smokes no longer mint sessions into the package checkout (fixture cwd). Guard: `scripts/smoke-pack-artifact.mjs` in `npm run check`.
+- Codex/Claude plugin packages no longer fail hook module resolution when hosts cache only the plugin directory (missing sibling `adapters/shared`).
+- UTF-8 BOM stripped from packaged skill frontmatter so Codex can parse `SKILL.md`.
+- Host plugins no longer ship only the three wrapper skills; the complete intended Heli skill library is packaged for native discovery when the host plugin is activated.
+
+### Notes
+
+- Local workspace coordination only — not a distributed lock service, scheduler, agent runtime, or merge orchestrator.
+- YOLO never bypasses ownership, lease, or wrong-task gates.
+- Legacy singular `state/current-task.md` workspaces continue to work until concurrent mode is initialized.
+- Workspace install and host plugin activation remain separate: `heli install` alone does not register host-native skills.
+- Live v0.5.24 plugin runtime proof (this release): **Codex** isolated `CODEX_HOME` + real `codex exec` — marketplace install, SessionStart Completed, PreToolUse denials for `git push` and `.env` honored. Claude Code SessionStart + concurrent context proven via `--plugin-dir`; full Claude PreToolUse enforcement requires a working host API key on the verification machine.
+- After editing `adapters/shared`, run `npm run sync:plugin-shared` before commit.
+- After editing `.heli-harness/skills/`, run `npm run sync:plugin-skills` before commit.
+
 ## v0.5.23 - Cursor Marketplace and OpenCode Discovery
+
 
 ### Added
 

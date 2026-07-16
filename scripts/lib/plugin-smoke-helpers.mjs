@@ -30,17 +30,51 @@ export function assertHookDeny(root, relScript, sample, expectedReason) {
 	assert.match(output.hookSpecificOutput.permissionDecisionReason, expectedReason);
 }
 
+/**
+ * SessionStart must not run against the package checkout — createIfMissing mints
+ * sessions/bindings under .heli-harness/ and pollutes the publishable tree.
+ */
 export function assertSessionContext(root, relScript) {
-	const result = spawnSync(process.execPath, [join(root, relScript)], {
-		cwd: root,
-		encoding: "utf8",
-		stdio: ["ignore", "pipe", "pipe"],
-	});
-	assert.equal(result.status, 0, result.stderr);
-	const output = JSON.parse(result.stdout);
-	assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
-	assert.match(output.hookSpecificOutput.additionalContext, /Heli-Harness plugin context/);
-	assert.match(output.hookSpecificOutput.additionalContext, /\.heli-harness\/HARNESS\.md/);
+	withFixtureWorkspace(
+		{
+			".heli-harness/HARNESS.md": "# Heli-Harness\n",
+			".heli-harness/state/current-task.md":
+				"# Current Task\n\nTask: (none — idle)\n\nMode: idle\n\nCurrent status: complete\n\nFailed attempts count: 0\n",
+			".heli-harness/workspace/target.json": JSON.stringify(
+				{
+					schemaVersion: 1,
+					targetRepo: "",
+					targetGitRoot: "",
+					writesAllowedUnder: "",
+					activeProfile: "",
+					selectedAt: "",
+					selectedBy: "",
+					reason: "fixture — no target selected",
+				},
+				null,
+				2,
+			),
+		},
+		(cwd) => {
+			const result = spawnSync(process.execPath, [join(root, relScript)], {
+				cwd,
+				encoding: "utf8",
+				stdio: ["ignore", "pipe", "pipe"],
+			});
+			assert.equal(result.status, 0, result.stderr);
+			const output = JSON.parse(result.stdout);
+			assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
+			assert.match(output.hookSpecificOutput.additionalContext, /Heli-Harness plugin context/);
+			assert.match(output.hookSpecificOutput.additionalContext, /\.heli-harness\/HARNESS\.md/);
+			// Skill bootstrap must appear exactly once and remain distinct from governance context.
+			const ctx = output.hookSpecificOutput.additionalContext;
+			assert.match(ctx, /Heli skill usage:/);
+			assert.match(ctx, /using-heli-skills/);
+			assert.match(ctx, /mandatory workflow resources/);
+			const bootstrapHits = ctx.split("Heli skill usage:").length - 1;
+			assert.equal(bootstrapHits, 1, "skill bootstrap must appear exactly once per SessionStart");
+		},
+	);
 }
 
 export function nodeCheck(root, relScript) {

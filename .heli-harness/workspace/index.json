@@ -1,14 +1,5 @@
 {
   "schemaVersion": 1,
   "workspaceRoot": ".",
-  "repos": [
-    {
-      "name": "heli-harness",
-      "path": ".",
-      "gitRoot": ".",
-      "profile": ".heli-harness/profiles/heli-harness.md",
-      "defaultTarget": true,
-      "notes": "Self-dogfood default for the Heli-Harness repository checkout."
-    }
-  ]
+  "repos": []
 }

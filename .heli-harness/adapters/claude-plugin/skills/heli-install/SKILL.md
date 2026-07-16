@@ -1,12 +1,6 @@
 ---
 name: heli-install
-description: Bootstrap the Heli-Harness workspace harness into the current folder (parity with Pi/AXGA's /heli-install)
-triggers:
-  - /heli-install
-  - /hh-install
-  - heli install
-  - bootstrap workspace harness
-  - install heli-harness
+description: Use when bootstrapping Heli-Harness into a folder — install workspace governance, AGENTS.md/CLAUDE.md pointers, or run /heli-install style setup without reimplementing install logic.
 ---
 
 # Heli Install
