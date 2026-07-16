@@ -17,4 +17,3 @@ Rules:
 - Do not add coverage theater.
 - Do not mock the system under test.
 - If a path cannot be tested, state why and document the residual risk.
-

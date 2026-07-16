@@ -24,4 +24,3 @@ Rules:
 - Do not silently switch scope.
 - If confirmed but unexplained, route to `debug`.
 - If confirmed and shared surface is affected, route to `impact` before editing.
-

@@ -23,4 +23,3 @@ Rules:
 - Pick the smallest protocol that covers the risk.
 - If target repo is unclear, identify it before editing.
 - Update `state/current-task.md` before non-trivial edits.
-

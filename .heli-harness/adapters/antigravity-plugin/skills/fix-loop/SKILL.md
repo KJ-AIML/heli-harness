@@ -29,4 +29,3 @@ Loop:
 5. Record evidence.
 6. Continue or stop with diagnosis.
 ```
-

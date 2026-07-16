@@ -16,4 +16,3 @@ Rules:
 - Do not assume release branch flow.
 - Do not publish or deploy without explicit user request or documented automation policy.
 - Treat irreversible release actions as S3 unless the repo profile says otherwise.
-

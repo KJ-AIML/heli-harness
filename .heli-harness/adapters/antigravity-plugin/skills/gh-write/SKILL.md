@@ -17,4 +17,3 @@ Rules:
 - Do not post, close, merge, label, or request reviewers unless the user asked or the repo profile permits it.
 - Do not expose secrets, private paths, or irrelevant local logs.
 - Do not claim checks passed unless evidence was collected.
-

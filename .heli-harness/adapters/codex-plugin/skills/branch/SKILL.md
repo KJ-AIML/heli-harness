@@ -25,4 +25,3 @@ Pre-PR checks:
 - scoped diff
 - focused build/test evidence
 - risk tier and rollback notes for S2/S3 work
-

@@ -226,7 +226,7 @@ if (inventoryOut || check) {
 		join(root, "..", "..", "temp", "heli-v0.5.24-skill-improvement"),
 		join(process.env.HELI_LAB_ROOT || "", "temp", "heli-v0.5.24-skill-improvement"),
 	].filter(Boolean);
-	// Worktree is .../heli-lab/worktrees/... so lab root is two levels up from worktree root? 
+	// Worktree is .../heli-lab/worktrees/... so lab root is two levels up from worktree root?
 	// Actually workspace is heli-lab, worktree is heli-lab/worktrees/heli-harness-...
 	const labTemp = join(root, "..", "..", "temp", "heli-v0.5.24-skill-improvement");
 	const writeTo = existsSync(dirname(labTemp)) ? labTemp : null;

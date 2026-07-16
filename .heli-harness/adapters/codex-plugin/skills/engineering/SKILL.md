@@ -25,4 +25,3 @@ Done means:
 - verification evidence captured
 - dirty user work preserved
 - unresolved risks named
-

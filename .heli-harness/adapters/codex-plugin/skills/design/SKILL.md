@@ -16,4 +16,3 @@ Rules:
 - Do not turn a design into implementation before the plan is clear.
 - Record durable decisions in `state/decisions.md` or a repo ADR when appropriate.
 - For UI/design extraction, cite source screens, states, tokens, and accessibility constraints.
-

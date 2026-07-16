@@ -18,4 +18,3 @@ Rules:
 - Keep each slice independently reviewable where feasible.
 - Use `impact` before changing shared surfaces.
 - Use `test-coverage` to identify regression or characterization tests.
-

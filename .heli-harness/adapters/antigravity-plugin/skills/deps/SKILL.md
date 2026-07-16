@@ -17,4 +17,3 @@ Rules:
 - Do not upgrade opportunistically during unrelated work.
 - Do not assume generated lockfiles are safe without reviewing scope.
 - For S2/S3 dependency changes, document rollback and compatibility risks.
-
