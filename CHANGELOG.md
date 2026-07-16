@@ -34,6 +34,7 @@
 ### Fixed
 
 - Clean installs no longer inherit operational state from a dogfooded source package tree.
+- **Published tarball is free of operational dogfood:** package seeds ship idle `current-task.md`, empty `target.json`/`index.json`, no `plan.md`/`yolo.json`, and `.npmignore` excludes `sessions/`/`tasks/`/`bindings/`/`locks/`. Plugin SessionStart smokes no longer mint sessions into the package checkout (fixture cwd). Guard: `scripts/smoke-pack-artifact.mjs` in `npm run check`.
 - Codex/Claude plugin packages no longer fail hook module resolution when hosts cache only the plugin directory (missing sibling `adapters/shared`).
 - UTF-8 BOM stripped from packaged skill frontmatter so Codex can parse `SKILL.md`.
 

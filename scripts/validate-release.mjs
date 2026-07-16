@@ -568,16 +568,89 @@ if (policyFiles.length > 0 && policyWarnings === 0) pass(`${policyFiles.length} 
 const shippedIndex = safeReadJson(join(root, ".heli-harness", "workspace", "index.json"));
 if (!shippedIndex || shippedIndex.schemaVersion !== 1 || !shippedIndex.workspaceRoot || !Array.isArray(shippedIndex.repos)) {
 	fail(".heli-harness/workspace/index.json", "must have schemaVersion, workspaceRoot, and repos array");
+} else if (shippedIndex.repos.length > 0) {
+	fail(
+		".heli-harness/workspace/index.json",
+		"package seed must ship empty repos[] (no selected source repository target metadata)",
+	);
 } else {
-	pass(".heli-harness/workspace/index.json has active schema fields");
+	pass(".heli-harness/workspace/index.json is clean empty-seed");
 }
 
 const shippedTarget = safeReadJson(join(root, ".heli-harness", "workspace", "target.json"));
-if (!shippedTarget || shippedTarget.schemaVersion !== 1 || !shippedTarget.targetRepo || !shippedTarget.targetGitRoot || !shippedTarget.writesAllowedUnder || !shippedTarget.activeProfile) {
-	fail(".heli-harness/workspace/target.json", "must have active target fields for dogfood defaults");
+if (!shippedTarget || shippedTarget.schemaVersion !== 1) {
+	fail(".heli-harness/workspace/target.json", "must parse with schemaVersion 1");
+} else if (shippedTarget.targetRepo || shippedTarget.targetGitRoot || shippedTarget.activeProfile) {
+	fail(
+		".heli-harness/workspace/target.json",
+		"package seed must not select a target (distributable artifact must be idle)",
+	);
 } else {
-	pass(".heli-harness/workspace/target.json has active target fields");
+	pass(".heli-harness/workspace/target.json is clean empty-seed");
 }
+
+section("Package operational seed cleanliness");
+
+const idleTask = safeReadText(join(root, ".heli-harness", "state", "current-task.md")) || "";
+if (!/idle|none — idle|Current status: complete/i.test(idleTask)) {
+	fail(".heli-harness/state/current-task.md", "package seed must be idle");
+} else if (/docs-overhaul|Documentation overhaul|Failed attempts count: [1-9]/i.test(idleTask)) {
+	fail(".heli-harness/state/current-task.md", "package seed contains dogfood operational markers");
+} else {
+	pass(".heli-harness/state/current-task.md is idle package seed");
+}
+
+if (isFile(join(root, ".heli-harness", "state", "plan.md"))) {
+	fail(".heli-harness/state/plan.md", "package must not ship operational plan.md");
+} else {
+	pass("no operational plan.md in package seed");
+}
+
+if (isFile(join(root, ".heli-harness", "state", "yolo.json"))) {
+	fail(".heli-harness/state/yolo.json", "package must not ship yolo.json");
+} else {
+	pass("no yolo.json in package seed");
+}
+
+for (const dirName of ["sessions", "tasks", "bindings", "locks"]) {
+	const dir = join(root, ".heli-harness", dirName);
+	if (isDir(dir)) {
+		const entries = readdirSync(dir).filter((n) => n !== ".gitkeep");
+		if (entries.length > 0) {
+			fail(`.heli-harness/${dirName}/`, `must be empty for packaging (found: ${entries.slice(0, 3).join(", ")})`);
+		} else {
+			pass(`.heli-harness/${dirName}/ empty or absent`);
+		}
+	} else {
+		pass(`.heli-harness/${dirName}/ absent`);
+	}
+}
+
+const pollutionMarkers = [
+	"docs-overhaul",
+	"DOCS_OVERHAUL_POLLUTION_MARKER",
+	"heli-ses-pollution",
+	"heli-lease-pollution",
+	"C:/fake/machine/path/pollution",
+	"Self-dogfood default for this repository checkout",
+];
+const seedScanPaths = [
+	join(root, ".heli-harness", "state", "current-task.md"),
+	join(root, ".heli-harness", "state", "decisions.md"),
+	join(root, ".heli-harness", "workspace", "target.json"),
+	join(root, ".heli-harness", "workspace", "index.json"),
+];
+let seedPollution = 0;
+for (const p of seedScanPaths) {
+	const text = safeReadText(p) || "";
+	for (const marker of pollutionMarkers) {
+		if (text.includes(marker)) {
+			seedPollution++;
+			fail(rel(p), `contains pollution marker: ${marker}`);
+		}
+	}
+}
+if (seedPollution === 0) pass("package operational seed files free of known pollution markers");
 
 section("Benchmark evidence wording");
 
