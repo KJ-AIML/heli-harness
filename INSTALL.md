@@ -68,6 +68,16 @@ In a multi-repo workspace, map repositories in `.heli-harness/workspace/index.js
 
 In concurrent mode, `heli status` shows each active task’s **live** writer session, worktree (from write lease → session → binding → task metadata), lease expiry, target, mode, and reviewer/observer counts.
 
+### Workspace install vs host-native skills
+
+`heli install` installs **workspace governance** (`.heli-harness/`, pointer files, Markdown skill library on disk). It does **not** by itself register host-native skills or hooks with Codex/Claude/other hosts.
+
+Host-native skill inventory requires a second step -- activate the host plugin (see Adapter setup below). Until then:
+
+- skills exist as files under `.heli-harness/skills/` and under adapter plugin trees;
+- SessionStart skill bootstrap and PreToolUse guardrails run only when the host plugin is loaded;
+- `heli status` reports skill packaging counts and `host activation: installed / activation not verifiable` -- file presence is not live activation proof.
+
 ## Adapter setup
 
 Install the workspace harness first. Adapter status, tested scope, and limitations are maintained in [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md).

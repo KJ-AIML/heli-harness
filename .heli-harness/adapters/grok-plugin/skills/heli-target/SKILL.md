@@ -1,13 +1,6 @@
 ---
 name: heli-target
-description: Show, list, set, or clear the active target repo in a Heli-Harness parent workspace
-triggers:
-  - /heli-target
-  - heli target
-  - set target repo
-  - show target repo
-  - list workspace repos
-  - clear target repo
+description: Use when listing, showing, setting, or clearing the active target repo in a Heli-Harness multi-repo parent workspace, or when target.json may not match the repo the user named.
 ---
 
 # Heli Target

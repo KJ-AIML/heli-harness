@@ -62,6 +62,32 @@ export function planRollup(text) {
 	return lines.join("\n");
 }
 
+/**
+ * Compact skill-usage bootstrap for SessionStart.
+ * Distinct from task/session/lease governance context. Injected once per context build.
+ * Does not dump the skill library; points at host inventory + using-heli-skills.
+ */
+export function buildSkillUsageBootstrap() {
+	return [
+		"Heli skill usage:",
+		"Heli skills are mandatory workflow resources when they match the task — not optional docs.",
+		"Before substantive action, check for a relevant Heli skill (host skill inventory when the plugin is loaded, or .heli-harness/skills/<name>/SKILL.md).",
+		"Load only matching skills; read the current skill body; do not invent skills; do not load every skill.",
+		"Process/workflow skills outrank implementation detail. Explicitly requested skills must be loaded.",
+		"User instructions and Heli safety/ownership rules remain authoritative. Skill use does not change task, session, worktree, or lease identity.",
+		"Subagents on a tightly scoped task should not restart the full controller skill stack.",
+		"Protocol skill: using-heli-skills.",
+	].join("\n");
+}
+
+export function appendSkillUsageBootstrap(contextText) {
+	const text = contextText || "";
+	if (text.includes("Heli skill usage:")) return text;
+	const bootstrap = buildSkillUsageBootstrap();
+	if (!text.trim()) return bootstrap;
+	return `${text}\n\n${bootstrap}`;
+}
+
 export function buildSessionContext(cwd, { host = "unknown", hookPayload = null, env = process.env } = {}) {
 	const ctx = resolveExecutionContext({
 		cwd,
@@ -73,7 +99,7 @@ export function buildSessionContext(cwd, { host = "unknown", hookPayload = null,
 	});
 
 	if (ctx.concurrentMode) {
-		return buildConcurrentSessionContext(ctx);
+		return appendSkillUsageBootstrap(buildConcurrentSessionContext(ctx));
 	}
 
 	const lines = [
@@ -87,7 +113,7 @@ export function buildSessionContext(cwd, { host = "unknown", hookPayload = null,
 
 	const root = ctx.workspaceRoot || cwd;
 	if (!existsSync(join(root, ".heli-harness", "HARNESS.md"))) {
-		return lines.join("\n");
+		return appendSkillUsageBootstrap(lines.join("\n"));
 	}
 
 	const taskPath = join(root, ".heli-harness", "state", "current-task.md");
@@ -122,7 +148,7 @@ export function buildSessionContext(cwd, { host = "unknown", hookPayload = null,
 		}
 	}
 
-	return lines.join("\n");
+	return appendSkillUsageBootstrap(lines.join("\n"));
 }
 
 export function pathsFrom(value, out = []) {

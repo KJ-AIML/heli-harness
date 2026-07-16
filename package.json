@@ -36,8 +36,9 @@
     "README.md"
   ],
   "scripts": {
-    "check": "node --check extensions/pi-extension.js && node --check bin/heli.mjs && node --check lib/concurrency/index.mjs && node scripts/sync-plugin-shared.mjs --check && node scripts/smoke-cli-entry.mjs && node scripts/smoke-cli-install.mjs && node scripts/smoke-cli-update.mjs && node scripts/smoke-cli-uninstall.mjs && node scripts/smoke-cli-target.mjs && node scripts/smoke-cli-status.mjs && node scripts/smoke-clean-install.mjs && node scripts/smoke-status-worktree.mjs && node scripts/smoke-extension-load.mjs && node scripts/smoke-update-preserves-local-state.mjs && node scripts/smoke-claude-adapter.mjs && node scripts/smoke-codex-adapter.mjs && node scripts/smoke-claude-plugin.mjs && node scripts/smoke-codex-plugin.mjs && node scripts/smoke-grok-adapter.mjs && node scripts/smoke-grok-plugin.mjs && node scripts/smoke-opencode-adapter.mjs && node scripts/smoke-opencode-plugin.mjs && node scripts/smoke-kimi-adapter.mjs && node scripts/smoke-kimi-plugin.mjs && node scripts/smoke-antigravity-adapter.mjs && node scripts/smoke-antigravity-plugin.mjs && node scripts/smoke-cursor-plugin.mjs && node scripts/smoke-yolo-mode.mjs && node scripts/smoke-concurrency-foundation.mjs && node scripts/smoke-pack-artifact.mjs && node scripts/verify-adapters.mjs && node scripts/validate-release.mjs",
+    "check": "node --check extensions/pi-extension.js && node --check bin/heli.mjs && node --check lib/concurrency/index.mjs && node scripts/sync-plugin-shared.mjs --check && node scripts/sync-plugin-skills.mjs --check && node scripts/smoke-cli-entry.mjs && node scripts/smoke-cli-install.mjs && node scripts/smoke-cli-update.mjs && node scripts/smoke-cli-uninstall.mjs && node scripts/smoke-cli-target.mjs && node scripts/smoke-cli-status.mjs && node scripts/smoke-clean-install.mjs && node scripts/smoke-status-worktree.mjs && node scripts/smoke-extension-load.mjs && node scripts/smoke-update-preserves-local-state.mjs && node scripts/smoke-claude-adapter.mjs && node scripts/smoke-codex-adapter.mjs && node scripts/smoke-claude-plugin.mjs && node scripts/smoke-codex-plugin.mjs && node scripts/smoke-plugin-skills.mjs && node scripts/smoke-grok-adapter.mjs && node scripts/smoke-grok-plugin.mjs && node scripts/smoke-opencode-adapter.mjs && node scripts/smoke-opencode-plugin.mjs && node scripts/smoke-kimi-adapter.mjs && node scripts/smoke-kimi-plugin.mjs && node scripts/smoke-antigravity-adapter.mjs && node scripts/smoke-antigravity-plugin.mjs && node scripts/smoke-cursor-plugin.mjs && node scripts/smoke-yolo-mode.mjs && node scripts/smoke-concurrency-foundation.mjs && node scripts/smoke-pack-artifact.mjs && node scripts/verify-adapters.mjs && node scripts/validate-release.mjs",
     "sync:plugin-shared": "node scripts/sync-plugin-shared.mjs",
+    "sync:plugin-skills": "node scripts/sync-plugin-skills.mjs",
     "live-verify:claude-concurrency": "node scripts/live-verify-claude-concurrency.mjs",
     "live-verify:codex-concurrency": "node scripts/live-verify-codex-concurrency.mjs",
     "smoke": "node scripts/smoke-extension-load.mjs",
@@ -46,7 +47,7 @@
     "smoke:claude": "node scripts/smoke-claude-adapter.mjs",
     "smoke:codex": "node scripts/smoke-codex-adapter.mjs",
     "smoke:claude-plugin": "node scripts/smoke-claude-plugin.mjs",
-    "smoke:codex-plugin": "node scripts/smoke-codex-plugin.mjs",
+    "smoke:codex-plugin": "node scripts/smoke-codex-plugin.mjs && node scripts/smoke-plugin-skills.mjs",
     "smoke:grok": "node scripts/smoke-grok-adapter.mjs",
     "smoke:grok-plugin": "node scripts/smoke-grok-plugin.mjs",
     "smoke:opencode": "node scripts/smoke-opencode-adapter.mjs",

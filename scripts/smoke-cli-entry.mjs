@@ -17,8 +17,17 @@ const heliPath = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "hel
 	try {
 		const installResult = spawnSync(process.execPath, [heliPath, "install", cwd], { encoding: "utf8" });
 		assert.equal(installResult.status, 0, installResult.stderr);
-		assert.ok(installResult.stdout.includes("Heli-Harness installed to:"));
+		assert.ok(
+			installResult.stdout.includes("Heli workspace governance installed:") ||
+				installResult.stdout.includes("Heli-Harness installed to:"),
+			"install should report workspace governance install",
+		);
 		assert.ok(installResult.stdout.includes(cwd));
+		assert.ok(
+			installResult.stdout.includes("Host-native skills require host plugin activation"),
+			"install must explain host plugin activation is separate",
+		);
+		assert.ok(installResult.stdout.includes("codex plugin marketplace add"));
 
 		// This repo's own .heli-harness/ is real, self-dogfooding operational state
 		// (workspace/target.json, workspace/index.json, state/current-task.md all
@@ -38,6 +47,10 @@ const heliPath = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "hel
 		assert.ok(
 			statusResult.stdout.includes("Current task status:") || statusResult.stdout.includes("Current task:"),
 			"status should report either a recorded task status or none recorded",
+		);
+		assert.ok(
+			statusResult.stdout.includes("Skill packaging:") || statusResult.stdout.includes("Host skill activation:"),
+			"status should report skill packaging / activation surface",
 		);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });

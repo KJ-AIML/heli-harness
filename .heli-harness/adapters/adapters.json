@@ -98,7 +98,7 @@
         "Pointer adapter remains the fallback path",
         "Codex must voluntarily follow AGENTS.md",
         "Not a sandbox",
-        "Plugin skill surface is heli-governance + heli-target + heli-install only; Pi/AXGA ships 23 skills, this plugin does not"
+        "Plugin skills mirror the full canonical library under .heli-harness/skills/ (including using-heli-skills); keep in sync via npm run sync:plugin-skills"
       ]
     },
     {
@@ -143,7 +143,7 @@
         "Guard rules only cover git push and .env-style writes today",
         "Pointer adapter (CLAUDE.md) remains the fallback path for hosts that don't load the native plugin",
         "Not a sandbox",
-        "Plugin skill surface is heli-governance + heli-target + heli-install only; Pi/AXGA ships 23 skills, this plugin does not"
+        "Plugin skills mirror the full canonical library under .heli-harness/skills/ (including using-heli-skills); keep in sync via npm run sync:plugin-skills"
       ]
     },
     {

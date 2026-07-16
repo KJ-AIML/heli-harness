@@ -1,5 +1,6 @@
 ---
-description: Use when working in a Heli-Harness parent workspace.
+name: heli-governance
+description: Use when working in a Heli-Harness parent workspace — load harness protocol, target discipline, concurrent session rules, and evidence-backed completion standards.
 ---
 
 # Heli Governance

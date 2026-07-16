@@ -66,6 +66,13 @@ export function assertSessionContext(root, relScript) {
 			assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
 			assert.match(output.hookSpecificOutput.additionalContext, /Heli-Harness plugin context/);
 			assert.match(output.hookSpecificOutput.additionalContext, /\.heli-harness\/HARNESS\.md/);
+			// Skill bootstrap must appear exactly once and remain distinct from governance context.
+			const ctx = output.hookSpecificOutput.additionalContext;
+			assert.match(ctx, /Heli skill usage:/);
+			assert.match(ctx, /using-heli-skills/);
+			assert.match(ctx, /mandatory workflow resources/);
+			const bootstrapHits = ctx.split("Heli skill usage:").length - 1;
+			assert.equal(bootstrapHits, 1, "skill bootstrap must appear exactly once per SessionStart");
 		},
 	);
 }
