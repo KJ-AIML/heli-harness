@@ -16,6 +16,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so whitespace checks can compare against the PR base
+          # (shallow depth-1 merge commits look like root commits and otherwise
+          # re-check the entire tree, including historical trailing blanks).
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -44,4 +49,16 @@ jobs:
           }
 
       - name: Git whitespace check
-        run: git diff-tree --check --no-commit-id --root -r HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+            echo "Checking whitespace on PR range $BASE...$HEAD"
+            git diff --check "$BASE...$HEAD"
+          else
+            # Push to main: check the tip commit only
+            echo "Checking whitespace on tip commit $(git rev-parse --short HEAD)"
+            git diff-tree --check --no-commit-id -r HEAD
+          fi
