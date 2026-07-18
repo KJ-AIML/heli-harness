@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Codex Git marketplace (Ponytail parity):** repo-root `.agents/plugins/marketplace.json` indexes `./.heli-harness/adapters/codex-plugin`, so `codex plugin marketplace add KJ-AIML/heli-harness` works and `codex plugin marketplace upgrade heli-harness` can refresh a Git marketplace snapshot (local nested path remains available for workspace dogfood only).
+
+### Changed
+
+- `heli update` / `update.sh` / `update.ps1` now print host plugin refresh commands after a workspace update, including `codex plugin marketplace upgrade heli-harness` for the Git marketplace and a one-time local→Git switch sequence.
+- INSTALL / INSTALL_MATRIX document workspace update vs Codex marketplace upgrade as separate steps.
+
+### Fixed
+
+- Codex install docs and `heli install` post-install hints no longer recommend bare `.heli-harness/adapters/codex-plugin` as a marketplace source — Codex rejects that form (`invalid marketplace source format`). Use `KJ-AIML/heli-harness` (Git) or `./.heli-harness/adapters/codex-plugin` / an absolute path (local).
+- `scripts/live-verify-codex-plugin-install.mjs` now proves repo-root marketplace install, nested dogfood install, and bare-path rejection against the real Codex CLI.
+
 ## v0.5.24 - Concurrent Session Foundation
 
 ### Added

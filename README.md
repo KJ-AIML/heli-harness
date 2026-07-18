@@ -63,7 +63,14 @@ Install Heli-Harness as a parent-workspace harness here. Confirm that .heli-harn
 
 For copy-paste commands, manual installation, updates, uninstall, and adapter setup, see [INSTALL.md](INSTALL.md).
 
-**Workspace install ≠ host skills.** `heli install` places governance files and the skill library on disk. Host-native skill inventory (Codex/Claude/etc.) requires activating the host plugin from the installed adapter tree — see INSTALL.md. SessionStart injects a short skill-usage bootstrap only when the plugin is loaded.
+**Workspace install ≠ host skills.** `heli install` places governance files and the skill library on disk. Host-native skill inventory (Codex/Claude/etc.) requires activating the host plugin — see INSTALL.md. For Codex, prefer the Git marketplace (upgradeable, Ponytail-style):
+
+```bash
+codex plugin marketplace add KJ-AIML/heli-harness
+codex plugin add heli-harness@heli-harness
+```
+
+SessionStart injects a short skill-usage bootstrap only when the plugin is loaded.
 
 The workflow preserves repository-local instructions and evidence boundaries; detailed adapter setup and verification limits remain in the linked documentation.
 

@@ -61,6 +61,7 @@
         ".heli-harness/adapters/codex/install.md",
         ".heli-harness/adapters/codex-plugin/.codex-plugin/plugin.json",
         ".heli-harness/adapters/codex-plugin/.agents/plugins/marketplace.json",
+        ".agents/plugins/marketplace.json",
         ".heli-harness/adapters/codex-plugin/hooks/hooks.json",
         ".heli-harness/adapters/codex-plugin/hooks/heli-session-start.mjs",
         ".heli-harness/adapters/codex-plugin/hooks/heli-pre-tool-use.mjs",

@@ -18,6 +18,7 @@
     "url": "git+https://github.com/KJ-AIML/heli-harness.git"
   },
   "files": [
+    ".agents/",
     ".heli-harness/",
     "assets/",
     "benchmarks/",
