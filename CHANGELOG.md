@@ -1,12 +1,12 @@
-﻿# Changelog
+# Changelog
 
-## Unreleased
+## v0.5.26 - Ops honesty and concurrent hygiene
 
 ### Added
 
-- **v0.5.26 ops honesty & concurrent hygiene**
+- **Ops honesty & concurrent hygiene**
   - Templates: Resume card + Command friction on `current-task.md`; plan Active strategy / Evidence hygiene; `ops-gate-packet.md`; `windows-shell-recipes.md`
-  - Skill `concurrent-upgrade` for legacy â†’ concurrent migration after `heli update`
+  - Skill `concurrent-upgrade` for legacy to concurrent migration after `heli update`
   - SessionStart: governance enforcement honesty, legacy multi-agent race warning, concurrent unbound write denial messaging
   - `heli status` / `heli update`: legacy multi-writer risk + migrate path (update does not flip mode)
   - Skills: `verify-premise` (e2e contract + ACTION_UNSUPPORTED), `impact` (destructive multi-path checklist), `fix-loop` (friction vs implementation failures)
@@ -24,13 +24,13 @@
 
 ### Changed
 
-- `heli update` / `update.sh` / `update.ps1` now print host plugin refresh commands after a workspace update, including `codex plugin marketplace upgrade heli-harness` for the Git marketplace and a one-time localâ†’Git switch sequence.
+- `heli update` / `update.sh` / `update.ps1` now print host plugin refresh commands after a workspace update, including `codex plugin marketplace upgrade heli-harness` for the Git marketplace and a one-time local-to-Git switch sequence.
 - INSTALL / INSTALL_MATRIX document workspace update vs Codex marketplace upgrade as separate steps.
 - `scripts/smoke-pack-artifact.mjs` asserts the packed version dynamically against `package.json` (no hardcoded version) and requires the root Codex marketplace manifest in the tarball.
 
 ### Fixed
 
-- Codex install docs and `heli install` post-install hints no longer recommend bare `.heli-harness/adapters/codex-plugin` as a marketplace source â€” Codex rejects that form (`invalid marketplace source format`). Use `KJ-AIML/heli-harness` (Git) or `./.heli-harness/adapters/codex-plugin` / an absolute path (local).
+- Codex install docs and `heli install` post-install hints no longer recommend bare `.heli-harness/adapters/codex-plugin` as a marketplace source — Codex rejects that form (`invalid marketplace source format`). Use `KJ-AIML/heli-harness` (Git) or `./.heli-harness/adapters/codex-plugin` / an absolute path (local).
 - `scripts/live-verify-codex-plugin-install.mjs` now proves repo-root marketplace install, nested dogfood install, and bare-path rejection against the real Codex CLI.
 
 ## v0.5.24 - Concurrent Session Foundation
