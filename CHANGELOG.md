@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.5.25 - Codex Git marketplace and update host refresh
 
 ### Added
 
@@ -10,6 +10,7 @@
 
 - `heli update` / `update.sh` / `update.ps1` now print host plugin refresh commands after a workspace update, including `codex plugin marketplace upgrade heli-harness` for the Git marketplace and a one-time local→Git switch sequence.
 - INSTALL / INSTALL_MATRIX document workspace update vs Codex marketplace upgrade as separate steps.
+- `scripts/smoke-pack-artifact.mjs` asserts the packed version dynamically against `package.json` (no hardcoded version) and requires the root Codex marketplace manifest in the tarball.
 
 ### Fixed
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -51,7 +51,9 @@ const allowed = [
 	"package.json", "manifest.json", ".heli-harness/manifest.json", ".heli-harness/adapters/",
 	"README.md", "ROADMAP.md", "INSTALL.md", "CHANGELOG.md", "docs/INSTALL_MATRIX.md", "docs/ADAPTER_SUPPORT_MATRIX.md",
 	"scripts/smoke-claude-plugin.mjs", "scripts/smoke-codex-plugin.mjs", "scripts/smoke-cursor-plugin.mjs",
+	"scripts/smoke-pack-artifact.mjs",
 	"scripts/lib/release-version.mjs", "scripts/release.mjs",
+	".agents/",
 ];
 const isAllowed = (path) => allowed.some((prefix) => path === prefix || path.startsWith(prefix));
 const unrelated = dirtyPaths.filter((path) => !isAllowed(path));
@@ -62,6 +64,10 @@ const versionFiles = [
 	"README.md", "ROADMAP.md", "INSTALL.md", "docs/INSTALL_MATRIX.md", "docs/ADAPTER_SUPPORT_MATRIX.md",
 	"scripts/smoke-claude-plugin.mjs", "scripts/smoke-codex-plugin.mjs", "scripts/smoke-cursor-plugin.mjs",
 	...walk(join(root, ".heli-harness", "adapters")).filter((path) => path.endsWith("plugin.json") || path.endsWith("marketplace.json")).map((path) => relative(root, path)),
+	// Root Codex marketplace has no embedded version string today; keep it staged with releases when present.
+	...(existsSync(join(root, ".agents", "plugins", "marketplace.json"))
+		? [".agents/plugins/marketplace.json"]
+		: []),
 ];
 for (const relativePath of [...new Set(versionFiles)]) {
 	const path = join(root, relativePath);

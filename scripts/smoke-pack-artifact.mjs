@@ -61,7 +61,12 @@ try {
 	const pkgRoot = join(extractDir, "package");
 	assert.ok(existsSync(join(pkgRoot, "package.json")), "package.json in tarball");
 	const pkg = JSON.parse(readFileSync(join(pkgRoot, "package.json"), "utf8"));
-	assert.equal(pkg.version, "0.5.24");
+	const expectedVersion = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
+	assert.equal(pkg.version, expectedVersion, "packed package.json version must match source package.json");
+	assert.ok(
+		existsSync(join(pkgRoot, ".agents", "plugins", "marketplace.json")),
+		"repo-root Codex marketplace manifest must be packed for Git marketplace installs",
+	);
 
 	const required = [
 		"bin/heli.mjs",
