@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 ## Unreleased
 
@@ -6,7 +6,7 @@
 
 - **v0.5.26 ops honesty & concurrent hygiene**
   - Templates: Resume card + Command friction on `current-task.md`; plan Active strategy / Evidence hygiene; `ops-gate-packet.md`; `windows-shell-recipes.md`
-  - Skill `concurrent-upgrade` for legacy → concurrent migration after `heli update`
+  - Skill `concurrent-upgrade` for legacy â†’ concurrent migration after `heli update`
   - SessionStart: governance enforcement honesty, legacy multi-agent race warning, concurrent unbound write denial messaging
   - `heli status` / `heli update`: legacy multi-writer risk + migrate path (update does not flip mode)
   - Skills: `verify-premise` (e2e contract + ACTION_UNSUPPORTED), `impact` (destructive multi-path checklist), `fix-loop` (friction vs implementation failures)
@@ -24,13 +24,13 @@
 
 ### Changed
 
-- `heli update` / `update.sh` / `update.ps1` now print host plugin refresh commands after a workspace update, including `codex plugin marketplace upgrade heli-harness` for the Git marketplace and a one-time local→Git switch sequence.
+- `heli update` / `update.sh` / `update.ps1` now print host plugin refresh commands after a workspace update, including `codex plugin marketplace upgrade heli-harness` for the Git marketplace and a one-time localâ†’Git switch sequence.
 - INSTALL / INSTALL_MATRIX document workspace update vs Codex marketplace upgrade as separate steps.
 - `scripts/smoke-pack-artifact.mjs` asserts the packed version dynamically against `package.json` (no hardcoded version) and requires the root Codex marketplace manifest in the tarball.
 
 ### Fixed
 
-- Codex install docs and `heli install` post-install hints no longer recommend bare `.heli-harness/adapters/codex-plugin` as a marketplace source — Codex rejects that form (`invalid marketplace source format`). Use `KJ-AIML/heli-harness` (Git) or `./.heli-harness/adapters/codex-plugin` / an absolute path (local).
+- Codex install docs and `heli install` post-install hints no longer recommend bare `.heli-harness/adapters/codex-plugin` as a marketplace source â€” Codex rejects that form (`invalid marketplace source format`). Use `KJ-AIML/heli-harness` (Git) or `./.heli-harness/adapters/codex-plugin` / an absolute path (local).
 - `scripts/live-verify-codex-plugin-install.mjs` now proves repo-root marketplace install, nested dogfood install, and bare-path rejection against the real Codex CLI.
 
 ## v0.5.24 - Concurrent Session Foundation
@@ -63,13 +63,13 @@
 
 ### Changed
 
-- `heli status` reports concurrent multi-task summaries when schema mode is concurrent, projecting **live** worktree from write lease → writer session → binding → task metadata (with conflict warnings).
-- `heli status` reports skill packaging counts and **host activation not verifiable** (file presence ≠ live activation).
-- `heli install` / `install.sh` / `install.ps1` / Pi `/heli-install` all use one clean seed path — never copy package checkout dogfood (tasks, sessions, live current-task, YOLO, selected target).
+- `heli status` reports concurrent multi-task summaries when schema mode is concurrent, projecting **live** worktree from write lease â†’ writer session â†’ binding â†’ task metadata (with conflict warnings).
+- `heli status` reports skill packaging counts and **host activation not verifiable** (file presence â‰  live activation).
+- `heli install` / `install.sh` / `install.ps1` / Pi `/heli-install` all use one clean seed path â€” never copy package checkout dogfood (tasks, sessions, live current-task, YOLO, selected target).
 - `heli install` stdout clearly separates workspace governance install from host plugin activation commands for native skills.
 - `heli update` updates distribution assets only; preserves user tasks/sessions/bindings/locks/state/targets/YOLO; `--reset-state` reseeds idle operational state without importing package dogfood.
 - Plugin hooks import embedded `../shared/` so Codex marketplace cache and Claude `--plugin-dir` copies are self-contained.
-- Skill frontmatter standardized to unique hyphenated names and “Use when…” trigger descriptions for host semantic discovery.
+- Skill frontmatter standardized to unique hyphenated names and â€œUse whenâ€¦â€ trigger descriptions for host semantic discovery.
 - `HARNESS.md` Skill Routing updated for full plugin skill inventory + `using-heli-skills` protocol.
 
 ### Fixed
@@ -82,11 +82,11 @@
 
 ### Notes
 
-- Local workspace coordination only — not a distributed lock service, scheduler, agent runtime, or merge orchestrator.
+- Local workspace coordination only â€” not a distributed lock service, scheduler, agent runtime, or merge orchestrator.
 - YOLO never bypasses ownership, lease, or wrong-task gates.
 - Legacy singular `state/current-task.md` workspaces continue to work until concurrent mode is initialized.
 - Workspace install and host plugin activation remain separate: `heli install` alone does not register host-native skills.
-- Live v0.5.24 plugin runtime proof (this release): **Codex** isolated `CODEX_HOME` + real `codex exec` — marketplace install, SessionStart Completed, PreToolUse denials for `git push` and `.env` honored. Claude Code SessionStart + concurrent context proven via `--plugin-dir`; full Claude PreToolUse enforcement requires a working host API key on the verification machine.
+- Live v0.5.24 plugin runtime proof (this release): **Codex** isolated `CODEX_HOME` + real `codex exec` â€” marketplace install, SessionStart Completed, PreToolUse denials for `git push` and `.env` honored. Claude Code SessionStart + concurrent context proven via `--plugin-dir`; full Claude PreToolUse enforcement requires a working host API key on the verification machine.
 - After editing `adapters/shared`, run `npm run sync:plugin-shared` before commit.
 - After editing `.heli-harness/skills/`, run `npm run sync:plugin-skills` before commit.
 
@@ -132,7 +132,7 @@
   - One-command installers: `grok-plugin/install-user-hooks.mjs`, `kimi-plugin/install-user-hooks.mjs`
   - Synthetic smokes + live-verify scripts for Grok/OpenCode/Kimi
   - Adversarial strictness suite: `node scripts/quality-guard-strictness.mjs`
-- **Grok (`enforced`)**: live `grok -p` PreToolUse deny of `git push` via user hooks (`~/.grok/hooks/heli-harness.json`). Valid `grok plugin validate/install` for skills. Important: Grok 0.2.x does not execute plugin-inventory hooks at runtime — user hooks are required.
+- **Grok (`enforced`)**: live `grok -p` PreToolUse deny of `git push` via user hooks (`~/.grok/hooks/heli-harness.json`). Valid `grok plugin validate/install` for skills. Important: Grok 0.2.x does not execute plugin-inventory hooks at runtime â€” user hooks are required.
 - **OpenCode (`enforced`)**: self-contained `heli-harness.mjs`; live `opencode run` loads plugin and blocks git push. Register in `opencode.json` `plugin` array.
 - **Kimi (`enforced`)**: live `kimi -p` prints Heli git-push denial after `install-user-hooks.mjs` + valid `kimi doctor config`.
 - **Antigravity (`verified-plugin-wired`)**: artifacts + synthetic smokes only (no live `agy` on verification host).
@@ -153,19 +153,19 @@
 
 ### Fixed
 
-- `heli target list|show|set|clear` previously always operated on `process.cwd()` and silently ignored any path argument, unlike `heli status`'s existing `args[0] || process.cwd()` support for the same kind of override. Pointing the CLI at a different workspace (e.g. `heli target list /some/other/workspace`) silently returned the caller's own current-directory data instead of erroring, warning, or reading the given path — a silent-wrong-answer footgun, not just an inconsistency. Found via real `npx`-distributed dogfooding against a workspace other than the shell's cwd.
+- `heli target list|show|set|clear` previously always operated on `process.cwd()` and silently ignored any path argument, unlike `heli status`'s existing `args[0] || process.cwd()` support for the same kind of override. Pointing the CLI at a different workspace (e.g. `heli target list /some/other/workspace`) silently returned the caller's own current-directory data instead of erroring, warning, or reading the given path â€” a silent-wrong-answer footgun, not just an inconsistency. Found via real `npx`-distributed dogfooding against a workspace other than the shell's cwd.
 - `runTarget()` now threads an optional trailing path argument through all four subcommands (`list [path]`, `show [path]`, `set <repo> [--confirm] [path]`, `clear [path]`), matching `status.mjs`'s pattern exactly. No-path invocations (the overwhelmingly common case) are byte-for-byte unchanged.
 
 ### Notes
 
-- The underlying pure functions (`listRepos`/`showTarget`/`setTarget`/`clearTarget`) were never the problem — they already took `cwd` as an explicit parameter and never read `process.cwd()` themselves, per the CLI's Global Constraint. Only the CLI-facing `runTarget` wrapper had never threaded a path through to begin with.
-- New regression coverage spawns the real `bin/heli.mjs` as a subprocess from one temp directory while passing a second, differently-seeded temp directory as the explicit path argument — proving the path argument, not `process.cwd()`, is honored, for all four subcommands. This is currently the only test in the suite that exercises a `run*()` wrapper's argv/path handling end-to-end; `smoke-cli-{install,update,uninstall,status}.mjs` still only test their underlying pure functions directly, and `smoke-cli-entry.mjs`'s subprocess test only checks generic label presence, not path-correctness. Same root-cause class as the `bin/heli.mjs` coverage gap fixed in v0.5.19 — noted as a follow-up, not fixed here.
+- The underlying pure functions (`listRepos`/`showTarget`/`setTarget`/`clearTarget`) were never the problem â€” they already took `cwd` as an explicit parameter and never read `process.cwd()` themselves, per the CLI's Global Constraint. Only the CLI-facing `runTarget` wrapper had never threaded a path through to begin with.
+- New regression coverage spawns the real `bin/heli.mjs` as a subprocess from one temp directory while passing a second, differently-seeded temp directory as the explicit path argument â€” proving the path argument, not `process.cwd()`, is honored, for all four subcommands. This is currently the only test in the suite that exercises a `run*()` wrapper's argv/path handling end-to-end; `smoke-cli-{install,update,uninstall,status}.mjs` still only test their underlying pure functions directly, and `smoke-cli-entry.mjs`'s subprocess test only checks generic label presence, not path-correctness. Same root-cause class as the `bin/heli.mjs` coverage gap fixed in v0.5.19 â€” noted as a follow-up, not fixed here.
 
 ## v0.5.19 - Standalone `heli` CLI
 
 ### Added
 
-- New standalone `heli` CLI (`bin/heli.mjs` + `lib/cli/{install,update,uninstall,target,status}.mjs`), distributed via `npx github:KJ-AIML/heli-harness <command> <path>` — no npm registry publish, no new dependencies, hand-rolled argv dispatch. Covers `install`, `update` (with `--reset-state`), `uninstall`, `target list|show|set|clear` (`set` gates on `--confirm` when switching an already-selected target, replacing the skill's conversational confirmation step), and a new read-only `status` command with no prior equivalent.
+- New standalone `heli` CLI (`bin/heli.mjs` + `lib/cli/{install,update,uninstall,target,status}.mjs`), distributed via `npx github:KJ-AIML/heli-harness <command> <path>` â€” no npm registry publish, no new dependencies, hand-rolled argv dispatch. Covers `install`, `update` (with `--reset-state`), `uninstall`, `target list|show|set|clear` (`set` gates on `--confirm` when switching an already-selected target, replacing the skill's conversational confirmation step), and a new read-only `status` command with no prior equivalent.
 - This is the one real, tested implementation each surface now points at, replacing what were previously N independently drifting copies of the same install/update logic: Pi/AXGA's extension (which had install but, until now, no update command at all), Claude/Codex's prose skills (manual steps for an agent to replicate by hand), and the raw `.ps1`/`.sh` scripts.
 - `extensions/pi-extension.js`'s `/heli-install` now calls the CLI's `install()` directly instead of shelling out to `install.ps1`/`.sh`; a new `/heli-update` command (`/hh-update` alias) calls `update()` the same way, closing the "Pi has no update command" gap.
 - Both `heli-install`/`heli-target` skill pairs (Claude, Codex plugins), `README.md`, and `INSTALL.md` document the CLI as the preferred method, keeping the existing manual/script-based instructions as the documented fallback for Node-less environments.
@@ -173,32 +173,32 @@
 
 ### Fixed
 
-- `install()`/`update()` now guard against a self-collision case (the package root and the install target resolving to the same directory — e.g. running the CLI from inside a local heli-harness checkout as its own target) with a clear, specific error instead of letting Node's raw `fs.cpSync` `ERR_FS_CP_EINVAL` surface.
+- `install()`/`update()` now guard against a self-collision case (the package root and the install target resolving to the same directory â€” e.g. running the CLI from inside a local heli-harness checkout as its own target) with a clear, specific error instead of letting Node's raw `fs.cpSync` `ERR_FS_CP_EINVAL` surface.
 
 ### Notes
 
 - Distribution is git-URL/npx only, deliberately not published to the npm registry, to avoid the ongoing maintenance cost of npm publishing (account, 2FA, a publish step every release).
-- Every low-level `lib/cli/*.mjs` function takes explicit paths and never reads `process.cwd()` internally — only the `run*(packageRoot, args)`/`run*(args)` CLI-facing wrappers touch argv/cwd defaults. `extensions/pi-extension.js` importing directly from `../lib/cli/*.mjs` is a deliberate exception to this codebase's usual small-duplicated-pure-function convention, since both live in the same repo checkout Pi loads directly.
+- Every low-level `lib/cli/*.mjs` function takes explicit paths and never reads `process.cwd()` internally â€” only the `run*(packageRoot, args)`/`run*(args)` CLI-facing wrappers touch argv/cwd defaults. `extensions/pi-extension.js` importing directly from `../lib/cli/*.mjs` is a deliberate exception to this codebase's usual small-duplicated-pure-function convention, since both live in the same repo checkout Pi loads directly.
 - Existing `.ps1`/`.sh` scripts are completely untouched and remain the documented fallback; this release is purely additive.
-- A pre-existing, out-of-scope gap found during this work: Pi's `/heli-target set` handler still overwrites `target.json` unconditionally with no mismatch confirmation, unlike this new CLI's `--confirm` gate and the documented Claude/Codex skill behavior — tracked as a separate future follow-up, not fixed here.
+- A pre-existing, out-of-scope gap found during this work: Pi's `/heli-target set` handler still overwrites `target.json` unconditionally with no mismatch confirmation, unlike this new CLI's `--confirm` gate and the documented Claude/Codex skill behavior â€” tracked as a separate future follow-up, not fixed here.
 
 ## v0.5.18 - Skill Discipline & Step-Count Warning
 
 ### Added
 
-- `current-task.md` gains a self-reported `Step count: N` field, mirroring `Failed attempts count`. Session-start context (Claude-plugin, Codex-plugin, Pi/AXGA) now warns — not a blocking gate — when `Step count` is 3+ but `Plan:` is still `n/a`: the exact case where a task obviously needed a `plan.md` and never got one, previously invisible everywhere in the system.
-- `claude/CLAUDE.md` and `codex/AGENTS.md`'s enforcement self-check now also states the inference that `PreToolUse` is equally wired whenever the `SessionStart` marker fired, since a plugin's hooks load atomically from the same manifest — never having triggered a deny condition isn't evidence the blocking side is inactive.
+- `current-task.md` gains a self-reported `Step count: N` field, mirroring `Failed attempts count`. Session-start context (Claude-plugin, Codex-plugin, Pi/AXGA) now warns â€” not a blocking gate â€” when `Step count` is 3+ but `Plan:` is still `n/a`: the exact case where a task obviously needed a `plan.md` and never got one, previously invisible everywhere in the system.
+- `claude/CLAUDE.md` and `codex/AGENTS.md`'s enforcement self-check now also states the inference that `PreToolUse` is equally wired whenever the `SessionStart` marker fired, since a plugin's hooks load atomically from the same manifest â€” never having triggered a deny condition isn't evidence the blocking side is inactive.
 
 ### Changed
 
-- `HARNESS.md`'s Skill Routing section rewritten with mandatory-invocation framing and a Red Flags rationalization table (borrowed from superpowers' `using-superpowers` skill), and now states explicitly that reading a `.heli-harness/skills/*/SKILL.md` file directly is the correct mechanism on Claude/Codex plugin installs — not a fallback — since those adapters never expose the shared skills directory as native Skill-tool entries.
+- `HARNESS.md`'s Skill Routing section rewritten with mandatory-invocation framing and a Red Flags rationalization table (borrowed from superpowers' `using-superpowers` skill), and now states explicitly that reading a `.heli-harness/skills/*/SKILL.md` file directly is the correct mechanism on Claude/Codex plugin installs â€” not a fallback â€” since those adapters never expose the shared skills directory as native Skill-tool entries.
 - `state/README.md` gains a dedup nudge: cross-reference one canonical location for repeated verification facts (test counts, version numbers) instead of hand-retyping them across `current-task.md`/`plan.md`/`decisions.md`.
 
 ### Notes
 
-- All four changes came from evidence-based feedback on two independent real projects using Heli-Harness. The skill-routing gap was found twice, independently, by two unrelated sessions — strong enough signal to fix immediately rather than continue deferring it.
-- The `Step count`/`Plan` warning is deliberately a warning, not a `PreToolUse` deny: it's a new, self-reported field with no track record yet, and a false-positive block would cost more than the gap it closes. `readPlanGate()`'s existing `if (!existsSync(planPath)) return null` (matching `decisions.md`'s own nothing-if-missing precedent) is unchanged — this is additive context, not a new gate.
-- Implemented directly rather than through the worktree/subagent-driven-development pipeline used for v0.5.17: no new state file, no `PreToolUse` changes, just an addition to the existing session-start injection — meaningfully lower-stakes than the plan-ledger feature itself.
+- All four changes came from evidence-based feedback on two independent real projects using Heli-Harness. The skill-routing gap was found twice, independently, by two unrelated sessions â€” strong enough signal to fix immediately rather than continue deferring it.
+- The `Step count`/`Plan` warning is deliberately a warning, not a `PreToolUse` deny: it's a new, self-reported field with no track record yet, and a false-positive block would cost more than the gap it closes. `readPlanGate()`'s existing `if (!existsSync(planPath)) return null` (matching `decisions.md`'s own nothing-if-missing precedent) is unchanged â€” this is additive context, not a new gate.
+- Implemented directly rather than through the worktree/subagent-driven-development pipeline used for v0.5.17: no new state file, no `PreToolUse` changes, just an addition to the existing session-start injection â€” meaningfully lower-stakes than the plan-ledger feature itself.
 
 ## v0.5.17 - Cross-CLI Plan Ledger
 
@@ -217,15 +217,15 @@
 
 ### Notes
 
-- HARNESS.md's Operating Model previously had a gap: an earlier release intended to add a "3+ discrete steps" rule alongside the `Relevant skills consulted` field, but only the field name landed in the Required Task State list — the behavioral rule itself was never written. This release adds that rule for the first time, extended to also cover `plan.md`.
-- Non-goals: no support for multiple simultaneous plans (one `plan.md`, same singular-active-task model as `current-task.md`); no archival mechanism for completed plans beyond whatever git history the workspace keeps; not a replacement for tool-specific planning skills (e.g. superpowers' `writing-plans`) — `plan.md` is the cross-CLI-portable layer, usable alongside a richer tool-specific plan doc if one exists.
+- HARNESS.md's Operating Model previously had a gap: an earlier release intended to add a "3+ discrete steps" rule alongside the `Relevant skills consulted` field, but only the field name landed in the Required Task State list â€” the behavioral rule itself was never written. This release adds that rule for the first time, extended to also cover `plan.md`.
+- Non-goals: no support for multiple simultaneous plans (one `plan.md`, same singular-active-task model as `current-task.md`); no archival mechanism for completed plans beyond whatever git history the workspace keeps; not a replacement for tool-specific planning skills (e.g. superpowers' `writing-plans`) â€” `plan.md` is the cross-CLI-portable layer, usable alongside a richer tool-specific plan doc if one exists.
 
 ## v0.5.16 - Cross-CLI Context Parity
 
 ### Added
 
 - Claude Code and Codex native plugins now surface the last 5 `## `-headed sections of `.heli-harness/state/decisions.md` (the durable "why" decision log) at session start, alongside the `current-task.md` content already surfaced since v0.5.15.
-- Pi/AXGA's `extensions/pi-extension.js` brought up to the same level as the Claude/Codex plugins: `before_agent_start` now injects real `current-task.md` and `decisions.md` content (previously only a generic reminder), and `tool_call` now gates file writes when `current-task.md` shows a stuck task (2+ failed attempts, incomplete) — mirroring the guard the plugins got in v0.5.15.
+- Pi/AXGA's `extensions/pi-extension.js` brought up to the same level as the Claude/Codex plugins: `before_agent_start` now injects real `current-task.md` and `decisions.md` content (previously only a generic reminder), and `tool_call` now gates file writes when `current-task.md` shows a stuck task (2+ failed attempts, incomplete) â€” mirroring the guard the plugins got in v0.5.15.
 - Both `heli-governance/SKILL.md` copies (Claude, Codex) gained a one-line nudge to log durable decisions to `decisions.md` after completing S2/S3-tier work.
 
 ### Fixed
@@ -239,14 +239,14 @@
 ### Notes
 
 - Closes the remaining asymmetry from v0.5.15: Pi/AXGA previously had weaker context continuity than Claude/Codex; all three adapters with a runtime hook mechanism (Claude, Codex, Pi/AXGA) now behave identically on this feature. Cursor and Generic have no hook mechanism and are unaffected.
-- `enforced` status for Claude Code, Codex, and Pi is unaffected — this adds enforcement surface and context, it doesn't change the taxonomy basis for any adapter's status.
+- `enforced` status for Claude Code, Codex, and Pi is unaffected â€” this adds enforcement surface and context, it doesn't change the taxonomy basis for any adapter's status.
 
 ## v0.5.15 - Session Task Gate
 
 ### Added
 
 - `SessionStart` in both the Claude Code and Codex native plugins now injects the real content of `.heli-harness/state/current-task.md` (previously only a static reminder to go read it), so carried-over task state actually reaches the next session's context instead of depending on the agent going to look for it.
-- `PreToolUse` in both plugins now blocks `Edit`/`Write`/`apply_patch` calls when that carried-over task is stuck (2+ failed attempts, still not `complete`) or its target repo no longer matches `.heli-harness/workspace/target.json` — until the state file (or `target.json`) is updated to resolve it. Stateless: re-reads both files on every call, no session-id tracking or marker files, and clears itself automatically once the mismatch/stuck condition is fixed.
+- `PreToolUse` in both plugins now blocks `Edit`/`Write`/`apply_patch` calls when that carried-over task is stuck (2+ failed attempts, still not `complete`) or its target repo no longer matches `.heli-harness/workspace/target.json` â€” until the state file (or `target.json`) is updated to resolve it. Stateless: re-reads both files on every call, no session-id tracking or marker files, and clears itself automatically once the mismatch/stuck condition is fixed.
 - Added 4 new fixture-based smoke assertions per plugin (`scripts/smoke-claude-plugin.mjs`, `scripts/smoke-codex-plugin.mjs`) covering the stuck case, the mismatch case, the healthy pass-through case, and the exemption for edits to `current-task.md`/`target.json` themselves. New shared test helpers (`withFixtureWorkspace`, `assertHookDenyInCwd`, `assertHookAllowInCwd`) added to `scripts/lib/plugin-smoke-helpers.mjs`.
 
 ### Changed
@@ -258,14 +258,14 @@
 
 - Closes a real cross-CLI handoff gap: this workspace's actual usage pattern is switching between Claude Code, Codex, and Pi/AXGA mid-task, and nothing previously stopped a new session in a different CLI from silently working against stale or mismatched task state left by a prior session.
 - Scoped to the Claude Code and Codex native plugins only. Pi/AXGA already has its own separate `enforced` mechanism (`before_agent_start`/`session_start` hooks); extending this same gate there is a reasonable follow-up, not done here.
-- `enforced` status for Claude Code and Codex is unaffected — this adds a new enforcement surface, it doesn't change the taxonomy basis for the existing status.
+- `enforced` status for Claude Code and Codex is unaffected â€” this adds a new enforcement surface, it doesn't change the taxonomy basis for the existing status.
 
 ## v0.5.14 - Plugin Install Parity
 
 ### Added
 
 - Added a `heli-install` skill to both `.heli-harness/adapters/claude-plugin/skills/` and `.heli-harness/adapters/codex-plugin/skills/`, giving parity with Pi/AXGA's `/heli-install`. Instruction-based (no JS runtime in these plugins): the agent runs `install.ps1`/`install.sh` itself instead of the skill shelling out.
-- Reproduces Pi's `installHandler` guard (refuse and point at the update flow if the workspace is already installed) and `verifyInstall` checklist, since a dry-run confirmed `install.ps1` has no preserve-local-state logic of its own — that safety only exists in `update.ps1`.
+- Reproduces Pi's `installHandler` guard (refuse and point at the update flow if the workspace is already installed) and `verifyInstall` checklist, since a dry-run confirmed `install.ps1` has no preserve-local-state logic of its own â€” that safety only exists in `update.ps1`.
 - Resolves the latest release tag at run time instead of hardcoding a version, so the skill won't go stale next release.
 - Added `assertFile` smoke coverage for `heli-target` and `heli-install` in both plugin smoke tests.
 
@@ -294,19 +294,19 @@
 ### Notes
 
 - Prompted by real Codex CLI feedback hitting this exact gap while working against this harness in a separate workspace.
-- `enforced` status for Claude Code and Codex is unaffected — it's scoped to runtime hook proof, which this release doesn't touch.
+- `enforced` status for Claude Code and Codex is unaffected â€” it's scoped to runtime hook proof, which this release doesn't touch.
 
 ## v0.5.12 - Codex Live Hook Verification
 
 ### Fixed
 
 - Fixed `heli-pre-tool-use.mjs` (Codex and Claude Code plugin copies): the file-write guard only recognized `path`/`file` object keys, but Codex's `apply_patch` tool embeds the target path inside a patch-format string under `command` (e.g. `*** Add File: .env`), so `.env` writes went through unguarded in a real Codex session. Now also parses `*** Add/Update/Delete File:` and `*** Move to:` patch directives.
-- Fixed the synthetic `apply_patch` test case in `smoke-claude-plugin.mjs` and `smoke-codex-plugin.mjs`, which used an unrealistic `{ path: ... }` payload that passed without exercising Codex's real tool shape — replaced with the actual payload shape captured from a live Codex session.
+- Fixed the synthetic `apply_patch` test case in `smoke-claude-plugin.mjs` and `smoke-codex-plugin.mjs`, which used an unrealistic `{ path: ... }` payload that passed without exercising Codex's real tool shape â€” replaced with the actual payload shape captured from a live Codex session.
 
 ### Added
 
 - Added `scripts/live-verify-codex-plugin-hook.mjs`: drives a real `codex exec` turn (isolated `CODEX_HOME`, throwaway git repo, `--dangerously-bypass-hook-trust`) and asserts the CLI's own output shows the PreToolUse hook denying both `git push` and a `.env` write, with the filesystem confirming `.env` was never created.
-- Added `live-verify:codex-plugin-hook` npm script. Not part of `npm run check` — requires a real installed, logged-in Codex CLI and available usage quota.
+- Added `live-verify:codex-plugin-hook` npm script. Not part of `npm run check` â€” requires a real installed, logged-in Codex CLI and available usage quota.
 
 ### Changed
 
@@ -322,10 +322,10 @@
 
 ### Added
 
-- Added `.heli-harness/adapters/codex-plugin/.agents/plugins/marketplace.json` — the Codex plugin directory had no marketplace manifest, so `codex plugin marketplace add` could not recognize it. Fixed and live-verified against the real Codex CLI.
+- Added `.heli-harness/adapters/codex-plugin/.agents/plugins/marketplace.json` â€” the Codex plugin directory had no marketplace manifest, so `codex plugin marketplace add` could not recognize it. Fixed and live-verified against the real Codex CLI.
 - Added `scripts/live-verify-claude-plugin.mjs`: drives a real `claude -p` session (`--plugin-dir`, isolated sandbox repo) and asserts the session's own `permission_denials` result shows the PreToolUse hook denying `git push` and a `.env` write.
 - Added `scripts/live-verify-codex-plugin-install.mjs`: drives the real `codex` CLI (isolated `CODEX_HOME`) through `plugin marketplace add` and `plugin add`, and confirms `plugin list` reports it installed and enabled.
-- Added `live-verify:claude-plugin` and `live-verify:codex-plugin-install` npm scripts. Not part of `npm run check` — they require a real installed CLI and make real API calls.
+- Added `live-verify:claude-plugin` and `live-verify:codex-plugin-install` npm scripts. Not part of `npm run check` â€” they require a real installed CLI and make real API calls.
 
 ### Changed
 
@@ -334,7 +334,7 @@
 
 ### Notes
 
-- Codex remains `verified-plugin-wired`: marketplace add, plugin install, and trust are proven live against the real Codex CLI, but PreToolUse hook firing during a real model turn is not yet proven — that check needs Codex usage quota that was unavailable at verification time.
+- Codex remains `verified-plugin-wired`: marketplace add, plugin install, and trust are proven live against the real Codex CLI, but PreToolUse hook firing during a real model turn is not yet proven â€” that check needs Codex usage quota that was unavailable at verification time.
 - Claude Code's live proof used `--plugin-dir` session loading, not the marketplace-installed-and-trusted flow (`claude plugin install`); that path is not separately verified.
 - Pi and Claude Code are the `enforced` adapters. Codex is not.
 
@@ -553,23 +553,23 @@
 
 - Added `benchmarks/` directory with repeatable governance benchmark templates.
 - Added benchmark scenarios:
-  - `docs-change.md` — low-risk docs task measuring report quality and minimality
-  - `bugfix-small.md` — small bugfix measuring diagnosis, minimal diff, tests, report evidence
-  - `feature-small.md` — small feature measuring scope control, implementation quality, validation
-  - `multi-repo-targeting.md` — parent workspace task measuring target discipline
-  - `unsafe-command.md` — risky command task measuring safety behavior
-  - `tech-debt-pattern.md` — weak pattern task measuring tech debt classification
+  - `docs-change.md` â€” low-risk docs task measuring report quality and minimality
+  - `bugfix-small.md` â€” small bugfix measuring diagnosis, minimal diff, tests, report evidence
+  - `feature-small.md` â€” small feature measuring scope control, implementation quality, validation
+  - `multi-repo-targeting.md` â€” parent workspace task measuring target discipline
+  - `unsafe-command.md` â€” risky command task measuring safety behavior
+  - `tech-debt-pattern.md` â€” weak pattern task measuring tech debt classification
 - Added scoring rubrics:
-  - `scoring-rubric.md` — 0-3 scoring scale with category groupings
-  - `metrics.md` — required and optional benchmark metrics
-  - `report-completeness.md` — report quality scoring guide
-  - `safety-score.md` — safety behavior scoring guide
-  - `target-discipline.md` — target discipline scoring guide
+  - `scoring-rubric.md` â€” 0-3 scoring scale with category groupings
+  - `metrics.md` â€” required and optional benchmark metrics
+  - `report-completeness.md` â€” report quality scoring guide
+  - `safety-score.md` â€” safety behavior scoring guide
+  - `target-discipline.md` â€” target discipline scoring guide
 - Added experiment templates:
-  - `experiment-plan.md` — benchmark experiment planning template
-  - `run-log.md` — run logging template
-  - `scorecard.md` — scoring template with example
-  - `comparison-report.md` — A/B/C/D mode comparison template
+  - `experiment-plan.md` â€” benchmark experiment planning template
+  - `run-log.md` â€” run logging template
+  - `scorecard.md` â€” scoring template with example
+  - `comparison-report.md` â€” A/B/C/D mode comparison template
 - Added example A/B/C/D benchmark (`openmesh-style-ab.md`).
 - Added optional local benchmark summary script (`scripts/benchmark-summary.mjs`).
 - Updated validation script to check benchmark pack presence.
@@ -727,7 +727,7 @@
 - **tool_call safety guard**: Blocks or confirms dangerous operations
   - Bash: `npm publish`, `git push`, `rm -rf`, release commands, API-credit-consuming commands
   - Files: `.env`, `.pem`, `.key`, credential files, legacy runtime folders
-- **input shortcuts**: `/review`, `/audit`, `/validate`, `/impact` → `/heli-*` commands
+- **input shortcuts**: `/review`, `/audit`, `/validate`, `/impact` â†’ `/heli-*` commands
 - **/heli-hooks command**: Show auto hooks status
 - Status bar integration: `heli: active` or `heli: package-only`
 
