@@ -361,6 +361,9 @@ export function buildConcurrentSessionContext(ctx) {
 	}
 
 	lines.push("", "Heli Concurrent Session");
+	lines.push(
+		"Governance enforcement: plugin hooks active for this session (not a sandbox). Writes require bound session + write lease; YOLO never bypasses ownership.",
+	);
 	lines.push(`- Session: ${ctx.sessionId || "none"}`);
 	lines.push(`- Task: ${ctx.taskId || "unbound"}`);
 	lines.push(`- Mode: ${ctx.mode || "n/a"}`);
@@ -373,10 +376,16 @@ export function buildConcurrentSessionContext(ctx) {
 	} else {
 		lines.push("- Other active tasks: none");
 	}
+	lines.push(
+		"- Authoritative task state: .heli-harness/tasks/<task-id>/ — shared state/current-task.md is non-authoritative projection only.",
+	);
 
 	if (!ctx.bound) {
 		const active = listActiveTasks(ctx.workspaceRoot);
-		lines.push("", "Session is unbound. Bind or create a task before write operations.");
+		lines.push(
+			"",
+			"Session is unbound. WRITE TOOLS ARE DENIED until you bind: heli task claim <id> --mode write (or heli session attach) and export HELI_SESSION_ID.",
+		);
 		if (active.length) {
 			lines.push("Active tasks:");
 			for (const t of active.slice(0, 12)) {

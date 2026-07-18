@@ -45,6 +45,11 @@ const heliPath = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "hel
 			updateResult.stdout.includes("Host plugin refresh"),
 			"update must separate workspace update from host plugin refresh",
 		);
+		assert.ok(
+			updateResult.stdout.includes("does NOT flip legacy") ||
+				updateResult.stdout.includes("migrate-legacy"),
+			"update must warn that concurrent mode is not auto-enabled",
+		);
 
 		// This repo's own .heli-harness/ is real, self-dogfooding operational state
 		// (workspace/target.json, workspace/index.json, state/current-task.md all

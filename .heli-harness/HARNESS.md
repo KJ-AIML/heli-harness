@@ -11,11 +11,15 @@ Heli-Harness is the source of truth for this parent workspace. It is tool-neutra
 - The agent must read the relevant profile in `.heli-harness/profiles/` when one exists.
 - If no profile exists yet for the identified target repo, the agent should create one from `.heli-harness/templates/repo-profile.md` before S2/S3 work, so branch policy, test commands, and other project-specific facts become durable and discoverable instead of verbal-only for this session.
 - A task that naturally breaks into 3+ discrete steps must have those steps recorded in `.heli-harness/state/plan.md` (from `.heli-harness/templates/plan.md`) before starting, with `Files` and `Verify` filled in per step. Immediately after a step's verification passes — not batched at the end — fill that step's `Evidence` (command + result, or commit SHA) and set `Status: complete` before starting the next step. On a failed verification, increment that step's `Attempts` and record what failed in `Evidence`, mirroring the Done Criteria rule below at step granularity. `current-task.md`'s `Plan:` field should point at `.heli-harness/state/plan.md` when one exists, or read `n/a` otherwise.
+- **Plan/task freshness (mandatory):** same-turn Evidence after verify; never leave `Next smallest action` or plan Status lagging after a blocking discovery (e.g. "await auth" after auth was granted, or "rebind pin" after the action is proven unsupported). When strategy shifts, update plan `Active strategy` / `Supersedes` so old eras do not look current.
+- **Evidence purity:** plan/task Evidence holds measured results only. Do not record product-defect hypotheses until `verify-premise` confirms them.
+- **Resume card + gate packet:** keep the Resume card in `current-task.md` current after every verify or blocker. For multi-gate S2/S3 ops (smoke, launch, staging), use `.heli-harness/templates/ops-gate-packet.md` and fail closed on typed blockers.
+- **Legacy vs concurrent:** default workspaces stay on shared `state/current-task.md` (legacy) until `heli task create` or `heli task migrate-legacy` sets `workspace/schema.json` mode `concurrent`. Multi-agent edits of the singular legacy file race — for parallel agents use concurrent tasks/sessions/leases (see `.heli-harness/state/README.md` and skill `concurrent-upgrade`). `heli update` does **not** auto-migrate mode.
 - `current-task.md`'s `Step count` field is a self-reported number of discrete steps in the current task (0 if the task isn't naturally step-shaped). Set it honestly before starting, not as a formality — it is what lets session-start context warn when `Step count` is 3+ but `Plan` is still `n/a`, catching the exact case where a task obviously needed a plan.md and didn't get one. This is a warning, not a blocking gate: it surfaces the gap instead of leaving it silent, but it does not stop you from proceeding.
 - The agent must read policy overlays in `.heli-harness/policies/` when they exist.
 - The agent must read safety overlays in `.heli-harness/safety/` when they exist.
 - The agent must also read repo-local `AGENTS.md`, `CLAUDE.md`, `README*`, package files, build files, and test configuration where relevant.
-- The agent must create or update `.heli-harness/state/current-task.md` before non-trivial edits.
+- The agent must create or update task state before non-trivial edits: in **legacy** mode, `.heli-harness/state/current-task.md`; in **concurrent** mode, the bound `tasks/<task-id>/current-task.md` after claim/attach (do not treat shared `state/current-task.md` as authoritative when mode is concurrent).
 - The agent must preserve dirty user work. Never revert, overwrite, move, or delete user changes unless explicitly asked.
 - The agent must not assume branch policy, test commands, generated-file policy, release process, deployment policy, or ownership unless a repo profile or repo docs say so.
 - Repo profiles remain descriptive. Team rules belong in policy overlays, and command-risk guidance belongs in safety overlays.
@@ -25,7 +29,7 @@ Heli-Harness is the source of truth for this parent workspace. It is tool-neutra
 - On Claude Code and Codex native plugin installs, `PreToolUse` blocks `Edit`/`Write`/`apply_patch` calls when `.heli-harness/state/current-task.md` shows 2+ failed attempts on an incomplete task, or a target repo that doesn't match `.heli-harness/workspace/target.json` — update the state file (or target.json) to resolve it before continuing. This closes the gap where a session in one CLI carries over stale or mismatched task state to a session in a different CLI without either agent noticing.
 - Locks are advisory warnings, not distributed locks. An expired or missing lock should warn, not block.
 - The agent must not run expensive loops repeatedly. Use the smallest useful check first, then widen only when evidence requires it.
-- After two failed fix attempts, stop coding and write a diagnosis with evidence, likely causes, and the next smallest action.
+- After two failed **implementation/fix** attempts, stop coding and write a diagnosis with evidence, likely causes, and the next smallest action. Shell quoting, path, host-syntax, or module-resolution failures are **command friction** — track them separately and do not burn the two-strike engineering stop on them.
 
 ## Risk Tiers
 
@@ -50,7 +54,9 @@ Before non-trivial edits, update `.heli-harness/state/current-task.md` with:
 - relevant skills consulted
 - current status
 - failed attempts count
+- command friction count (optional but recommended)
 - next smallest action
+- resume card (kept current)
 
 ## Done Criteria
 
@@ -86,7 +92,8 @@ If a trigger condition applies, this is not optional or discretionary:
 - Use `flow` for ambiguous task routing.
 - Use `engineering` for risk tiering and done criteria.
 - Use `verify-premise` before fixing a claimed bug or acting on a disputed premise.
-- Use `impact` before edits that may affect callers, data, APIs, UI flows, or operations.
+- Use `impact` before edits that may affect callers, data, APIs, UI flows, or operations — including destructive multi-path cleanup.
+- Use `concurrent-upgrade` when parallel agents share a legacy workspace or after update still shows mode legacy.
 - Use `debug` to reproduce, isolate, and explain confirmed bugs.
 - Use `fix-loop` after failed tests or repeated fix attempts.
 - Use `audit` for read-only verification of a diff, PR, or claimed fix.

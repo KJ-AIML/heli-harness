@@ -38,7 +38,9 @@ If the host plugin is not loaded, workspace Markdown skills still apply when the
 | Risk / done criteria unclear | `engineering` |
 | Failed tests / repeated fixes | `fix-loop` |
 | Parent workspace / target / concurrent work | `heli-governance`, `heli-target` |
+| Old workspace still on shared current-task / multi-agent race | `concurrent-upgrade` |
 | Before claiming complete | `audit` or verification skill |
+| Staging/prod multi-gate ready check | templates `ops-gate-packet.md` + Resume card |
 
 ## Red flags
 

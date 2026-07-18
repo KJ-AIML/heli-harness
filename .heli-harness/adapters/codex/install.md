@@ -24,6 +24,8 @@ Do not copy Heli-Harness into `%USERPROFILE%\.codex\skills` by default. This har
 
 v0.5.10 verifies Codex adapter wiring with `node scripts/smoke-codex-adapter.mjs`. v0.5.11 adds a real plugin marketplace manifest and live-verifies install/trust with `node scripts/live-verify-codex-plugin-install.mjs`. v0.5.12 live-verifies the PreToolUse hook itself with `node scripts/live-verify-codex-plugin-hook.mjs` against a real Codex session — Codex is now `enforced`.
 
+Windows shell patterns for agents: `.heli-harness/templates/windows-shell-recipes.md`.
+
 ### Native plugin install
 
 **Recommended (Git marketplace — upgradeable, Ponytail parity):**
