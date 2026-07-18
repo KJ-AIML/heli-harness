@@ -1,6 +1,6 @@
 {
   "name": "Heli-Harness",
-  "version": "0.5.26",
+  "version": "0.5.27",
   "description": "Parent-workspace AI development harness for multi-repo, multi-agent engineering work. Gives local coding agents (Claude Code, Codex, generic) a shared source of truth: protocols, repo profiles, state tracking, optional hooks, and adapter instructions.",
   "topics": [
     "ai-agents",

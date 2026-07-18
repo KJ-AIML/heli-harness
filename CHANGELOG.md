@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.5.27 - Default concurrent install and Start with Heli
 
 ### Added
 
@@ -9,6 +9,8 @@
 ### Changed
 
 - **New installs default to concurrent mode** (`workspace/schema.json` `"mode": "concurrent"`). Zero tasks = single-agent bootstrap (writes allowed); once any task exists, full session/lease ownership applies. `heli update` still does not flip existing legacy workspaces.
+- SessionStart/ownership: concurrent empty-task bootstrap messaging; full lease gates once any task exists.
+- Install CLI seed messaging documents concurrent default and multi-agent claim path.
 
 ## v0.5.26 - Ops honesty and concurrent hygiene
 
