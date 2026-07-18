@@ -1,0 +1,20 @@
+{
+  "name": "heli-harness",
+  "interface": {
+    "displayName": "Heli-Harness"
+  },
+  "plugins": [
+    {
+      "name": "heli-harness",
+      "source": {
+        "source": "local",
+        "path": "./.heli-harness/adapters/codex-plugin"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

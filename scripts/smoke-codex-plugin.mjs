@@ -186,14 +186,30 @@ withFixtureWorkspace({
 	assert.ok(!/Warning: current-task\.md declares Step count/.test(context), "a real Plan: value should not warn even at 3+ steps");
 });
 
-assertFile(join(pluginRoot, ".agents", "plugins", "marketplace.json"), "Codex plugin marketplace manifest");
-const marketplace = json(join(pluginRoot, ".agents", "plugins", "marketplace.json"));
-assert.equal(marketplace.plugins?.[0]?.source?.path, ".");
+assertFile(join(pluginRoot, ".agents", "plugins", "marketplace.json"), "Codex nested plugin marketplace manifest");
+const nestedMarketplace = json(join(pluginRoot, ".agents", "plugins", "marketplace.json"));
+assert.equal(nestedMarketplace.name, "heli-harness");
+assert.equal(nestedMarketplace.plugins?.[0]?.name, "heli-harness");
+assert.equal(nestedMarketplace.plugins?.[0]?.source?.path, ".");
+
+// Repo-root marketplace enables `codex plugin marketplace add KJ-AIML/heli-harness`
+// (Ponytail-style Git source + upgrade). Nested path alone is not a Git marketplace root.
+const rootMarketplacePath = join(root, ".agents", "plugins", "marketplace.json");
+assertFile(rootMarketplacePath, "Codex repo-root marketplace manifest");
+const rootMarketplace = json(rootMarketplacePath);
+assert.equal(rootMarketplace.name, "heli-harness");
+assert.equal(rootMarketplace.plugins?.[0]?.name, "heli-harness");
+assert.equal(
+	rootMarketplace.plugins?.[0]?.source?.path,
+	"./.heli-harness/adapters/codex-plugin",
+	"root marketplace must index the nested Codex plugin package",
+);
 
 const codex = json(join(root, ".heli-harness", "adapters", "adapters.json")).adapters.find((adapter) => adapter.id === "codex");
 assert.equal(codex.status, "enforced");
 assert.ok(codex.evidence.includes(".heli-harness/adapters/codex-plugin/.codex-plugin/plugin.json"));
 assert.ok(codex.evidence.includes(".heli-harness/adapters/codex-plugin/.agents/plugins/marketplace.json"));
+assert.ok(codex.evidence.includes(".agents/plugins/marketplace.json"));
 assert.ok(codex.evidence.includes("scripts/live-verify-codex-plugin-hook.mjs"));
 assert.ok(codex.verification.includes("node scripts/smoke-codex-plugin.mjs"));
 assert.ok(codex.verification.includes("node scripts/live-verify-codex-plugin-install.mjs"));
@@ -202,5 +218,16 @@ assert.ok(codex.verification.includes("node scripts/live-verify-codex-plugin-hoo
 const matrix = read(join(root, "docs", "ADAPTER_SUPPORT_MATRIX.md"));
 const row = matrix.split("\n").find((line) => line.includes("**Codex**")) || "";
 assert.match(row, /enforced/);
+
+const installMd = read(join(root, "INSTALL.md"));
+assert.match(installMd, /codex plugin marketplace add KJ-AIML\/heli-harness/);
+assert.match(installMd, /codex plugin marketplace add \.\/\.heli-harness\/adapters\/codex-plugin/);
+// Code fences must not recommend the bare relative form Codex rejects.
+assert.ok(
+	!/```(?:bash|powershell)?\s*\n(?:(?!```)[\s\S])*codex plugin marketplace add \.heli-harness\/adapters\/codex-plugin\n(?:(?!```)[\s\S])*```/m.test(
+		installMd,
+	),
+	"INSTALL.md code fences must not use bare .heli-harness marketplace path",
+);
 
 console.log("codex plugin smoke ok");

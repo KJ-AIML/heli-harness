@@ -124,8 +124,19 @@ Implemented:
 
 - No live Claude Code runtime hook execution/trust flow was completed.
 - No live Codex runtime hook execution/trust flow was completed.
-- No plugin marketplace publication is included.
 - OpenCode, Gemini, Cursor, Windsurf, Cline, and Copilot CLI remain analysis/planned unless existing pointer docs already cover them.
+
+## Codex marketplace publication (Ponytail parity)
+
+Shipped:
+
+- Repo-root `.agents/plugins/marketplace.json` so `codex plugin marketplace add KJ-AIML/heli-harness` is a valid **Git** marketplace (upgradeable), matching Ponytail’s `DietrichGebert/ponytail` flow.
+- Nested `.heli-harness/adapters/codex-plugin/.agents/plugins/marketplace.json` remains for workspace-local dogfood after `heli install` (local path; not upgradeable).
+- Documented install/upgrade/remove-local-first steps in `INSTALL.md`, `docs/INSTALL_MATRIX.md`, and `.heli-harness/adapters/codex/install.md`.
+
+Remaining gap vs Ponytail:
+
+- Heli’s plugin package still lives nested under `.heli-harness/adapters/codex-plugin/` (not at monorepo root like Ponytail’s single-package repo). The root marketplace indexes that nested path; plugin identity is still `heli-harness@heli-harness`.
 
 ## What Heli Copied Conceptually
 

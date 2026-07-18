@@ -84,12 +84,40 @@ Install the workspace harness first. Adapter status, tested scope, and limitatio
 
 ### Codex
 
-The workspace `AGENTS.md` points to `.heli-harness/adapters/codex/AGENTS.md`. To install the native plugin from the installed workspace:
+The workspace `AGENTS.md` points to `.heli-harness/adapters/codex/AGENTS.md`.
+
+#### Recommended: Git marketplace (Ponytail-style, upgradeable)
+
+Install from the published repo so Codex treats the marketplace as **Git** and `marketplace upgrade` works (same flow as `DietrichGebert/ponytail`):
 
 ```bash
-codex plugin marketplace add .heli-harness/adapters/codex-plugin
+codex plugin marketplace add KJ-AIML/heli-harness
 codex plugin add heli-harness@heli-harness
 ```
+
+Upgrade later:
+
+```bash
+codex plugin marketplace upgrade heli-harness
+```
+
+Requires a root Codex marketplace manifest at `.agents/plugins/marketplace.json` (indexes the nested plugin under `./.heli-harness/adapters/codex-plugin`). If you previously added a **local** marketplace with the same name, remove it first:
+
+```bash
+codex plugin marketplace remove heli-harness
+codex plugin remove heli-harness@heli-harness
+```
+
+#### Workspace-local dogfood (after `heli install`; not upgradeable)
+
+Use this only when dogfooding the plugin tree that was copied into the parent workspace. Codex requires a real path form (`./…` or absolute) — a bare `.heli-harness/…` source is rejected as invalid:
+
+```bash
+codex plugin marketplace add ./.heli-harness/adapters/codex-plugin
+codex plugin add heli-harness@heli-harness
+```
+
+Local marketplaces cannot be refreshed with `codex plugin marketplace upgrade` (that command only upgrades Git marketplaces).
 
 ### Claude Code
 

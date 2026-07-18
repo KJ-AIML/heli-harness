@@ -23,3 +23,22 @@ Updates do not modify the parent workspace `AGENTS.md`; keep local Codex notes t
 Do not copy Heli-Harness into `%USERPROFILE%\.codex\skills` by default. This harness is intended to live with the parent workspace.
 
 v0.5.10 verifies Codex adapter wiring with `node scripts/smoke-codex-adapter.mjs`. v0.5.11 adds a real plugin marketplace manifest and live-verifies install/trust with `node scripts/live-verify-codex-plugin-install.mjs`. v0.5.12 live-verifies the PreToolUse hook itself with `node scripts/live-verify-codex-plugin-hook.mjs` against a real Codex session — Codex is now `enforced`.
+
+### Native plugin install
+
+**Recommended (Git marketplace — upgradeable, Ponytail parity):**
+
+```bash
+codex plugin marketplace add KJ-AIML/heli-harness
+codex plugin add heli-harness@heli-harness
+codex plugin marketplace upgrade heli-harness
+```
+
+The repo-root `.agents/plugins/marketplace.json` indexes `./.heli-harness/adapters/codex-plugin`.
+
+**Workspace-local dogfood** (after `heli install`; not upgradeable). Use `./` or an absolute path — bare `.heli-harness/…` is an invalid Codex marketplace source:
+
+```bash
+codex plugin marketplace add ./.heli-harness/adapters/codex-plugin
+codex plugin add heli-harness@heli-harness
+```
