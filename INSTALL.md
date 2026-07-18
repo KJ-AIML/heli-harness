@@ -176,11 +176,39 @@ This installs the agent package, not a workspace harness. Run `/heli-install` in
 
 ## Update
 
+### Workspace harness
+
 ```bash
 npx github:KJ-AIML/heli-harness update /path/to/workspace
 ```
 
 Or, from a source checkout, run `./update.sh /path/to/workspace` on macOS/Linux or `.\update.ps1 -Parent "C:\your\workspace"` on Windows.
+
+`heli update` refreshes **workspace** distribution assets only. It does **not** upgrade host-native plugins or Codex marketplace snapshots. After updating the workspace, refresh host plugins separately.
+
+### Codex plugin (Git marketplace)
+
+If you installed with `codex plugin marketplace add KJ-AIML/heli-harness`:
+
+```bash
+codex plugin marketplace upgrade heli-harness
+```
+
+If you previously used a **local** path marketplace (`./.heli-harness/adapters/codex-plugin`), switch once so Upgrade works:
+
+```bash
+codex plugin remove heli-harness@heli-harness
+codex plugin marketplace remove heli-harness
+codex plugin marketplace add KJ-AIML/heli-harness
+codex plugin add heli-harness@heli-harness
+```
+
+Then future updates are:
+
+```bash
+npx github:KJ-AIML/heli-harness update /path/to/workspace
+codex plugin marketplace upgrade heli-harness
+```
 
 ## Uninstall
 

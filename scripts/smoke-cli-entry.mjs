@@ -28,6 +28,23 @@ const heliPath = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "hel
 			"install must explain host plugin activation is separate",
 		);
 		assert.ok(installResult.stdout.includes("codex plugin marketplace add"));
+		assert.ok(
+			installResult.stdout.includes("KJ-AIML/heli-harness") ||
+				installResult.stdout.includes("./.heli-harness/adapters/codex-plugin"),
+			"install should mention Git marketplace and/or local dogfood Codex path",
+		);
+
+		const updateResult = spawnSync(process.execPath, [heliPath, "update", cwd], { encoding: "utf8" });
+		assert.equal(updateResult.status, 0, updateResult.stderr);
+		assert.ok(updateResult.stdout.includes("Updated Heli-Harness at"), "update should report target");
+		assert.ok(
+			updateResult.stdout.includes("codex plugin marketplace upgrade heli-harness"),
+			"update must tell users how to refresh the Codex Git marketplace",
+		);
+		assert.ok(
+			updateResult.stdout.includes("Host plugin refresh"),
+			"update must separate workspace update from host plugin refresh",
+		);
 
 		// This repo's own .heli-harness/ is real, self-dogfooding operational state
 		// (workspace/target.json, workspace/index.json, state/current-task.md all

@@ -31,5 +31,6 @@ For copy-paste setup, manual installation, updates, removal, and adapter details
 
 | Action | CLI | Local checkout |
 | --- | --- | --- |
-| Update | `npx github:KJ-AIML/heli-harness update <path>` | `./update.sh /path/to/workspace` or `.\update.ps1 -Parent "C:\your\workspace"` |
+| Update workspace | `npx github:KJ-AIML/heli-harness update <path>` | `./update.sh /path/to/workspace` or `.\update.ps1 -Parent "C:\your\workspace"` |
+| Update Codex plugin | `codex plugin marketplace upgrade heli-harness` (Git marketplace only) | Switch from local marketplace first: remove local, then `codex plugin marketplace add KJ-AIML/heli-harness` |
 | Uninstall | `npx github:KJ-AIML/heli-harness uninstall <path>` | `./uninstall.sh /path/to/workspace` or `.\uninstall.ps1 -Parent "C:\your\workspace"` |
