@@ -35,4 +35,8 @@ heli task migrate-legacy --id <id>
 
 Set `HELI_SESSION_ID` in the agent process after claim/start so hooks resolve the same session.
 
+### Upgrade note
+
+`heli update` does **not** enable concurrent mode. After updating an old workspace, `heli status` still reports `legacy` until you migrate or create a task. Skill: `concurrent-upgrade`.
+
 Do not fill `runs/` or `reports/` with fake data.

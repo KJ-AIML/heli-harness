@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **v0.5.26 ops honesty & concurrent hygiene**
+  - Templates: Resume card + Command friction on `current-task.md`; plan Active strategy / Evidence hygiene; `ops-gate-packet.md`; `windows-shell-recipes.md`
+  - Skill `concurrent-upgrade` for legacy → concurrent migration after `heli update`
+  - SessionStart: governance enforcement honesty, legacy multi-agent race warning, concurrent unbound write denial messaging
+  - `heli status` / `heli update`: legacy multi-writer risk + migrate path (update does not flip mode)
+  - Skills: `verify-premise` (e2e contract + ACTION_UNSUPPORTED), `impact` (destructive multi-path checklist), `fix-loop` (friction vs implementation failures)
+
+### Changed
+
+- HARNESS.md: plan/task freshness, evidence purity, resume/gate packet, legacy vs concurrent upgrade truth, command-friction vs failed attempts
+- Codex adapter: Windows/shell recipes pointer
+
 ## v0.5.25 - Codex Git marketplace and update host refresh
 
 ### Added

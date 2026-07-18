@@ -50,6 +50,16 @@ Use the harness command tiers:
 - `T3`/`T4`: dependency, runtime, network, API, or cost-bearing work; ask or report as policy requires.
 - `T5`/`T6`: release, remote write, destructive, secret-bearing, or outside-root actions; require explicit approval or block.
 
+## Windows / shell (Codex on Windows)
+
+PowerShell is not bash. Follow `.heli-harness/templates/windows-shell-recipes.md`:
+
+- Do not assume `&&` works — use `;` + `$LASTEXITCODE` or separate calls.
+- Quote `terraform -chdir="..."`.
+- Prefer `git commit -F -` with a PowerShell here-string, not bash heredocs.
+- Treat quoting/module-path failures as **command friction**, not failed engineering attempts.
+- For parallel agents: `heli status` — if mode is `legacy`, run skill `concurrent-upgrade` before sharing `current-task.md`.
+
 ## Claims require evidence
 
 Do not claim support, enforcement, validation, test results, release status, or runtime behavior without file evidence or command output. If evidence is missing, say what is missing.

@@ -77,6 +77,8 @@ if (-not $ResetState) {
   Write-Host "state/ was replaced from the repo checkout (-ResetState)."
 }
 Write-Host "AGENTS.md and CLAUDE.md were not modified."
+Write-Host "Workspace mode is preserved: update does NOT flip legacy to concurrent."
+Write-Host "Parallel agents: heli task migrate-legacy --id <id> then claim write + HELI_SESSION_ID (skill concurrent-upgrade)."
 Write-Host ""
 Write-Host "Host plugin refresh (workspace update does not upgrade host marketplaces/plugins):"
 Write-Host "  - Codex (Git marketplace): codex plugin marketplace upgrade heli-harness"

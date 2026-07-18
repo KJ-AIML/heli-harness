@@ -24,3 +24,6 @@ Rules:
 - Do not silently switch scope.
 - If confirmed but unexplained, route to `debug`.
 - If confirmed and shared surface is affected, route to `impact` before editing.
+- **Manual smoke / UX "fails":** open existing e2e/Playwright/smoke contracts first. If the manual path disagrees with the contract (wrong entry URL, wrong CTA), treat it as agent/operator error until the product path is proven broken.
+- **Authorized ops request:** before mutating, map the request to a **supported control-plane action**. If no action exists (e.g. "rebind pin" but service only has pin-on-create), stop with a typed blocker such as `ACTION_UNSUPPORTED` — do not invent DB bypasses.
+- Do not write product-defect claims into plan Evidence until this skill confirms them.

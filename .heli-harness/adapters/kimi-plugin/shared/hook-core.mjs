@@ -108,7 +108,11 @@ export function buildSessionContext(cwd, { host = "unknown", hookPayload = null,
 		"Identify the active target repo from .heli-harness/workspace/target.json when present.",
 		"Instruction files are not a sandbox; plugin hooks are guardrails only.",
 		"",
+		"Governance enforcement: plugin hooks active for this session (not a sandbox). Without this SessionStart marker in another host, treat governance as advisory/file-only.",
+		"",
 		"Workspace mode: legacy",
+		"Legacy uses shared .heli-harness/state/current-task.md — multi-agent edits race (last writer wins).",
+		"For parallel agents: heli task migrate-legacy --id <id> (or heli task create), then claim write + HELI_SESSION_ID. See skill concurrent-upgrade.",
 	];
 
 	const root = ctx.workspaceRoot || cwd;
@@ -120,6 +124,9 @@ export function buildSessionContext(cwd, { host = "unknown", hookPayload = null,
 	if (existsSync(taskPath)) {
 		const taskText = readFileSync(taskPath, "utf8").trim();
 		if (taskText) {
+			const status = field(taskText, "Current status").toLowerCase();
+			const incomplete =
+				status && status !== "complete" && status !== "idle" && !status.includes("none");
 			lines.push(
 				"",
 				"Carried-over task state from .heli-harness/state/current-task.md:",
@@ -127,6 +134,12 @@ export function buildSessionContext(cwd, { host = "unknown", hookPayload = null,
 				"",
 				"Acknowledge this before your first edit this session: confirm with the user whether to resume, abandon, or reset it. If it shows a target-repo mismatch against workspace/target.json, or 2+ failed attempts on an incomplete task, the PreToolUse hook will block Edit/Write/apply_patch calls until you update current-task.md (or target.json) to resolve it.",
 			);
+			if (incomplete) {
+				lines.push(
+					"",
+					"MULTI-AGENT WARNING (legacy): this incomplete shared current-task.md is a single global ledger. A second agent editing it will swap/race. Prefer concurrent mode for parallel work.",
+				);
+			}
 			const stepWarning = stepCountPlanWarning(taskText);
 			if (stepWarning) lines.push("", stepWarning);
 		}

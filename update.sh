@@ -74,6 +74,8 @@ else
 	echo "state/ was replaced from the repo checkout (--reset-state)."
 fi
 echo "AGENTS.md and CLAUDE.md were not modified."
+echo "Workspace mode is preserved: update does NOT flip legacy to concurrent."
+echo "Parallel agents: heli task migrate-legacy --id <id> then claim write + HELI_SESSION_ID (skill concurrent-upgrade)."
 echo ""
 echo "Host plugin refresh (workspace update does not upgrade host marketplaces/plugins):"
 echo "  - Codex (Git marketplace): codex plugin marketplace upgrade heli-harness"
