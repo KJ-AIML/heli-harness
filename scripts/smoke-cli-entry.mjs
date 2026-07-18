@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -33,6 +33,14 @@ const heliPath = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "hel
 				installResult.stdout.includes("./.heli-harness/adapters/codex-plugin"),
 			"install should mention Git marketplace and/or local dogfood Codex path",
 		);
+		assert.ok(
+			installResult.stdout.includes("concurrent"),
+			"install should report concurrent as default workspace mode",
+		);
+		const schemaPath = join(cwd, ".heli-harness", "workspace", "schema.json");
+		assert.ok(existsSync(schemaPath), "install should seed workspace/schema.json");
+		const schema = JSON.parse(readFileSync(schemaPath, "utf8"));
+		assert.equal(schema.mode, "concurrent", "fresh install schema mode must be concurrent");
 
 		const updateResult = spawnSync(process.execPath, [heliPath, "update", cwd], { encoding: "utf8" });
 		assert.equal(updateResult.status, 0, updateResult.stderr);

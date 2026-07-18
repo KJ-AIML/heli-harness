@@ -108,12 +108,17 @@ try {
 	const target = JSON.parse(readFileSync(join(installed, "workspace", "target.json"), "utf8"));
 	assert.equal(target.targetRepo, "");
 
-	// SessionStart must not inject pollution markers
+	const schema = JSON.parse(readFileSync(join(installed, "workspace", "schema.json"), "utf8"));
+	assert.equal(schema.mode, "concurrent", "fresh install must default to concurrent mode");
+
+	// SessionStart must not inject pollution markers; concurrent empty bootstrap OK
 	const ctx = buildSessionContext(dest, { host: "test", createIfMissing: false });
 	for (const m of MARKERS) {
 		assert.ok(!ctx.includes(m), `SessionStart leaked marker: ${m}`);
 	}
 	assert.ok(!/docs-overhaul/i.test(ctx), "SessionStart must not mention polluted task");
+	assert.match(ctx, /concurrent/i, "SessionStart should report concurrent mode on fresh install");
+	assert.match(ctx, /bootstrap|no tasks/i, "SessionStart should describe zero-task bootstrap");
 	console.log("smoke-clean-install: node install API ok");
 
 	// bin/heli.mjs install path

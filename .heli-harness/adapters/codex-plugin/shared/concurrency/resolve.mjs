@@ -10,7 +10,7 @@ import {
 	canonicalizePath,
 } from "./paths.mjs";
 import { isConcurrentMode, readWorkspaceSchema } from "./schema.mjs";
-import { readTask, listActiveTasks, readTaskMarkdown } from "./task.mjs";
+import { readTask, listTasks, listActiveTasks, readTaskMarkdown } from "./task.mjs";
 import {
 	createSession,
 	readSession,
@@ -284,6 +284,18 @@ export function evaluateOwnershipGate(ctx, { isWrite = false } = {}) {
 	}
 	if (!isWrite) return { deny: false };
 
+	// Concurrent is the install default. With zero tasks, allow single-agent
+	// bootstrap writes so S0/S1 work is not blocked until the first claim.
+	// Once any task exists, full session/lease ownership applies.
+	const tasks = listTasks(ctx.workspaceRoot);
+	if (!tasks.length) {
+		return {
+			deny: false,
+			bootstrap: true,
+			code: "CONCURRENT_BOOTSTRAP",
+		};
+	}
+
 	if (!ctx.sessionId) {
 		return {
 			deny: true,
@@ -361,9 +373,17 @@ export function buildConcurrentSessionContext(ctx) {
 	}
 
 	lines.push("", "Heli Concurrent Session");
-	lines.push(
-		"Governance enforcement: plugin hooks active for this session (not a sandbox). Writes require bound session + write lease; YOLO never bypasses ownership.",
-	);
+	const allTasks = listTasks(ctx.workspaceRoot);
+	const bootstrapEmpty = !allTasks.length;
+	if (bootstrapEmpty) {
+		lines.push(
+			"Governance enforcement: plugin hooks active for this session (not a sandbox). Workspace mode is concurrent with no tasks yet — single-agent bootstrap writes are allowed. Before multi-agent work: heli task create <id> --work-item <key> --repo <name> && heli task claim <id> --mode write (export HELI_SESSION_ID).",
+		);
+	} else {
+		lines.push(
+			"Governance enforcement: plugin hooks active for this session (not a sandbox). Writes require bound session + write lease; YOLO never bypasses ownership.",
+		);
+	}
 	lines.push(`- Session: ${ctx.sessionId || "none"}`);
 	lines.push(`- Task: ${ctx.taskId || "unbound"}`);
 	lines.push(`- Mode: ${ctx.mode || "n/a"}`);
@@ -371,6 +391,7 @@ export function buildConcurrentSessionContext(ctx) {
 	lines.push(`- Worktree: ${ctx.worktreeRoot || "n/a"}`);
 	lines.push(`- Lease: ${ctx.lease && !ctx.lease.stale ? "active" : ctx.lease?.stale ? "stale" : "none"}`);
 	lines.push(`- YOLO: ${ctx.yolo?.active ? `active (${ctx.yolo.source})` : "strict"}`);
+	lines.push(`- Tasks registered: ${allTasks.length}`);
 	if (ctx.otherActiveTasks?.length) {
 		lines.push(`- Other active tasks: ${ctx.otherActiveTasks.join(", ")}`);
 	} else {
@@ -382,10 +403,17 @@ export function buildConcurrentSessionContext(ctx) {
 
 	if (!ctx.bound) {
 		const active = listActiveTasks(ctx.workspaceRoot);
-		lines.push(
-			"",
-			"Session is unbound. WRITE TOOLS ARE DENIED until you bind: heli task claim <id> --mode write (or heli session attach) and export HELI_SESSION_ID.",
-		);
+		if (bootstrapEmpty) {
+			lines.push(
+				"",
+				"No tasks yet (concurrent bootstrap). Prefer heli task create + claim before parallel agents share this workspace.",
+			);
+		} else {
+			lines.push(
+				"",
+				"Session is unbound. WRITE TOOLS ARE DENIED until you bind: heli task claim <id> --mode write (or heli session attach) and export HELI_SESSION_ID.",
+			);
+		}
 		if (active.length) {
 			lines.push("Active tasks:");
 			for (const t of active.slice(0, 12)) {
