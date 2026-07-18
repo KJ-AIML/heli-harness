@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- README **Start with Heli** guide: parent workspace layout (`repos/`, `docs/`, `resources/`), npx install, Codex plugin, strict YOLO default, target/profile setup, and first-session open prompt.
+
+### Changed
+
+- **New installs default to concurrent mode** (`workspace/schema.json` `"mode": "concurrent"`). Zero tasks = single-agent bootstrap (writes allowed); once any task exists, full session/lease ownership applies. `heli update` still does not flip existing legacy workspaces.
+
 ## v0.5.26 - Ops honesty and concurrent hygiene
 
 ### Added

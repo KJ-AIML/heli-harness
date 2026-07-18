@@ -2,19 +2,18 @@
 
 This directory holds shared parent-workspace state.
 
-## Legacy mode (default)
+## Concurrent mode (default on new installs, v0.5.27+)
 
-Until concurrent mode is enabled, these files remain authoritative:
+New `heli install` seeds `.heli-harness/workspace/schema.json` with `"mode": "concurrent"`.
 
-- `current-task.md`: active task state. Update before non-trivial edits.
-- `plan.md`: optional step-by-step plan ledger for tasks with 3+ discrete steps.
-- `decisions.md`: durable harness-level decisions (workspace scope).
-- `yolo.json`: workspace-global unguarded mode (legacy only).
-- `runs/` / `reports/`: generated artifacts (prefer unique names).
+- **Zero tasks:** single-agent bootstrap — writes are allowed; prefer creating a task before a second agent joins.
+- **One or more tasks:** write tools require bound session + write lease (`heli task claim` / `HELI_SESSION_ID`).
 
-## Concurrent mode (v0.5.24+)
+When concurrent mode is active:
 
-When `.heli-harness/workspace/schema.json` has `"mode": "concurrent"` (created by `heli task create` or `heli task migrate-legacy`):
+## Concurrent mode details (v0.5.24+)
+
+When `.heli-harness/workspace/schema.json` has `"mode": "concurrent"` (default install seed, or enabled by `heli task create` / `heli task migrate-legacy`):
 
 - **Authoritative** task state lives under `.heli-harness/tasks/<task-id>/`.
 - Sessions: `.heli-harness/sessions/`
@@ -35,8 +34,16 @@ heli task migrate-legacy --id <id>
 
 Set `HELI_SESSION_ID` in the agent process after claim/start so hooks resolve the same session.
 
+## Legacy mode (older workspaces)
+
+Workspaces installed before v0.5.27 (or never migrated) may still have `"mode": "legacy"`. Then these files remain authoritative:
+
+- `current-task.md`: active task state (shared — multi-agent races).
+- `plan.md`, `decisions.md`, `yolo.json` (workspace-global YOLO in legacy only).
+- `runs/` / `reports/`: generated artifacts (prefer unique names).
+
 ### Upgrade note
 
-`heli update` does **not** enable concurrent mode. After updating an old workspace, `heli status` still reports `legacy` until you migrate or create a task. Skill: `concurrent-upgrade`.
+`heli update` does **not** flip legacy → concurrent (preserves in-flight state). New installs default concurrent. Old workspaces: `heli task migrate-legacy --id <id>` or `heli task create` (skill: `concurrent-upgrade`).
 
 Do not fill `runs/` or `reports/` with fake data.

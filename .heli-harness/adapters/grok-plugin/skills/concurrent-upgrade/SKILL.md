@@ -7,11 +7,11 @@ description: Use when an old Heli workspace still uses shared state/current-task
 
 ## Problem
 
-`heli update` installs new concurrent **capability** but does **not** flip workspace mode. Legacy default:
+**New installs (v0.5.27+) default to concurrent.** Older workspaces may still be legacy after `heli update` (update never flips mode):
 
 - One shared `.heli-harness/state/current-task.md`
 - Two agents edit it → race / last-writer swap
-- Agents keep "old behavior" because SessionStart still says `Workspace mode: legacy`
+- SessionStart says `Workspace mode: legacy`
 
 ## When to migrate
 
