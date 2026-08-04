@@ -22,7 +22,7 @@ Planned verification:
 - 
 
 Verification limitations:
-- 
+-
 
 Relevant skills consulted:
 - 
