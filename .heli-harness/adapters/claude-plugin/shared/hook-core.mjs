@@ -198,16 +198,15 @@ export function readPlanGate(cwd) {
 }
 
 export function isTaskStateWrite(paths) {
+	// Control-plane paths (sessions/, locks/, bindings/, workspace/schema.json)
+	// are deliberately excluded — hand-writes there must face the ownership gate.
 	return paths.some(
 		(path) =>
 			path.endsWith(".heli-harness/state/current-task.md") ||
 			path.endsWith(".heli-harness/state/plan.md") ||
 			path.endsWith(".heli-harness/workspace/target.json") ||
 			path.endsWith(".heli-harness/state/yolo.json") ||
-			path.includes(".heli-harness/tasks/") ||
-			path.includes(".heli-harness/sessions/") ||
-			path.includes(".heli-harness/locks/") ||
-			path.includes(".heli-harness/bindings/"),
+			path.includes(".heli-harness/tasks/"),
 	);
 }
 

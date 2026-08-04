@@ -376,8 +376,93 @@ if (existsSync(ocPath)) {
 	}
 }
 
+console.log("\n▸ Concurrent fail-closed gates — corrupt state and control-plane writes must deny\n");
+
+const healthyState =
+	"# Current Task\n\nTarget repo: demo\n\nCurrent status: in progress\n\nFailed attempts count: 0\n";
+const validTask = JSON.stringify({
+	schemaVersion: 1,
+	taskId: "t1",
+	status: "active",
+	mode: "strict",
+	revision: 1,
+	target: { repositoryId: "demo" },
+});
+
+function makeConcurrentDir(prefix, { schemaContent, taskContent } = {}) {
+	const dir = mkdtempSync(join(tmpdir(), prefix));
+	mkdirSync(join(dir, ".heli-harness", "state"), { recursive: true });
+	mkdirSync(join(dir, ".heli-harness", "workspace"), { recursive: true });
+	writeFileSync(join(dir, ".heli-harness", "HARNESS.md"), "# Heli\n");
+	writeFileSync(join(dir, ".heli-harness", "state", "current-task.md"), healthyState);
+	writeFileSync(join(dir, ".heli-harness", "workspace", "target.json"), JSON.stringify({ targetRepo: "demo" }));
+	if (schemaContent != null) {
+		writeFileSync(join(dir, ".heli-harness", "workspace", "schema.json"), schemaContent);
+	}
+	if (taskContent != null) {
+		mkdirSync(join(dir, ".heli-harness", "tasks", "t1"), { recursive: true });
+		writeFileSync(join(dir, ".heli-harness", "tasks", "t1", "task.json"), taskContent);
+	}
+	return dir;
+}
+
+// Corrupt schema.json must fail closed (concurrent + gate), not fall back to legacy.
+const corruptSchemaDir = makeConcurrentDir("heli-strict-corrupt-schema-", {
+	schemaContent: "{not json",
+	taskContent: validTask,
+});
+// Corrupt task.json must not re-open zero-task bootstrap.
+const corruptTaskDir = makeConcurrentDir("heli-strict-corrupt-task-", {
+	schemaContent: JSON.stringify({ schemaVersion: 1, mode: "concurrent" }),
+	taskContent: "{not json",
+});
+// Valid concurrent workspace for control-plane write probes.
+const controlPlaneDir = makeConcurrentDir("heli-strict-control-plane-", {
+	schemaContent: JSON.stringify({ schemaVersion: 1, mode: "concurrent" }),
+	taskContent: validTask,
+});
+// Zero-task workspace: bootstrap writes must STILL be allowed.
+const bootstrapDir = makeConcurrentDir("heli-strict-bootstrap-", {
+	schemaContent: JSON.stringify({ schemaVersion: 1, mode: "concurrent" }),
+});
+
+const controlPlaneProbes = [
+	{ label: "self-granted lease", file_path: ".heli-harness/locks/tasks/t1.write.lock/lease.json" },
+	{ label: "session rebind", file_path: ".heli-harness/sessions/heli-ses-fake.json" },
+	{ label: "mode flip", file_path: ".heli-harness/workspace/schema.json" },
+	{ label: "binding forge", file_path: ".heli-harness/bindings/worktrees/abc.json" },
+];
+
+for (const [name, rel] of Object.entries(hooks)) {
+	hard(`${name}: corrupt schema.json fails closed (denies unbound write)`, () => {
+		expectDeny(rel, { tool_name: "Write", tool_input: { file_path: "src/x.ts" } }, /session/i, corruptSchemaDir);
+	});
+	hard(`${name}: corrupt task.json does not re-open bootstrap`, () => {
+		expectDeny(rel, { tool_name: "Write", tool_input: { file_path: "src/x.ts" } }, /session/i, corruptTaskDir);
+	});
+	for (const probe of controlPlaneProbes) {
+		hard(`${name}: control-plane write denied (${probe.label})`, () => {
+			expectDeny(rel, { tool_name: "Write", tool_input: { file_path: probe.file_path } }, /session/i, controlPlaneDir);
+		});
+	}
+	hard(`${name}: zero-task bootstrap write still allowed`, () => {
+		expectAllow(rel, { tool_name: "Write", tool_input: { file_path: "src/x.ts" } }, bootstrapDir);
+	});
+	hard(`${name}: task-state markdown write still allowed unbound`, () => {
+		expectAllow(rel, {
+			tool_name: "Write",
+			tool_input: { file_path: ".heli-harness/state/current-task.md" },
+		}, controlPlaneDir);
+	});
+}
+
+gap(
+	"lease holder can still write control-plane files",
+	"a bound write-mode session holding the lease passes the ownership gate and could hand-edit its own lease/schema; acceptable for the trusted writer, recorded for honesty",
+);
+
 // cleanup fixtures
-for (const d of [stuckDir, mismatchDir, cleanDir]) {
+for (const d of [stuckDir, mismatchDir, cleanDir, corruptSchemaDir, corruptTaskDir, controlPlaneDir, bootstrapDir]) {
 	try { rmSync(d, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 

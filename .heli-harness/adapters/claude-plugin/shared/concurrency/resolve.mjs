@@ -10,7 +10,7 @@ import {
 	canonicalizePath,
 } from "./paths.mjs";
 import { isConcurrentMode, readWorkspaceSchema } from "./schema.mjs";
-import { readTask, listTasks, listActiveTasks, readTaskMarkdown } from "./task.mjs";
+import { readTask, listTasks, listTaskIds, listActiveTasks, readTaskMarkdown } from "./task.mjs";
 import {
 	createSession,
 	readSession,
@@ -287,8 +287,10 @@ export function evaluateOwnershipGate(ctx, { isWrite = false } = {}) {
 	// Concurrent is the install default. With zero tasks, allow single-agent
 	// bootstrap writes so S0/S1 work is not blocked until the first claim.
 	// Once any task exists, full session/lease ownership applies.
-	const tasks = listTasks(ctx.workspaceRoot);
-	if (!tasks.length) {
+	// Count task DIRECTORIES, not readable tasks: a corrupt task.json must not
+	// be indistinguishable from "no tasks" and silently re-open bootstrap.
+	const taskIds = listTaskIds(ctx.workspaceRoot);
+	if (!taskIds.length) {
 		return {
 			deny: false,
 			bootstrap: true,
@@ -524,7 +526,6 @@ export function isTaskStateWriteForContext(ctx, paths) {
 			".heli-harness/state/plan.md",
 			".heli-harness/workspace/target.json",
 			".heli-harness/state/yolo.json",
-			".heli-harness/workspace/schema.json",
 		])
 	) {
 		return true;
@@ -533,16 +534,9 @@ export function isTaskStateWriteForContext(ctx, paths) {
 		const prefix = `.heli-harness/tasks/${ctx.taskId.toLowerCase()}/`;
 		if (normalized.some((p) => p.includes(prefix))) return true;
 	}
-	// allow sessions/bindings/locks maintenance
-	if (
-		normalized.some(
-			(p) =>
-				p.includes(".heli-harness/sessions/") ||
-				p.includes(".heli-harness/bindings/") ||
-				p.includes(".heli-harness/locks/"),
-		)
-	) {
-		return true;
-	}
+	// Control-plane files (sessions/, bindings/, locks/, workspace/schema.json)
+	// are deliberately NOT exempt: hand-writing a lease or flipping the workspace
+	// mode must go through the ownership gate, not around it. The CLI and hooks
+	// write these via fs directly and are not path-gated.
 	return false;
 }
