@@ -13,9 +13,12 @@ export function readWorkspaceSchema(workspaceRoot) {
 	}
 	const data = readJson(schemaPath, null);
 	if (!data) {
-		return { schemaVersion: WORKSPACE_SCHEMA_VERSION, mode: "legacy", exists: true, malformed: true };
+		// Fail closed: a schema file that exists but cannot be read must not
+		// silently downgrade to legacy (which disables all lease enforcement).
+		return { schemaVersion: WORKSPACE_SCHEMA_VERSION, mode: "concurrent", exists: true, malformed: true };
 	}
-	const mode = data.mode === "concurrent" ? "concurrent" : "legacy";
+	// Only an explicit "legacy" opts out of enforcement; unknown values fail closed.
+	const mode = data.mode === "legacy" ? "legacy" : "concurrent";
 	return {
 		schemaVersion: data.schemaVersion || WORKSPACE_SCHEMA_VERSION,
 		mode,

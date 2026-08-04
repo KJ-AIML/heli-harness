@@ -128,8 +128,11 @@ export function acquireWriteLease(workspaceRoot, {
 		assertUsableLease(existing, taskId);
 	}
 	if (existing) {
-		if (existing.sessionId === sessionId && !isLeaseExpired(existing)) {
-			return refreshLease(workspaceRoot, taskId, { sessionId });
+		if (existing.sessionId === sessionId) {
+			// Own lease — renew even if expired. Nobody else took over (takeover
+			// replaces sessionId), so re-claiming your own stale lease is safe and
+			// beats forcing a takeover ceremony after an idle overnight session.
+			return refreshLease(workspaceRoot, taskId, { sessionId, allowExpiredOwn: true });
 		}
 		if (!isLeaseExpired(existing)) {
 			const err = new Error(
@@ -196,7 +199,7 @@ export function acquireWriteLease(workspaceRoot, {
 	return lease;
 }
 
-export function refreshLease(workspaceRoot, taskId, { sessionId, ttlSeconds } = {}) {
+export function refreshLease(workspaceRoot, taskId, { sessionId, ttlSeconds, allowExpiredOwn = false } = {}) {
 	const lease = readLease(workspaceRoot, taskId);
 	if (!lease) {
 		const err = new Error(`no lease to refresh for task ${taskId}`);
@@ -211,10 +214,15 @@ export function refreshLease(workspaceRoot, taskId, { sessionId, ttlSeconds } = 
 		throw err;
 	}
 	if (isLeaseExpired(lease)) {
-		const err = new Error(`lease expired for task ${taskId}; use takeover`);
-		err.code = "STALE_LEASE";
-		err.lease = lease;
-		throw err;
+		// Renewing your own expired lease is safe (owner unchanged); anonymous
+		// or non-owner refresh of a stale lease still requires takeover.
+		const ownRenewal = allowExpiredOwn && sessionId && lease.sessionId === sessionId;
+		if (!ownRenewal) {
+			const err = new Error(`lease expired for task ${taskId}; use takeover`);
+			err.code = "STALE_LEASE";
+			err.lease = lease;
+			throw err;
+		}
 	}
 	const ttl = Number(ttlSeconds) > 0 ? Number(ttlSeconds) : lease.ttlSeconds || DEFAULT_LEASE_TTL_SECONDS;
 	const now = new Date();

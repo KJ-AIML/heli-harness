@@ -87,6 +87,13 @@ npx github:KJ-AIML/heli-harness status .
 
 You should see `.heli-harness/HARNESS.md`, `AGENTS.md`, and `CLAUDE.md`.
 
+The workspace also embeds the full CLI — after install, every `heli` command works offline with no npx and no PATH setup:
+
+```bash
+node .heli-harness/heli.mjs status
+node .heli-harness/heli.mjs task list
+```
+
 **Update later:**
 
 ```bash

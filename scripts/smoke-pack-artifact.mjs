@@ -51,7 +51,9 @@ try {
 	const tgzPath = join(staging, tgzName);
 	assert.ok(existsSync(tgzPath), `tarball missing: ${tgzPath}`);
 
-	const extract = spawnSync("tar", ["-xzf", tgzPath, "-C", extractDir], {
+	// Relative paths + cwd: GNU tar treats absolute `C:\...` args as remote hosts.
+	const extract = spawnSync("tar", ["-xzf", tgzName, "-C", "extract"], {
+		cwd: staging,
 		encoding: "utf8",
 		shell: true,
 		stdio: ["ignore", "pipe", "pipe"],
@@ -75,6 +77,9 @@ try {
 		"lib/concurrency/index.mjs",
 		".heli-harness/HARNESS.md",
 		".heli-harness/manifest.json",
+		".heli-harness/heli.mjs",
+		".heli-harness/cli/install.mjs",
+		".heli-harness/cli/task.mjs",
 		".heli-harness/adapters/adapters.json",
 		".heli-harness/adapters/shared/hook-core.mjs",
 		".heli-harness/adapters/shared/concurrency/lease.mjs",

@@ -68,6 +68,9 @@ Dirty files observed:
 Planned verification:
 - (none yet)
 
+Verification limitations:
+- (none noted — record what could NOT be verified and why)
+
 Relevant skills consulted:
 - none
 
