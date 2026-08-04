@@ -42,8 +42,15 @@ const packagePath = join(root, "package.json");
 const current = JSON.parse(readFileSync(packagePath, "utf8")).version;
 if (!semver.test(current)) fail(`current package version is invalid: ${current}`);
 if (nextVersion === current) fail(`version is already ${current}`);
-const newer = (a, b) => a.split(".").map(Number).some((value, index) => value > Number(b.split(".")[index]));
-if (!newer(nextVersion, current)) fail(`new version ${nextVersion} must be greater than ${current}`);
+const compareSemver = (a, b) => {
+	const pa = a.split(".").map(Number);
+	const pb = b.split(".").map(Number);
+	for (let i = 0; i < 3; i++) {
+		if (pa[i] !== pb[i]) return pa[i] - pb[i];
+	}
+	return 0;
+};
+if (compareSemver(nextVersion, current) <= 0) fail(`new version ${nextVersion} must be greater than ${current}`);
 
 const status = git("status", "--porcelain=v1").stdout;
 const dirtyPaths = status.split("\n").filter(Boolean).map((line) => line.slice(3).trim().replaceAll("\\", "/"));

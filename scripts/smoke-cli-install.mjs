@@ -49,4 +49,21 @@ const sourceHarnessDir = join(root, ".heli-harness");
 	assert.throws(() => install(sourceHarnessDir, missingDir), /does not exist/);
 }
 
+// Re-install over an existing workspace throws without --force; user state survives
+{
+	const parentDir = mkdtempSync(join(tmpdir(), "heli-cli-install-"));
+	try {
+		install(sourceHarnessDir, parentDir);
+		const profilePath = join(parentDir, ".heli-harness", "profiles", "user-repo.md");
+		writeFileSync(profilePath, "# User profile\n");
+		assert.throws(() => install(sourceHarnessDir, parentDir), /already exists/);
+		assert.ok(existsSync(profilePath), "existing workspace must be untouched after refused install");
+		const result = install(sourceHarnessDir, parentDir, { force: true });
+		assert.ok(existsSync(join(result.target, "HARNESS.md")), "forced install should reseed the workspace");
+		assert.ok(!existsSync(profilePath), "forced install replaces the workspace");
+	} finally {
+		rmSync(parentDir, { recursive: true, force: true });
+	}
+}
+
 console.log("cli install smoke ok");

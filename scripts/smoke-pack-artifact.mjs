@@ -51,7 +51,9 @@ try {
 	const tgzPath = join(staging, tgzName);
 	assert.ok(existsSync(tgzPath), `tarball missing: ${tgzPath}`);
 
-	const extract = spawnSync("tar", ["-xzf", tgzPath, "-C", extractDir], {
+	// Relative paths + cwd: GNU tar treats absolute `C:\...` args as remote hosts.
+	const extract = spawnSync("tar", ["-xzf", tgzName, "-C", "extract"], {
+		cwd: staging,
 		encoding: "utf8",
 		shell: true,
 		stdio: ["ignore", "pipe", "pipe"],
