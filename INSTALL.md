@@ -19,6 +19,8 @@ npx github:KJ-AIML/heli-harness target list
 npx github:KJ-AIML/heli-harness status
 ```
 
+After install, the workspace embeds the CLI: `node .heli-harness/heli.mjs <cmd>` runs every command offline (no npx, no network, no PATH setup). Agent-facing denial messages reference this path.
+
 ## Maintainer release
 
 From a clean `main` worktree, run `npm run release -- <x.y.z> "summary"`. The command updates current version surfaces, runs `npm run check`, stages only release-managed paths, creates the commit and annotated tag, and refuses unrelated dirty files. Add `--push` to push `main` and the new tag.

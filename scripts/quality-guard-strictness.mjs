@@ -456,13 +456,79 @@ for (const [name, rel] of Object.entries(hooks)) {
 	});
 }
 
+console.log("\n▸ Command-tier rules — T5/T6 must deny, safe commands and approvals allowed\n");
+
+const tierDir = makeConcurrentDir("heli-strict-tier-", {
+	schemaContent: JSON.stringify({ schemaVersion: 1, mode: "concurrent" }),
+});
+mkdirSync(join(tierDir, ".heli-harness", "safety"), { recursive: true });
+writeFileSync(
+	join(tierDir, ".heli-harness", "safety", "command-rules.json"),
+	JSON.stringify({
+		version: 1,
+		rules: [
+			{ id: "destructive-delete", match: "rm -rf", tier: "T6", reason: "Recursive delete is destructive" },
+			{ id: "npm-publish", match: "npm publish", tier: "T5", reason: "Publish is a release operation" },
+			{ id: "git-reset-hard", match: "git reset --hard", tier: "T6", reason: "Destructive" },
+			{ id: "advisory-only", match: "npm run e2e", tier: "T4", reason: "advisory tier must not deny" },
+		],
+	}),
+);
+
+function runHookEnv(relScript, sample, cwd, env) {
+	const result = spawnSync(process.execPath, [join(root, relScript)], {
+		cwd,
+		input: JSON.stringify(sample),
+		encoding: "utf8",
+		env: { ...process.env, ...env },
+		stdio: ["pipe", "pipe", "pipe"],
+	});
+	let body = {};
+	try {
+		body = result.stdout.trim() ? JSON.parse(result.stdout) : {};
+	} catch {
+		body = { _raw: result.stdout, _parseError: true };
+	}
+	return { status: result.status, body, stderr: result.stderr };
+}
+
+for (const [name, rel] of Object.entries(hooks)) {
+	hard(`${name}: T6 rm -rf denied`, () => {
+		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "rm -rf build" } }, /destructive/i, tierDir);
+	});
+	hard(`${name}: T6 git reset --hard denied`, () => {
+		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "git reset --hard origin/main" } }, /tier t6/i, tierDir);
+	});
+	hard(`${name}: T5 npm publish denied with approval hint`, () => {
+		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "npm publish" } }, /HELI_ALLOW_COMMAND=npm-publish/i, tierDir);
+	});
+	hard(`${name}: T4 advisory tier does not deny`, () => {
+		const out = runHookEnv(rel, { tool_name: "Bash", tool_input: { command: "npm run e2e" } }, tierDir, {});
+		const { denied, reason } = isDenied(out);
+		assert.ok(!denied, `T4 must stay advisory, got deny: ${reason}`);
+	});
+	hard(`${name}: HELI_ALLOW_COMMAND approves the named rule`, () => {
+		const out = runHookEnv(
+			rel,
+			{ tool_name: "Bash", tool_input: { command: "npm publish" } },
+			tierDir,
+			{ HELI_ALLOW_COMMAND: "npm-publish" },
+		);
+		const { denied, reason } = isDenied(out);
+		assert.ok(!denied, `approved rule must allow, got deny: ${reason}`);
+	});
+	hard(`${name}: safe command allowed in tier workspace`, () => {
+		expectAllow(rel, { tool_name: "Bash", tool_input: { command: "git status" } }, tierDir);
+	});
+}
+
 gap(
 	"lease holder can still write control-plane files",
 	"a bound write-mode session holding the lease passes the ownership gate and could hand-edit its own lease/schema; acceptable for the trusted writer, recorded for honesty",
 );
 
 // cleanup fixtures
-for (const d of [stuckDir, mismatchDir, cleanDir, corruptSchemaDir, corruptTaskDir, controlPlaneDir, bootstrapDir]) {
+for (const d of [stuckDir, mismatchDir, cleanDir, corruptSchemaDir, corruptTaskDir, controlPlaneDir, bootstrapDir, tierDir]) {
 	try { rmSync(d, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 

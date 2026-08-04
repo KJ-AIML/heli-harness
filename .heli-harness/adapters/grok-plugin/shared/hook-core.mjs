@@ -374,12 +374,55 @@ export function evaluatePreToolUse({
 		};
 	}
 
+	const tierDenial = evaluateCommandTierRules(ctx.workspaceRoot || cwd, command, env);
+	if (tierDenial) return { ...tierDenial, ctx };
+
 	if (isWrite && !isTaskStateWriteForContext(ctx, paths) && !isTaskStateWrite(paths)) {
 		const gateReason = readTaskGateForContext(ctx) || readPlanGateForContext(ctx);
 		if (gateReason) return { deny: true, reason: gateReason, ctx };
 	}
 
 	return { deny: false, ctx };
+}
+
+/**
+ * Enforce safety/command-rules.json T5/T6 rules on command strings.
+ * T6 (block) and T5 (explicit approval) deny; T0–T4 stay advisory.
+ * YOLO bypasses this (safety scope) — callers run it after the YOLO early-return.
+ * git-push has its own dedicated check with scoped opt-ins; skipped here so a
+ * granted HELI_ALLOW_GIT_PUSH is not re-denied by the generic rule.
+ */
+export function evaluateCommandTierRules(workspaceRoot, command, env = process.env) {
+	if (!command || !workspaceRoot) return null;
+	const rulesPath = join(workspaceRoot, ".heli-harness", "safety", "command-rules.json");
+	if (!existsSync(rulesPath)) return null;
+	let rules;
+	try {
+		rules = JSON.parse(readFileSync(rulesPath, "utf8"));
+	} catch {
+		return null; // malformed safety overlay is advisory-only; ownership gates still hold
+	}
+	if (!Array.isArray(rules?.rules)) return null;
+	const approved = String(env.HELI_ALLOW_COMMAND || "")
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
+	for (const rule of rules.rules) {
+		if (!rule?.match || (rule.tier !== "T5" && rule.tier !== "T6")) continue;
+		if (rule.id === "git-push") continue;
+		const needle = String(rule.match).toLowerCase().replace(/\s+/g, " ").trim();
+		if (!needle || !command.includes(needle)) continue;
+		if (approved.includes(rule.id)) continue;
+		const kind = rule.tier === "T6" ? "blocks destructive command" : "requires explicit approval for";
+		return {
+			deny: true,
+			code: rule.tier === "T6" ? "TIER_BLOCKED" : "TIER_APPROVAL_REQUIRED",
+			reason:
+				`Heli-Harness ${kind} "${rule.match}" (rule ${rule.id}, tier ${rule.tier}): ${rule.reason || "see safety/command-rules.json"}. ` +
+				`Opt-in: HELI_YOLO=1, HELI_ALLOW_COMMAND=${rule.id}, or \`heli yolo on\` — or run it manually outside the session.`,
+		};
+	}
+	return null;
 }
 
 export { resolveExecutionContext };
