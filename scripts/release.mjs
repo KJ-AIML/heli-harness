@@ -83,7 +83,14 @@ for (const relativePath of [...new Set(versionFiles)]) {
 
 const changelog = join(root, "CHANGELOG.md");
 const changelogText = readFileSync(changelog, "utf8");
-writeFileSync(changelog, changelogText.replace(/^# Changelog\r?\n/, `# Changelog\n\n## v${nextVersion} - ${summary}\n\n### Changed\n\n- Release metadata and validation updated.\n`));
+const unreleasedHeading = /^## Unreleased[^\n]*$/m;
+if (unreleasedHeading.test(changelogText)) {
+	// Hand-written Unreleased section becomes the release entry — matches actual
+	// practice; a stub insert would orphan it below a content-free heading.
+	writeFileSync(changelog, changelogText.replace(unreleasedHeading, `## v${nextVersion} - ${summary}`));
+} else {
+	writeFileSync(changelog, changelogText.replace(/^# Changelog\r?\n/, `# Changelog\n\n## v${nextVersion} - ${summary}\n\n### Changed\n\n- Release metadata and validation updated.\n`));
+}
 
 run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "check"]);
 run("git", ["diff", "--check"]);

@@ -1,6 +1,6 @@
 {
   "name": "heli-harness",
-  "version": "0.5.27",
+  "version": "0.6.0",
   "description": "Heli-Harness workspace governance for Grok Build (Claude-compatible plugin layout).",
   "author": {
     "name": "KJ-AIML",

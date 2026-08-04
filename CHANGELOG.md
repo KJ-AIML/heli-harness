@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.6.0 - Enforcement, lifecycle, and offline CLI
 
 Driven by a full code review and field feedback from five agent sessions using the harness on real projects.
 
