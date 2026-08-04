@@ -197,6 +197,15 @@ export function readPlanGate(cwd) {
 	return readPlanGateForContext(ctx);
 }
 
+/**
+ * Denial reasons reference `heli <cmd>`, but the CLI is often not on PATH in
+ * agent sessions. Point at the workspace-embedded copy so the remedy always works.
+ */
+export function withCliHint(reason) {
+	if (!reason || !/`heli /.test(reason)) return reason;
+	return `${reason}\n(heli not on PATH? Run: node .heli-harness/heli.mjs <command> from the workspace root.)`;
+}
+
 export function isTaskStateWrite(paths) {
 	// Control-plane paths (sessions/, locks/, bindings/, workspace/schema.json)
 	// are deliberately excluded — hand-writes there must face the ownership gate.
@@ -298,7 +307,7 @@ export function evaluatePreToolUse({
 	if (isWrite && !isTaskStateWriteForContext(ctx, paths) && !isTaskStateWrite(paths)) {
 		const ownership = evaluateOwnershipGate(ctx, { isWrite: true });
 		if (ownership.deny) {
-			return { deny: true, reason: ownership.reason, code: ownership.code, ctx };
+			return { deny: true, reason: withCliHint(ownership.reason), code: ownership.code, ctx };
 		}
 	}
 

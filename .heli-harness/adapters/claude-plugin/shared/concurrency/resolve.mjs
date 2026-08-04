@@ -331,6 +331,16 @@ export function evaluateOwnershipGate(ctx, { isWrite = false } = {}) {
 			};
 		}
 		if (lease && isLeaseExpired(lease)) {
+			if (lease.sessionId === ctx.sessionId) {
+				// Own expired lease (e.g. idle overnight): self-renew instead of
+				// forcing a takeover ceremony against yourself.
+				try {
+					refreshLease(ctx.workspaceRoot, ctx.taskId, { sessionId: ctx.sessionId, allowExpiredOwn: true });
+					return { deny: false, ok: true, selfRenewed: true };
+				} catch {
+					/* fall through to the stale denial below */
+				}
+			}
 			return {
 				deny: true,
 				reason: `Heli-Harness concurrent mode: write lease for task ${ctx.taskId} is stale (owner ${lease.sessionId}, expired ${lease.expiresAt}). Use \`heli task takeover ${ctx.taskId} --confirm\`.`,

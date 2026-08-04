@@ -66,10 +66,35 @@ try {
 	// With a task present, unbound target set is still refused
 	run(["target", "set", "demo"], { expectFail: true });
 
+	// Workspace-embedded CLI: a fresh install must be runnable offline
+	const embedded = spawnSync("node", [join(harness, "heli.mjs"), "status", parent], { encoding: "utf8" });
+	assert.equal(embedded.status, 0, `embedded CLI failed:\n${embedded.stdout}\n${embedded.stderr}`);
+	assert.match(embedded.stdout, /Heli-Harness version/, "embedded CLI should print status");
+
 	// Claim write, then complete: status flips, md syncs, lease releases
 	run(["task", "claim", "t1", "--mode", "write"], { env: { HELI_SESSION_ID: SESSION } });
 	const leaseDir = join(harness, "locks", "tasks", "t1.write.lock");
 	assert.ok(existsSync(leaseDir), "write lease should exist after claim");
+
+	// Own expired lease self-renews on re-claim (no takeover ceremony)
+	const leasePath = join(leaseDir, "lease.json");
+	const lease = readJson(leasePath);
+	lease.expiresAt = new Date(Date.now() - 60_000).toISOString();
+	writeFileSync(leasePath, JSON.stringify(lease, null, 2));
+	const renewOut = run(["task", "claim", "t1", "--mode", "write"], { env: { HELI_SESSION_ID: SESSION } });
+	assert.match(renewOut, /Claimed write lease/, "own stale lease should self-renew on claim");
+	assert.ok(
+		new Date(readJson(leasePath).expiresAt).getTime() > Date.now(),
+		"lease expiry should be extended after self-renew",
+	);
+
+	// A different session must still be refused takeover-free
+	run(["task", "claim", "t1", "--mode", "write"], { env: { HELI_SESSION_ID: "heli-ses-other" }, expectFail: true });
+
+	// Provenance: timeline from events.jsonl
+	const provOut = run(["task", "provenance", "t1"], { env: { HELI_SESSION_ID: SESSION } });
+	assert.match(provOut, /task_created/, "provenance should list task_created event");
+	assert.match(provOut, /lease:/, "provenance should report lease state");
 
 	const completeOut = run(["task", "complete", "t1"], { env: { HELI_SESSION_ID: SESSION } });
 	assert.match(completeOut, /marked complete/, "complete should confirm");
