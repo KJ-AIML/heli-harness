@@ -12,6 +12,16 @@ Install https://github.com/KJ-AIML/heli-harness into this folder as a parent-wor
 
 ## CLI
 
+Global install from the npm registry (package name is `heli-harness` — `heli` is taken — but the command it installs is `heli`):
+
+```bash
+npm install -g heli-harness
+heli install <path>
+heli status
+```
+
+Or run without installing:
+
 ```bash
 npx github:KJ-AIML/heli-harness install <path>
 npx github:KJ-AIML/heli-harness update <path>
@@ -20,6 +30,23 @@ npx github:KJ-AIML/heli-harness status
 ```
 
 After install, the workspace embeds the CLI: `node .heli-harness/heli.mjs <cmd>` runs every command offline (no npx, no network, no PATH setup). Agent-facing denial messages reference this path.
+
+## Cloud sync (optional)
+
+Carry a workspace's portable context (profiles, policies, safety overlays, task history) across devices. Fully optional — everything else works offline with no account. Design and boundaries: [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md); server deploy: [cloud/README.md](cloud/README.md).
+
+```bash
+heli auth login --url https://<your-sync-server>   # OAuth device flow (GitHub)
+heli ws create my-lab                              # create + link this workspace
+heli push                                          # snapshot portable context
+
+# on another device, after heli install:
+heli auth login
+heli ws link my-lab
+heli pull
+```
+
+`heli push` refuses bundles containing secret-shaped content (override false positives with `--allow-secrets`). Machine-local state (`sessions/`, `locks/`, `bindings/`, YOLO) and `repos/` never sync.
 
 ## Maintainer release
 

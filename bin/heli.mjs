@@ -11,6 +11,7 @@ import { runYolo } from "../lib/cli/yolo.mjs";
 import { runTask } from "../lib/cli/task.mjs";
 import { runSession } from "../lib/cli/session-cmd.mjs";
 import { runConflicts } from "../lib/cli/conflicts-cmd.mjs";
+import { runCloud } from "../lib/cli/cloud.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [command, ...args] = process.argv.slice(2);
@@ -24,6 +25,10 @@ Commands:
   task create|list|show|migrate-legacy|claim|release|takeover
   session start|attach|status|list|close
   conflicts [--task id]
+
+  auth login|logout|status|devices     (cloud sync)
+  ws create|link|list|versions|delete  (cloud sync)
+  push | pull                          (cloud sync)
 
   heli yolo on|off|status [path] [--hours N]
 `);
@@ -60,6 +65,15 @@ try {
 			break;
 		case "conflicts":
 			runConflicts(args);
+			break;
+		case "auth":
+		case "ws":
+		case "push":
+		case "pull":
+			runCloud(command, args).catch((error) => {
+				console.error(`Error: ${error.message}`);
+				process.exit(1);
+			});
 			break;
 		default:
 			usage();

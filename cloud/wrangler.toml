@@ -1,0 +1,22 @@
+name = "heli-sync"
+main = "worker.mjs"
+compatibility_date = "2026-08-01"
+
+[[durable_objects.bindings]]
+name = "HELI_API"
+class_name = "HeliApiDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["HeliApiDO"]
+
+[[r2_buckets]]
+binding = "BUNDLES"
+bucket_name = "heli-sync-bundles"
+
+# Secrets (set via `wrangler secret put`, never committed):
+#   GITHUB_CLIENT_ID
+#   GITHUB_CLIENT_SECRET
+#
+# TEST_LOGIN=1 enables the passwordless /activate test endpoint. Local dev and
+# CI smokes only — never set it on a deployed environment.

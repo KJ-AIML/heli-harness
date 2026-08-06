@@ -1,7 +1,13 @@
 # Heli Cloud Sync — Design
 
-Status: **approved design, pre-implementation** (owner-approved 2026-08-06)
+Status: **Phase 1 implemented** (owner-approved 2026-08-06; implementation same day)
 Owner decision record: workspace task `cloud-sync-design`
+
+> Implementation amendments (2026-08-06), applied by the Phase 1 build:
+>
+> 1. **Bundle format is gzip'd JSON, not tar.gz** — `gzip(JSON {format: "heli-bundle-v1", encryption, files})` via pure `node:zlib`. No platform tar quirks (GNU/BSD tar already bit this repo once); the server stores opaque bytes either way, so the format stays a client concern. The `encryption` field ships from day one so Phase 2 E2E is additive.
+> 2. **Phase 1 server state lives in Durable Object storage, not D1** — same data model as the tables below, keyed KV records instead of SQL, one API DO serializing all mutations. This keeps the API core (`cloud/core.mjs`) dependency-free and fully CI-testable in plain node (`scripts/smoke-cloud-sync.mjs`); the thin CF shell is `cloud/worker.mjs`. D1 and per-workspace DO sharding remain the scale-up path.
+> 3. **`heli ws link <name>` added to Phase 1** — linking an existing sync workspace from a second device couldn't wait for Phase 2's `heli init`; cross-device pull is the core recovery story.
 
 ## Problem
 
