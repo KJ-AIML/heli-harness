@@ -13,13 +13,15 @@
  *       lastBundleSha256 }                 (per machine; never part of a bundle)
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
+import { gunzipSync } from "node:zlib";
 import { findWorkspaceRoot } from "../adapters/shared/concurrency/paths.mjs";
-import { writeJsonAtomic } from "../adapters/shared/concurrency/fs-atomic.mjs";
+import { readJson, writeJsonAtomic } from "../adapters/shared/concurrency/fs-atomic.mjs";
 import {
 	collectBundleFiles,
+	contentSha256,
 	packBundle,
 	unpackBundle,
 	writeBundleFiles,
@@ -103,8 +105,13 @@ function requireSyncState(workspaceRoot) {
 	return state;
 }
 
-function sha256(bytes) {
-	return createHash("sha256").update(bytes).digest("hex");
+function passphraseFor(state) {
+	if (!state.e2e) return null;
+	const passphrase = process.env.HELI_E2E_PASSPHRASE;
+	if (!passphrase) {
+		throw new Error("This workspace has E2E sync enabled. Set HELI_E2E_PASSPHRASE before push/pull.");
+	}
+	return passphrase;
 }
 
 function flagValue(args, flag) {
@@ -208,7 +215,7 @@ function linkWorkspace(workspaceRoot, ws) {
 		workspaceId: ws.id,
 		name: ws.name,
 		lastVersion: ws.currentVersion ?? 0,
-		lastBundleSha256: null,
+		lastContentSha: null,
 	});
 }
 
@@ -297,7 +304,7 @@ async function runPush(args) {
 		);
 	}
 
-	const bundle = packBundle(files);
+	const bundle = packBundle(files, { passphrase: passphraseFor(state) });
 	let baseVersion = state.lastVersion ?? 0;
 	for (;;) {
 		try {
@@ -308,9 +315,9 @@ async function runPush(args) {
 			writeJsonAtomic(syncStatePath(workspaceRoot), {
 				...state,
 				lastVersion: result.version,
-				lastBundleSha256: sha256(bundle),
+				lastContentSha: contentSha256(files),
 			});
-			console.log(`Pushed v${result.version} (${Object.keys(files).length} files, ${bundle.length} bytes) to "${state.name}".`);
+			console.log(`Pushed v${result.version} (${Object.keys(files).length} files, ${bundle.length} bytes${state.e2e ? ", E2E encrypted" : ""}) to "${state.name}".`);
 			return;
 		} catch (error) {
 			if (error.status === 409 && args.includes("--force")) {
@@ -334,9 +341,8 @@ async function runPull(args) {
 	const state = requireSyncState(workspaceRoot);
 
 	// Dirty check: refuse to overwrite unsynced local changes unless --force.
-	if (state.lastBundleSha256 && !args.includes("--force")) {
-		const localSha = sha256(packBundle(collectBundleFiles(workspaceRoot)));
-		if (localSha !== state.lastBundleSha256) {
+	if (state.lastContentSha && !args.includes("--force")) {
+		if (contentSha256(collectBundleFiles(workspaceRoot)) !== state.lastContentSha) {
 			throw new Error(
 				"Local portable subset has changes since the last sync. Run: heli push first, or pull --force to overwrite them.",
 			);
@@ -351,18 +357,108 @@ async function runPull(args) {
 		throw new Error(data.error === "no_versions" ? "Nothing to pull: no versions pushed yet." : `Pull failed: ${data.error || response.status}`);
 	}
 	const bytes = Buffer.from(await response.arrayBuffer());
-	const files = unpackBundle(bytes);
+	const files = unpackBundle(bytes, { passphrase: process.env.HELI_E2E_PASSPHRASE || null });
+	// If the server bundle was encrypted, latch e2e on locally so this machine's
+	// next push cannot silently downgrade the workspace to plaintext.
+	let wireEncrypted = false;
+	try {
+		const outer = JSON.parse(gunzipSync(bytes).toString("utf8"));
+		wireEncrypted = Boolean(outer.encryption && outer.encryption !== "none");
+	} catch {
+		// unpackBundle already validated the bundle; treat parse issues as plaintext
+	}
 	const written = writeBundleFiles(workspaceRoot, files);
 	const version = Number(response.headers.get("x-version"));
 	writeJsonAtomic(syncStatePath(workspaceRoot), {
 		...state,
 		lastVersion: version,
-		lastBundleSha256: sha256(bytes),
+		lastContentSha: contentSha256(files),
+		e2e: Boolean(state.e2e || wireEncrypted),
 	});
 	console.log(`Pulled v${version} (${written} files) from "${state.name}".`);
 }
 
-export async function runCloud(command, args) {
+// -------------------------------------------------------------- heli sync
+
+async function runSync(args) {
+	const [sub, value] = args.filter((a) => !a.startsWith("--"));
+	if (sub === "auto" || sub === "e2e") {
+		const workspaceRoot = requireWorkspace([]);
+		const state = requireSyncState(workspaceRoot);
+		if (value !== "on" && value !== "off") {
+			console.log(`sync.${sub}: ${state[sub === "auto" ? "auto" : "e2e"] ? "on" : "off"}`);
+			return;
+		}
+		const next = { ...state, [sub === "auto" ? "auto" : "e2e"]: value === "on" };
+		writeJsonAtomic(syncStatePath(workspaceRoot), next);
+		console.log(`sync.${sub} = ${value}`);
+		if (sub === "e2e" && value === "on") {
+			console.log("Pushes/pulls now require HELI_E2E_PASSPHRASE. The server will only ever store ciphertext.");
+			console.log("Note: already-pushed plaintext versions remain in history until they age out (last 10).");
+		}
+		return;
+	}
+	if (sub) throw new Error("Usage: heli sync [auto on|off | e2e on|off]");
+
+	const creds = requireCredentials();
+	const workspaceRoot = requireWorkspace(args);
+	const state = requireSyncState(workspaceRoot);
+	const head = (await api(creds, "GET", `/ws/${state.workspaceId}/versions`)).currentVersion;
+	const localDirty = !state.lastContentSha || contentSha256(collectBundleFiles(workspaceRoot)) !== state.lastContentSha;
+	const serverAhead = head > (state.lastVersion ?? 0);
+	if (localDirty && serverAhead) {
+		throw new Error(
+			`Diverged: local changes exist and the server is at v${head} (this machine last synced v${state.lastVersion}). ` +
+				"Resolve with: heli pull --force (take server) or heli push --force (take local; old head stays in history).",
+		);
+	}
+	if (localDirty) return runPush(args);
+	if (serverAhead) return runPull(args);
+	console.log(`Up to date (v${state.lastVersion}).`);
+}
+
+// -------------------------------------------------------------- heli init
+
+async function runInit(args, packageRoot) {
+	const name = args.find((a) => !a.startsWith("--"));
+	if (!name) throw new Error("Usage: heli init <sync-workspace-name> [--dir path] [--clone]");
+	const creds = requireCredentials();
+	const dirArg = flagValue(args, "--dir");
+	const dir = dirArg ? (isAbsolute(dirArg) ? dirArg : join(process.cwd(), dirArg)) : process.cwd();
+
+	if (!existsSync(join(dir, ".heli-harness"))) {
+		mkdirSync(dir, { recursive: true });
+		const { runInstall } = await import("./install.mjs");
+		runInstall(packageRoot, [dir]);
+	}
+
+	const list = await api(creds, "GET", "/ws");
+	const ws = list.find((w) => w.name === name || w.id === name);
+	if (!ws) throw new Error(`No sync workspace named "${name}". Run: heli ws list`);
+	linkWorkspace(dir, { ...ws, currentVersion: 0 });
+	await runPull([dir, "--force"]);
+
+	// Offer the product repos back: entries with a `remote` can be re-cloned.
+	const index = readJson(join(dir, ".heli-harness", "workspace", "index.json"), {});
+	const repos = Array.isArray(index.repos) ? index.repos : [];
+	const missing = repos.filter((repo) => repo.path && !existsSync(join(dir, repo.path)));
+	for (const repo of missing) {
+		if (repo.remote && args.includes("--clone")) {
+			console.log(`Cloning ${repo.name} from ${repo.remote}...`);
+			const result = spawnSync("git", ["clone", repo.remote, join(dir, repo.path)], { stdio: "inherit" });
+			if (result.status !== 0) console.warn(`Clone failed for ${repo.name} — clone it manually.`);
+		} else {
+			console.log(
+				`Missing repo: ${repo.name} at ${repo.path}` +
+					(repo.remote ? ` — clone with: git clone ${repo.remote} ${repo.path} (or re-run init with --clone)` : " — no remote recorded in workspace/index.json; clone it manually"),
+			);
+		}
+	}
+
+	console.log(`\nWorkspace "${ws.name}" restored at ${dir}. Next: open your agent from this folder.`);
+}
+
+export async function runCloud(command, args, packageRoot = null) {
 	switch (command) {
 		case "auth":
 			return runAuth(args);
@@ -372,6 +468,10 @@ export async function runCloud(command, args) {
 			return runPush(args);
 		case "pull":
 			return runPull(args);
+		case "sync":
+			return runSync(args);
+		case "init":
+			return runInit(args, packageRoot);
 		default:
 			throw new Error(`Unknown cloud command: ${command}`);
 	}

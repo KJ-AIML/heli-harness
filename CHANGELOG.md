@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+Cloud sync Phase 2 per [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md): full device restore, one-command sync, and client-side encryption.
+
+### Added
+
+- `heli init <name> [--dir path] [--clone]` — one-command device restore: installs the workspace if absent, links the named sync workspace, pulls full context, and lists missing product repos (`--clone` re-clones entries whose `workspace/index.json` record carries a `remote` field).
+- `heli sync` — pushes when local is ahead, pulls when the server is ahead, refuses cleanly on divergence; `heli sync auto on` auto-pushes the portable context after every `heli task complete` (best-effort: offline or blocked pushes warn, never fail the completion).
+- Client-side E2E encryption: `heli sync e2e on` + `HELI_E2E_PASSPHRASE` env — bundles are AES-256-GCM encrypted with a scrypt-derived key before upload, the server stores ciphertext only, and pulling an encrypted bundle latches e2e on locally so no device can silently downgrade the workspace to plaintext.
+
+### Changed
+
+- Sync dirty detection now hashes canonical bundle content (`lastContentSha` in machine-local `state/sync.json`) instead of wire bytes — required because encrypted bundles are non-deterministic. Existing 0.7.0 links self-heal on the next push/pull.
+
 ## v0.7.0 - Cloud sync Phase 0-1
 
 Cloud sync Phases 0–1 per [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md): carry a workspace's portable context (profiles, policies, safety overlays, task history) across devices, gcloud-style. Strictly optional — no governance path requires the service; workspaces stay fully offline-capable.
