@@ -18,6 +18,9 @@ tmp/
 temp/
 .tmp/
 
+# Wrangler local state (created by any wrangler command in cloud/)
+cloud/.wrangler/
+
 # Harness-generated run artifacts
 .heli-harness/state/runs/*
 !.heli-harness/state/runs/.gitkeep
