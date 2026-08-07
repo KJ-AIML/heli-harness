@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.3 - Re-audit hardening
 
 Response to the independent re-audit of v0.7.2 (8.1/10): its FAIL/PARTIAL claims and new-risk findings, converted.
 
