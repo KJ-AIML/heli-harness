@@ -386,11 +386,60 @@ export function evaluatePreToolUse({
 }
 
 /**
+ * Split a command (or a rule's `match`) into lowercase tokens on whitespace runs.
+ * Collapsing runs of spaces/tabs/newlines is what closes the "git  push" /
+ * "git\tpush" evasion; lowercasing closes "GIT PUSH".
+ */
+export function commandRuleTokens(value) {
+	return String(value ?? "")
+		.toLowerCase()
+		.split(/\s+/)
+		.filter(Boolean);
+}
+
+/**
+ * Program-position tokens also match a path-qualified invocation of the same
+ * program, so `node .heli-harness/heli.mjs push` still trips the `heli.mjs push`
+ * rule (substring matching used to cover this). Applied to the FIRST rule token
+ * only — later tokens are argument positions and must match exactly.
+ */
+function commandTokenMatches(commandToken, ruleToken, isProgramPosition) {
+	if (commandToken === ruleToken) return true;
+	if (!isProgramPosition) return false;
+	return commandToken.endsWith(`/${ruleToken}`) || commandToken.endsWith(`\\${ruleToken}`);
+}
+
+/**
+ * True when the rule's tokens appear as a CONSECUTIVE subsequence of the
+ * command's tokens. Token-sequence matching (not substring) so "git push" no
+ * longer fires on "echo digit pushups" while still firing on any real
+ * whitespace/case variant of `git push`.
+ */
+export function commandMatchesRuleTokens(commandTokens, ruleTokens) {
+	if (!ruleTokens.length || ruleTokens.length > commandTokens.length) return false;
+	for (let start = 0; start + ruleTokens.length <= commandTokens.length; start += 1) {
+		let hit = true;
+		for (let offset = 0; offset < ruleTokens.length; offset += 1) {
+			if (!commandTokenMatches(commandTokens[start + offset], ruleTokens[offset], offset === 0)) {
+				hit = false;
+				break;
+			}
+		}
+		if (hit) return true;
+	}
+	return false;
+}
+
+/**
  * Enforce safety/command-rules.json T5/T6 rules on command strings.
  * T6 (block) and T5 (explicit approval) deny; T0–T4 stay advisory.
  * YOLO bypasses this (safety scope) — callers run it after the YOLO early-return.
  * git-push has its own dedicated check with scoped opt-ins; skipped here so a
  * granted HELI_ALLOW_GIT_PUSH is not re-denied by the generic rule.
+ *
+ * Matching is token-sequence based; known-unfixable evasions (shell variable
+ * indirection, base64, aliases) remain out of scope — this is best-effort
+ * command guarding, not a sandbox.
  */
 export function evaluateCommandTierRules(workspaceRoot, command, env = process.env) {
 	if (!command || !workspaceRoot) return null;
@@ -407,11 +456,13 @@ export function evaluateCommandTierRules(workspaceRoot, command, env = process.e
 		.split(",")
 		.map((s) => s.trim())
 		.filter(Boolean);
+	const commandTokens = commandRuleTokens(command);
+	if (!commandTokens.length) return null;
 	for (const rule of rules.rules) {
 		if (!rule?.match || (rule.tier !== "T5" && rule.tier !== "T6")) continue;
 		if (rule.id === "git-push") continue;
-		const needle = String(rule.match).toLowerCase().replace(/\s+/g, " ").trim();
-		if (!needle || !command.includes(needle)) continue;
+		const ruleTokens = commandRuleTokens(rule.match);
+		if (!ruleTokens.length || !commandMatchesRuleTokens(commandTokens, ruleTokens)) continue;
 		if (approved.includes(rule.id)) continue;
 		const kind = rule.tier === "T6" ? "blocks destructive command" : "requires explicit approval for";
 		return {

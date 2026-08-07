@@ -1,6 +1,6 @@
 # Heli Cloud Sync — Design
 
-Status: **Phases 0–2 implemented** (owner-approved 2026-08-06; Phases 0–1 shipped in v0.7.0 with the service deployed; Phase 2 implemented 2026-08-07)
+Status: **Phases 0–2 shipped** (owner-approved 2026-08-06; Phases 0–1 shipped in v0.7.0 with the service deployed; Phase 2 shipped in v0.7.1). Phase 3 remains unscheduled.
 Owner decision record: workspace task `cloud-sync-design`
 
 > Phase 2 amendments (2026-08-07):
@@ -185,15 +185,15 @@ heli config set sync.auto on  # auto-push after `task complete`
 
 ## Rollout
 
-| Phase | Ships | Acceptance |
-|---|---|---|
-| **0 — npm publish** | `npm publish` of `heli-harness`; `npm i -g heli-harness` → global `heli`; INSTALL/README updated | Global install verified on Windows + macOS/Linux CI legs; npx path unchanged |
-| **1 — Service + core CLI** | Worker (auth device flow, ws CRUD, push/pull), D1/R2/DO setup via wrangler, CLI: `auth`, `ws`, `push`, `pull`; blocking secret scan | Contract smokes against a local `wrangler dev` worker in CI; live-verify script against staging; INSTALL section |
-| **2 — Restore & comfort** | `heli init` full restore (incl. repo cloning offer), `heli sync`, auto-push on `task complete`, E2E encryption, `ws versions` time machine | Smoke: fresh temp "device" → auth (stubbed) → init → workspace equivalence assert |
-| **3 — Teams (unscheduled)** | Shared workspaces, roles, live cross-device state via DO | Not designed here; requires its own design doc and real demand |
+| Phase | Ships | Status | Acceptance |
+|---|---|---|---|
+| **0 — npm publish** | `npm publish` of `heli-harness`; `npm i -g heli-harness` → global `heli`; INSTALL/README updated | shipped v0.7.0 | Global install verified on Windows + macOS/Linux CI legs; npx path unchanged |
+| **1 — Service + core CLI** | Worker (auth device flow, ws CRUD, push/pull), D1/R2/DO setup via wrangler, CLI: `auth`, `ws`, `push`, `pull`; blocking secret scan | shipped v0.7.0 | Contract smokes against a local `wrangler dev` worker in CI; live-verify script against staging; INSTALL section |
+| **2 — Restore & comfort** | `heli init` full restore (incl. repo cloning offer), `heli sync`, auto-push on `task complete`, E2E encryption, `ws versions` time machine | shipped v0.7.1 | Smoke: fresh temp "device" → auth (stubbed) → init → workspace equivalence assert |
+| **3 — Teams** | Shared workspaces, roles, live cross-device state via DO | unscheduled | Not designed here; requires its own design doc and real demand |
 
-Version targets: Phase 0 → v0.7.0. Phases 1–2 → v0.8.x behind a `sync` command group
-that is invisible-when-unauthenticated. Phase 3 unversioned.
+Version targets: Phases 0–1 shipped in v0.7.0. Phase 2 shipped in v0.7.1, behind a `sync`
+command group that is invisible-when-unauthenticated. Phase 3 unscheduled and unversioned.
 
 ## Rollback
 

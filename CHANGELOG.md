@@ -10,6 +10,15 @@ Agent-facing governance for cloud sync: every plugin now ships the rules, not ju
 - HARNESS.md **Cloud Sync Boundary**: local-only default, no unrequested sync commands, no hand-editing `state/sync.json`/credentials, no bypassing secret findings; skill routing points at `cloud-sync`.
 - Command-tier rules: `heli push` / `heli sync` (and `heli.mjs` forms) are T5 explicit-approval — uploading workspace context is egress, same class as `git push`.
 - `heli ws unlink` — return a linked workspace to local-only at any time; deliberately works without credentials (post-logout or dead-server escape hatch). Server copies remain until `heli ws delete`.
+- `heli doctor [path]` — purely offline workspace health check: manifest/schema/index/target validity, per-task lease state (expired, orphaned), sessions and worktree bindings, embedded CLI presence, host-plugin file presence (with the honest "activation not verifiable from files" caveat), cloud-sync link + credentials, and YOLO state. Exits non-zero only on real failures; `scripts/smoke-cli-doctor.mjs` covers healthy, corrupt-schema, missing-repo, expired-lease, and orphan-lease scenarios in the check chain.
+
+### Changed
+
+- Command-tier rule matching is token-based instead of substring-based: rule tokens must appear as a consecutive, case-insensitive token subsequence of the (whitespace-normalized) command, with path-qualified program names still matching (`node .heli-harness/heli.mjs push` hits the `heli.mjs push` rule). Closes whitespace/tab/case evasion and substring false positives (`echo digit pushups` no longer trips `git push`). Adversarial guard suite grows 225 → 260 hard asserts.
+
+### Fixed
+
+- ROADMAP and the cloud-sync design doc now state shipped reality (Phases 0–1 → v0.7.0, Phase 2 → v0.7.1) instead of pre-implementation version targets.
 
 ## v0.7.1 - Cloud sync Phase 2
 

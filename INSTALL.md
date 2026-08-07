@@ -18,7 +18,10 @@ Global install from the npm registry (package name is `heli-harness` — `heli` 
 npm install -g heli-harness
 heli install <path>
 heli status
+heli doctor
 ```
+
+`heli doctor [path]` is a purely offline health check: it verifies the workspace schema, index, target, task leases, sessions, worktree bindings, embedded CLI, plugin files, and cloud-sync link, then exits non-zero only when something is actually broken.
 
 Or run without installing:
 

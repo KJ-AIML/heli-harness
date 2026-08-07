@@ -471,6 +471,9 @@ writeFileSync(
 			{ id: "npm-publish", match: "npm publish", tier: "T5", reason: "Publish is a release operation" },
 			{ id: "git-reset-hard", match: "git reset --hard", tier: "T6", reason: "Destructive" },
 			{ id: "advisory-only", match: "npm run e2e", tier: "T4", reason: "advisory tier must not deny" },
+			// distinct id (not "git-push") so the generic tier matcher — not the dedicated
+			// git push check — is what these token-matching cases exercise
+			{ id: "git-push-tier", match: "git push", tier: "T5", reason: "Remote git writes need explicit approval" },
 		],
 	}),
 );
@@ -520,7 +523,35 @@ for (const [name, rel] of Object.entries(hooks)) {
 	hard(`${name}: safe command allowed in tier workspace`, () => {
 		expectAllow(rel, { tool_name: "Bash", tool_input: { command: "git status" } }, tierDir);
 	});
+	// token-sequence matching: whitespace/case evasion must not slip past a tier rule
+	hard(`${name}: double-space "git  push" denied`, () => {
+		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "git  push origin main" } }, /git push/i, tierDir);
+	});
+	hard(`${name}: tab-separated "git\\tpush" denied`, () => {
+		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "git\tpush origin main" } }, /git push/i, tierDir);
+	});
+	hard(`${name}: uppercase "GIT PUSH" denied`, () => {
+		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "GIT PUSH origin main" } }, /git push/i, tierDir);
+	});
+	hard(`${name}: newline-separated "git\\npush" denied`, () => {
+		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "git\npush origin main" } }, /git push/i, tierDir);
+	});
+	hard(`${name}: T6 tab-separated "rm\\t-rf" denied`, () => {
+		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "rm\t-rf   build" } }, /destructive/i, tierDir);
+	});
+	// false-positive regression: substring "git push" lives inside "digit pushups"
+	hard(`${name}: "echo digit pushups" allowed (substring false positive)`, () => {
+		expectAllow(rel, { tool_name: "Bash", tool_input: { command: "echo digit pushups" } }, tierDir);
+	});
+	hard(`${name}: "echo npm publisher notes" allowed (substring false positive)`, () => {
+		expectAllow(rel, { tool_name: "Bash", tool_input: { command: "echo npm publisher notes" } }, tierDir);
+	});
 }
+
+gap(
+	"command-tier rules: variable-indirection evasion accepted",
+	"token-sequence matching closes whitespace/case evasion and substring false positives, but a command that never spells the rule literally (shell variable indirection like G=push; git $G, base64 -d | sh, or a shell alias) still evades every tier rule; accepted — the documented contract is best-effort command guarding, not a sandbox",
+);
 
 gap(
 	"lease holder can still write control-plane files",

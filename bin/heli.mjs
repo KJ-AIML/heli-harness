@@ -7,6 +7,7 @@ import { runUpdate } from "../lib/cli/update.mjs";
 import { runUninstall } from "../lib/cli/uninstall.mjs";
 import { runTarget } from "../lib/cli/target.mjs";
 import { runStatus } from "../lib/cli/status.mjs";
+import { runDoctor } from "../lib/cli/doctor.mjs";
 import { runYolo } from "../lib/cli/yolo.mjs";
 import { runTask } from "../lib/cli/task.mjs";
 import { runSession } from "../lib/cli/session-cmd.mjs";
@@ -22,6 +23,7 @@ function usage() {
 Commands:
   install | update | uninstall
   target | status | yolo
+  doctor [path]  (workspace health: plugins, target, leases, sessions, sync)
   task create|list|show|migrate-legacy|claim|release|takeover
   session start|attach|status|list|close
   conflicts [--task id]
@@ -54,6 +56,9 @@ try {
 			break;
 		case "status":
 			runStatus(args);
+			break;
+		case "doctor":
+			runDoctor(args);
 			break;
 		case "yolo":
 			runYolo(args);
