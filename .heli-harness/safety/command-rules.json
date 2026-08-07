@@ -77,6 +77,30 @@
       "reason": "npm version is a versioning operation"
     },
     {
+      "id": "heli-cloud-push",
+      "match": "heli push",
+      "tier": "T5",
+      "reason": "heli push uploads workspace context to the sync server"
+    },
+    {
+      "id": "heli-mjs-cloud-push",
+      "match": "heli.mjs push",
+      "tier": "T5",
+      "reason": "heli push uploads workspace context to the sync server"
+    },
+    {
+      "id": "heli-cloud-sync",
+      "match": "heli sync",
+      "tier": "T5",
+      "reason": "heli sync can upload workspace context or change auto-sync settings"
+    },
+    {
+      "id": "heli-mjs-cloud-sync",
+      "match": "heli.mjs sync",
+      "tier": "T5",
+      "reason": "heli sync can upload workspace context or change auto-sync settings"
+    },
+    {
       "id": "git-reset-hard",
       "match": "git reset --hard",
       "tier": "T6",

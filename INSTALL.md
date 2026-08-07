@@ -55,6 +55,8 @@ End-to-end encryption (optional): `heli sync e2e on`, then set `HELI_E2E_PASSPHR
 
 `heli push` refuses bundles containing secret-shaped content (override false positives with `--allow-secrets`). Machine-local state (`sessions/`, `locks/`, `bindings/`, YOLO) and `repos/` never sync. Repo entries in `workspace/index.json` may carry a `remote` field — `heli init --clone` uses it to re-clone product repos automatically.
 
+**Local-only is the default** — with no login and no linked workspace, nothing ever leaves the machine. `heli ws unlink` returns a linked workspace to local-only at any time (server copies remain until `heli ws delete`). For agents, sync is governed: the `cloud-sync` skill and the Cloud Sync Boundary in `HARNESS.md` forbid unrequested sync commands, and `heli push`/`heli sync` are T5 (explicit-approval) in the command-tier rules — same class as `git push`.
+
 ## Maintainer release
 
 From a clean `main` worktree, run `npm run release -- <x.y.z> "summary"`. The command updates current version surfaces, runs `npm run check`, stages only release-managed paths, creates the commit and annotated tag, and refuses unrelated dirty files. Add `--push` to push `main` and the new tag.

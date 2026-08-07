@@ -221,6 +221,22 @@ function linkWorkspace(workspaceRoot, ws) {
 
 async function runCloudWs(args) {
 	const [sub, ...rest] = args;
+	if (sub === "unlink") {
+		// Deliberately works without credentials: going local-only must be
+		// possible after logout or against a dead server.
+		const workspaceRoot = requireWorkspace(rest);
+		const state = readSyncState(workspaceRoot);
+		if (!state?.workspaceId) {
+			console.log("Workspace is not linked to a sync workspace — already local-only.");
+			return;
+		}
+		rmSync(syncStatePath(workspaceRoot), { force: true });
+		console.log(
+			`Unlinked from sync workspace "${state.name}". This workspace is local-only again.\n` +
+				"Server copies remain until: heli ws delete " + state.name,
+		);
+		return;
+	}
 	const creds = requireCredentials();
 	switch (sub) {
 		case "create": {
@@ -279,7 +295,7 @@ async function runCloudWs(args) {
 			return;
 		}
 		default:
-			throw new Error("Usage: heli ws create <name> | link <name> | list | versions | delete <name>");
+			throw new Error("Usage: heli ws create <name> | link <name> | unlink | list | versions | delete <name>");
 	}
 }
 
