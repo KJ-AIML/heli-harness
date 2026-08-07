@@ -45,10 +45,23 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 - Refine schemas and validation only where the markdown-first contract is insufficient.
 - Use benchmark results to guide changes to governance workflows, safety behavior, and reporting.
 
+## Planned Milestone: Cloud Sync
+
+Design: [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md). Goal: a gcloud-style device story — install the CLI globally, authenticate once, select a workspace, and receive its portable context (profiles, policies, safety overlays, task history) on any machine. The workspace stays local-first: sync is an optional transport layer, never a requirement for governance, hooks, tasks, or leases.
+
+| Phase | Ships | Target |
+| --- | --- | --- |
+| 0 | npm registry publish: `npm i -g heli-harness` → global `heli` command | v0.7.0 |
+| 1 | Cloudflare sync service (Workers + D1 + R2 + Durable Objects), OAuth device-flow auth, `heli auth` / `heli ws` / `heli push` / `heli pull`, blocking pre-push secret scan | v0.8.x |
+| 2 | `heli init` full device restore, `heli sync` + auto-push on task complete, optional client-side (E2E) encryption, version time machine | v0.8.x |
+| 3 | Team workspaces and live cross-device state (Durable Object seam) | unscheduled; needs its own design and demonstrated demand |
+
+Boundary rules carried from the design: the server stores opaque snapshots only (it never parses profile/policy/task schemas), machine-local state (`sessions/`, `locks/`, `bindings/`, YOLO) never syncs, and product repos under `repos/` remain out of scope — each keeps its own git remote.
+
 ## Not Doing
 
 - No full agent runtime, planner, task execution engine, or multi-agent orchestrator.
-- No central database, vector memory platform, hosted telemetry product, or plugin marketplace before schemas are stable.
+- No schema-coupled central database, vector memory platform, hosted telemetry product, or plugin marketplace before schemas are stable. The planned cloud sync service stores opaque workspace snapshots only and must never become required for local operation (see [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md)).
 - No replacement for linters, tests, code owners, branch protection, host-specific sandboxing, approval systems, or human review.
 - No treating auto-generated descriptive profiles as authoritative policy.
 - No memory source for required policy.

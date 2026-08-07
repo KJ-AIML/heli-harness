@@ -65,7 +65,11 @@ Tips:
 From the parent folder (`my-lab/`):
 
 ```bash
-# pin a release (recommended)
+# global CLI (npm registry package: heli-harness, command: heli)
+npm install -g heli-harness
+heli install .
+
+# or without installing: pin a release (recommended)
 npx github:KJ-AIML/heli-harness#v0.6.0 install .
 
 # or latest main

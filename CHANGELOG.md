@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+Cloud sync Phases 0–1 per [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md): carry a workspace's portable context (profiles, policies, safety overlays, task history) across devices, gcloud-style. Strictly optional — no governance path requires the service; workspaces stay fully offline-capable.
+
+### Added
+
+- `npm i -g heli-harness` global install path (`prepublishOnly` gates publishes on `npm run check`); npm registry names `heli`/`heli-cli` are taken, so the package is `heli-harness` with bin `heli`.
+- `heli auth login|logout|status|devices` — OAuth device-flow auth against a heli sync server (GitHub as identity provider; per-device revocable tokens stored in `~/.heli/credentials.json`, override dir with `HELI_CONFIG_DIR`).
+- `heli ws create|link|list|versions|delete` — sync workspace management; the local link lives in machine-local `.heli-harness/state/sync.json` and never syncs.
+- `heli push` / `heli pull` — snapshot sync of the portable subset (`profiles/`, `policies/`, `safety/`, `tasks/`, `workspace/index.json`, `workspace/schema.json`, `state/*.md`) as gzip'd `heli-bundle-v1` bundles with optimistic concurrency (stale push → 409 → pull first or `--force`; old heads stay in the last-10 version history), dirty-pull refusal, and a blocking pre-push secret scan (`--allow-secrets` to override false positives).
+- Sync server: `cloud/core.mjs` portable API core (dependency-free, standard Request/Response) + `cloud/worker.mjs` Cloudflare shell (single Durable Object serializes state, R2 stores bundles) + `cloud/wrangler.toml` + deploy guide in `cloud/README.md`.
+- `scripts/smoke-cloud-sync.mjs` in `npm run check` / CI: full client↔core contract — device-flow login ×2 devices, create/link, push/pull round-trip, secret blocking, version conflict, dirty-pull refusal, device revocation — against the real CLI subprocess and the core served over node:http.
+
 ## v0.6.0 - Enforcement, lifecycle, and offline CLI
 
 Driven by a full code review and field feedback from five agent sessions using the harness on real projects.
