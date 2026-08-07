@@ -1,8 +1,8 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.7.0
+## Current Baseline: v0.7.1
 
-Latest stable release: `v0.7.0`
+Latest stable release: `v0.7.1`
 
 Heli-Harness is an instructions-as-code governance harness for coding agents. It gives local coding agents a shared, inspectable operating layer for workspace protocols, repo facts, policies, safety expectations, task state, adapter instructions, observable hooks, and reviewable reports.
 
@@ -33,7 +33,7 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 
 ## Now
 
-- Maintain the `v0.7.0` Concurrent Session Foundation baseline and keep release claims aligned with the changelog and adapter support matrix.
+- Maintain the `v0.7.1` Concurrent Session Foundation baseline and keep release claims aligned with the changelog and adapter support matrix.
 - Dogfood multi-task leases, worktree bindings, and task-scoped YOLO/target isolation in real parent workspaces.
 - Stabilize local governance contracts: profiles, policies, safety rules, workspace targeting, task state, and reports.
 - Preserve evidence-backed adapter status; runtime enforcement is only claimed where host behavior has been tested.
@@ -51,7 +51,7 @@ Design: [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md). Goal
 
 | Phase | Ships | Target |
 | --- | --- | --- |
-| 0 | npm registry publish: `npm i -g heli-harness` → global `heli` command | v0.7.0 |
+| 0 | npm registry publish: `npm i -g heli-harness` → global `heli` command | v0.7.1 |
 | 1 | Cloudflare sync service (Workers + D1 + R2 + Durable Objects), OAuth device-flow auth, `heli auth` / `heli ws` / `heli push` / `heli pull`, blocking pre-push secret scan | v0.8.x |
 | 2 | `heli init` full device restore, `heli sync` + auto-push on task complete, optional client-side (E2E) encryption, version time machine | v0.8.x |
 | 3 | Team workspaces and live cross-device state (Durable Object seam) | unscheduled; needs its own design and demonstrated demand |

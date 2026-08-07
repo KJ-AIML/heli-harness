@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.1 - Cloud sync Phase 2
 
 Cloud sync Phase 2 per [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md): full device restore, one-command sync, and client-side encryption.
 
