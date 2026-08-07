@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "
 import { join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { resolveNpmCheckInvocation } from "./lib/release-npm.mjs";
 
 const root = join(fileURLToPath(new URL("..", import.meta.url)));
 const args = process.argv.slice(2);
@@ -60,7 +61,7 @@ const allowed = [
 	"README.md", "ROADMAP.md", "INSTALL.md", "CHANGELOG.md", "docs/INSTALL_MATRIX.md", "docs/ADAPTER_SUPPORT_MATRIX.md",
 	"scripts/smoke-claude-plugin.mjs", "scripts/smoke-codex-plugin.mjs", "scripts/smoke-cursor-plugin.mjs",
 	"scripts/smoke-pack-artifact.mjs",
-	"scripts/lib/release-version.mjs", "scripts/release.mjs",
+	"scripts/lib/release-version.mjs", "scripts/lib/release-npm.mjs", "scripts/release.mjs",
 	".agents/",
 ];
 const isAllowed = (path) => allowed.some((prefix) => path === prefix || path.startsWith(prefix));
@@ -93,18 +94,18 @@ if (unreleasedHeading.test(changelogText)) {
 	writeFileSync(changelog, changelogText.replace(/^# Changelog\r?\n/, `# Changelog\n\n## v${nextVersion} - ${summary}\n\n### Changed\n\n- Release metadata and validation updated.\n`));
 }
 
-// Spawning "npm.cmd" directly EINVALs on current Node (CVE-2024-27980 hardening);
-// invoke npm's JS entry with the running node instead — no shell, fully portable.
-// npm_execpath is always set here because release runs via `npm run release`.
-const npmEntry = process.env.npm_execpath;
-if (npmEntry && !npmEntry.endsWith(".cmd") && !npmEntry.endsWith(".exe")) {
-	run(process.execPath, [npmEntry, "run", "check"]);
-} else {
-	run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "check"]);
-}
+// Decision lives in scripts/lib/release-npm.mjs so it stays unit-testable
+// (scripts/smoke-release-npm.mjs) instead of only being provable by a real release.
+// npm_execpath is normally set here because release runs via `npm run release`.
+const npmCheck = resolveNpmCheckInvocation({
+	npmExecpath: process.env.npm_execpath,
+	platform: process.platform,
+	execPath: process.execPath,
+});
+run(npmCheck.command, npmCheck.args);
 run("git", ["diff", "--check"]);
 
-const stagePaths = [...new Set([...versionFiles, "CHANGELOG.md", "scripts/release.mjs", "scripts/lib/release-version.mjs"])];
+const stagePaths = [...new Set([...versionFiles, "CHANGELOG.md", "scripts/release.mjs", "scripts/lib/release-version.mjs", "scripts/lib/release-npm.mjs"])];
 run("git", ["add", "--", ...stagePaths]);
 run("git", ["commit", "-m", `chore(release): v${nextVersion}`]);
 run("git", ["tag", "-a", `v${nextVersion}`, "-m", `Release v${nextVersion}`]);

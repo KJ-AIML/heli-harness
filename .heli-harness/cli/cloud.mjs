@@ -224,6 +224,10 @@ async function runCloudWs(args) {
 	if (sub === "unlink") {
 		// Deliberately works without credentials: going local-only must be
 		// possible after logout or against a dead server.
+		// Race vs a concurrent sync.auto push is assessed benign, no lock:
+		// the push either re-reads sync.json and throws (caught, warn-only)
+		// or lands one final retained version against the old link. Neither
+		// harms the now-local workspace.
 		const workspaceRoot = requireWorkspace(rest);
 		const state = readSyncState(workspaceRoot);
 		if (!state?.workspaceId) {

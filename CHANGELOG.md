@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+Response to the independent re-audit of v0.7.2 (8.1/10): its FAIL/PARTIAL claims and new-risk findings, converted.
+
+### Fixed
+
+- Command-tier tokenizer treats shell separators (`;`, `&`, `|`, parentheses, newlines) as token boundaries and strips surrounding quotes per token — `git push;echo hi`, `npm publish;echo done`, `"git" "push"`, and quoted program paths (`"C:\tools\heli.mjs" push`) no longer evade T5/T6 gating. Adversarial guard suite grows 260 → 310 hard asserts; `echo "digit pushups"` and `getprop | grep push` stay allowed.
+- Cloud-sync design doc body rewritten to shipped reality (Durable Object storage + gzip `heli-bundle-v1`, not the original D1 + tar.gz design, which is retained as clearly-labeled "original design / scale-up path" notes); ROADMAP Phase 2 version corrected to v0.7.1. Root cause of the drift: the release script's version rewrite clobbers historical version mentions — `validate-release` now cross-checks phase versions between ROADMAP and the design doc and bans un-marked `v0.8` speculation, and it runs inside every release's gate after the rewrite, so this class now fails a release instead of shipping.
+
+### Changed
+
+- The release script's npm invocation decision lives in `scripts/lib/release-npm.mjs` as a pure function, unit-tested across the npm_execpath/platform matrix by `scripts/smoke-release-npm.mjs` in the check chain — the Windows EINVAL fix is now provable without cutting a release.
+- `heli ws unlink` racing a concurrent auto-push is assessed benign and documented at the code site (the push either fails into the warn-only catch or lands one final retained version); doctor warnings intentionally keep exit code 0 — exit codes signal breakage, warnings signal attention.
+
 ## v0.7.2 - Doctor, hardened guards, audit response
 
 Agent-facing governance for cloud sync: every plugin now ships the rules, not just the user docs.

@@ -474,6 +474,8 @@ writeFileSync(
 			// distinct id (not "git-push") so the generic tier matcher — not the dedicated
 			// git push check — is what these token-matching cases exercise
 			{ id: "git-push-tier", match: "git push", tier: "T5", reason: "Remote git writes need explicit approval" },
+			// program-position rule: exercises path-suffix matching (`node .../heli.mjs push`)
+			{ id: "heli-cli-push", match: "heli.mjs push", tier: "T5", reason: "Heli CLI push needs explicit approval" },
 		],
 	}),
 );
@@ -545,6 +547,66 @@ for (const [name, rel] of Object.entries(hooks)) {
 	});
 	hard(`${name}: "echo npm publisher notes" allowed (substring false positive)`, () => {
 		expectAllow(rel, { tool_name: "Bash", tool_input: { command: "echo npm publisher notes" } }, tierDir);
+	});
+	// separator-glued tokens: `;`, `&`, `|`, `(`, `)` must act as token boundaries,
+	// otherwise "push;echo" is not the token "push" and the rule never fires
+	hard(`${name}: semicolon-chained "git push;echo hi" denied`, () => {
+		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "git push;echo hi" } }, /git push/i, tierDir);
+	});
+	hard(`${name}: trailing-semicolon "git push;" denied`, () => {
+		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "git push;" } }, /git push/i, tierDir);
+	});
+	hard(`${name}: piped "git push|cat" denied`, () => {
+		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "git push|cat" } }, /git push/i, tierDir);
+	});
+	hard(`${name}: and-chained "git push&&echo ok" denied`, () => {
+		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "git push&&echo ok" } }, /git push/i, tierDir);
+	});
+	// separator boundary on a NON-git rule: proves the tier matcher (not the dedicated
+	// git-push regex) is what closes the glued-separator hole
+	hard(`${name}: semicolon-chained "npm publish;echo done" denied by tier rule`, () => {
+		expectDeny(
+			rel,
+			{ tool_name: "Bash", tool_input: { command: "npm publish;echo done" } },
+			/HELI_ALLOW_COMMAND=npm-publish/i,
+			tierDir,
+		);
+	});
+	// quoted tokens never match the \bgit\s+push\b fast path, so only quote-stripped
+	// token matching can catch this shape
+	hard(`${name}: quoted tokens '"git" "push"' denied by tier rule`, () => {
+		expectDeny(
+			rel,
+			{ tool_name: "Bash", tool_input: { command: '"git" "push" origin main' } },
+			/HELI_ALLOW_COMMAND=git-push-tier/i,
+			tierDir,
+		);
+	});
+	// program-position path-suffix matching still works, including through quotes
+	hard(`${name}: "node .heli-harness/heli.mjs push" denied`, () => {
+		expectDeny(
+			rel,
+			{ tool_name: "Bash", tool_input: { command: "node .heli-harness/heli.mjs push" } },
+			/HELI_ALLOW_COMMAND=heli-cli-push/i,
+			tierDir,
+		);
+	});
+	hard(`${name}: quoted path '"C:\\tools\\heli.mjs" push' denied`, () => {
+		expectDeny(
+			rel,
+			{ tool_name: "Bash", tool_input: { command: '"C:\\tools\\heli.mjs" push' } },
+			/HELI_ALLOW_COMMAND=heli-cli-push/i,
+			tierDir,
+		);
+	});
+	// overreach guards: separator splitting and quote stripping must not fabricate a match
+	hard(`${name}: 'echo "digit pushups"' allowed (quote strip must not merge words)`, () => {
+		expectAllow(rel, { tool_name: "Bash", tool_input: { command: 'echo "digit pushups"' } }, tierDir);
+	});
+	// tokens across the pipe are [getprop, grep, push] — no "git" token at all, and
+	// "push" alone is not the consecutive [git, push] pair the rule requires
+	hard(`${name}: "getprop | grep push" allowed (no git token)`, () => {
+		expectAllow(rel, { tool_name: "Bash", tool_input: { command: "getprop | grep push" } }, tierDir);
 	});
 }
 
