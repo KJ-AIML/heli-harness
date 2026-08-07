@@ -45,15 +45,15 @@ Facts describe. Policies decide. Safety enforces. Reports prove.
 - Refine schemas and validation only where the markdown-first contract is insufficient.
 - Use benchmark results to guide changes to governance workflows, safety behavior, and reporting.
 
-## Milestone: Cloud Sync (shipped v0.7.0–v0.7.2)
+## Milestone: Cloud Sync (Phases 0–2 shipped, v0.7.0–v0.7.1)
 
 Design: [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md). Goal: a gcloud-style device story — install the CLI globally, authenticate once, select a workspace, and receive its portable context (profiles, policies, safety overlays, task history) on any machine. The workspace stays local-first: sync is an optional transport layer, never a requirement for governance, hooks, tasks, or leases.
 
 | Phase | Ships | Status |
 | --- | --- | --- |
 | 0 | npm registry publish: `npm i -g heli-harness` → global `heli` command | shipped in v0.7.0 |
-| 1 | Cloudflare sync service (Workers + D1 + R2 + Durable Objects), OAuth device-flow auth, `heli auth` / `heli ws` / `heli push` / `heli pull`, blocking pre-push secret scan | shipped in v0.7.0 |
-| 2 | `heli init` full device restore, `heli sync` + auto-push on task complete, optional client-side (E2E) encryption, version time machine | shipped in v0.7.2 |
+| 1 | Cloudflare sync service (Workers + Durable Object storage + R2), OAuth device-flow auth, `heli auth` / `heli ws` / `heli push` / `heli pull`, blocking pre-push secret scan | shipped in v0.7.0 |
+| 2 | `heli init` full device restore, `heli sync` + auto-push on task complete, optional client-side (E2E) encryption, version time machine | shipped in v0.7.1 |
 | 3 | Team workspaces and live cross-device state (Durable Object seam) | unscheduled; needs its own design and demonstrated demand |
 
 Boundary rules carried from the design: the server stores opaque snapshots only (it never parses profile/policy/task schemas), machine-local state (`sessions/`, `locks/`, `bindings/`, YOLO) never syncs, and product repos under `repos/` remain out of scope — each keeps its own git remote.

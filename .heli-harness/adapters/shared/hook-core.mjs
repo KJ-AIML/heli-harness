@@ -386,14 +386,26 @@ export function evaluatePreToolUse({
 }
 
 /**
- * Split a command (or a rule's `match`) into lowercase tokens on whitespace runs.
- * Collapsing runs of spaces/tabs/newlines is what closes the "git  push" /
- * "git\tpush" evasion; lowercasing closes "GIT PUSH".
+ * Split a command (or a rule's `match`) into lowercase tokens.
+ *
+ * Normalization pipeline, in order:
+ *  1. lowercase — closes "GIT PUSH".
+ *  2. shell separators (`;` `&` `|` `(` `)` and newlines) become spaces, so they
+ *     act as token boundaries — closes "git push;echo hi", "git push;",
+ *     "git push|cat", "git push&&echo ok" (punctuation glued to a token used to
+ *     produce "push;echo" and slip past the rule tokens).
+ *  3. split on whitespace runs — closes "git  push" / "git\tpush".
+ *  4. strip surrounding quote characters (' " `) from each token — closes
+ *     `"git" "push"`. Only leading/trailing quotes are removed; token interiors
+ *     are untouched and tokens are never merged, so `echo "digit pushups"` still
+ *     tokenizes to [echo, digit, pushups] and stays allowed.
  */
 export function commandRuleTokens(value) {
 	return String(value ?? "")
 		.toLowerCase()
+		.replace(/[;&|()\r\n]/g, " ")
 		.split(/\s+/)
+		.map((token) => token.replace(/^["'`]+/, "").replace(/["'`]+$/, ""))
 		.filter(Boolean);
 }
 
@@ -402,6 +414,8 @@ export function commandRuleTokens(value) {
  * program, so `node .heli-harness/heli.mjs push` still trips the `heli.mjs push`
  * rule (substring matching used to cover this). Applied to the FIRST rule token
  * only — later tokens are argument positions and must match exactly.
+ * Quotes are already stripped by commandRuleTokens, so a quoted path
+ * (`"C:\tools\heli.mjs" push`) hits the same suffix check.
  */
 function commandTokenMatches(commandToken, ruleToken, isProgramPosition) {
 	if (commandToken === ruleToken) return true;

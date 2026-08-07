@@ -11,6 +11,8 @@
  *   - bundled skill frontmatters are valid
  *   - no exact legacy references
  *   - docs current-baseline / install examples use current package version
+ *   - cloud-sync phase "shipped vX.Y.Z" claims agree between the design doc and ROADMAP
+ *   - cloud-sync docs carry no unshipped "v0.8" version speculation
  *   - no obvious conflict markers
  *   - benchmark pack presence
  *   - adapter wiring verification
@@ -485,6 +487,131 @@ if (!currentVersion) {
 		} else {
 			pass("docs/INSTALL_MATRIX.md uses current version");
 		}
+	}
+
+	// Cloud-sync phase versions must agree between the design doc and the roadmap.
+	//
+	// Two independent docs claim which release each cloud-sync phase shipped in.
+	// They drifted once already (ROADMAP said Phase 2 shipped in v0.7.2 while the
+	// design doc said v0.7.1), which no version-vs-package.json check can catch —
+	// both values are "some real version", just not the same one. So cross-compare
+	// the docs against each other instead of against package.json.
+	const PHASE_DOCS = [
+		{ label: "docs/architecture/cloud-sync.md", path: join(root, "docs", "architecture", "cloud-sync.md") },
+		{ label: "ROADMAP.md", path: join(root, "ROADMAP.md") },
+	];
+
+	// Accepts, per line:
+	//   table row   | **2 — Restore & comfort** | … | shipped v0.7.1 | … |
+	//   table row   | 2 | … | shipped in v0.7.1 |
+	//   prose       Phase 2 shipped in v0.7.1
+	//   prose range Phases 0–1 shipped in v0.7.0
+	function extractPhaseVersions(text) {
+		const found = new Map(); // phase (number) -> Set of version strings
+		const record = (phase, version) => {
+			if (!found.has(phase)) found.set(phase, new Set());
+			found.get(phase).add(version);
+		};
+		for (const line of normalizeText(text).split("\n")) {
+			const shipped = /\bshipped\s+(?:in\s+)?v?(\d+\.\d+\.\d+)/i.exec(line);
+			if (!shipped) continue;
+			const version = shipped[1];
+
+			// Table row: the phase number is the first cell.
+			if (line.trimStart().startsWith("|")) {
+				const firstCell = line.split("|")[1] || "";
+				const phase = /^[\s*_`]*(\d+)\b/.exec(firstCell.trim());
+				if (phase) {
+					record(Number(phase[1]), version);
+					continue;
+				}
+			}
+
+			// Prose: "Phase 2 shipped in v0.7.1" / "Phases 0–1 shipped in v0.7.0".
+			const prosePattern = /\bPhases?\s+(\d+)(?:\s*[–—-]\s*(\d+))?\s+shipped\s+(?:in\s+)?v?(\d+\.\d+\.\d+)/gi;
+			let prose;
+			while ((prose = prosePattern.exec(line)) !== null) {
+				const from = Number(prose[1]);
+				const to = prose[2] === undefined ? from : Number(prose[2]);
+				for (let phase = from; phase <= to; phase++) record(phase, prose[3]);
+			}
+		}
+		return found;
+	}
+
+	const phaseTables = [];
+	for (const doc of PHASE_DOCS) {
+		const text = safeReadText(doc.path);
+		if (text === null) {
+			fail(doc.label, "missing (cloud-sync phase version check needs it)");
+			continue;
+		}
+		const phases = extractPhaseVersions(text);
+		// Self-consistency first: one doc must not claim two versions for one phase.
+		const selfConflicts = [...phases.entries()]
+			.filter(([, versions]) => versions.size > 1)
+			.map(([phase, versions]) => `phase ${phase}: ${[...versions].map((v) => `v${v}`).join(" vs ")}`);
+		if (selfConflicts.length > 0) {
+			fail(`${doc.label} cloud-sync phase versions`, `self-contradictory — ${selfConflicts.join("; ")}`);
+		}
+		phaseTables.push({ ...doc, phases });
+	}
+
+	if (phaseTables.length === 2) {
+		const [a, b] = phaseTables;
+		const crossConflicts = [];
+		for (const [phase, versionsA] of a.phases) {
+			const versionsB = b.phases.get(phase);
+			if (!versionsB) continue;
+			for (const va of versionsA) {
+				for (const vb of versionsB) {
+					if (va !== vb) crossConflicts.push(`phase ${phase}: ${a.label} says v${va}, ${b.label} says v${vb}`);
+				}
+			}
+		}
+		const sharedPhases = [...a.phases.keys()].filter((phase) => b.phases.has(phase)).sort((x, y) => x - y);
+		if (crossConflicts.length > 0) {
+			fail(
+				"cloud-sync phase versions disagree across docs",
+				`${[...new Set(crossConflicts)].join("; ")} — the shipped release for a phase must read identically in both docs`,
+			);
+		} else if (sharedPhases.length === 0) {
+			warn(
+				"cloud-sync phase versions",
+				`no shared "shipped vX.Y.Z" phase rows found in ${a.label} and ${b.label} (check the extraction pattern)`,
+			);
+		} else {
+			pass(`cloud-sync phase versions agree across docs (phases ${sharedPhases.sort().join(", ")})`);
+		}
+	}
+
+	// No unreleased-version speculation in the cloud-sync docs.
+	//
+	// Rule: the literal token "v0.8" must not appear in these docs at all, UNLESS the
+	// line it sits on is explicitly marked historical by containing the literal marker
+	// "(historical)". Cloud-sync phases 0-2 all shipped in the v0.7.x line, so a bare
+	// "v0.8"/"0.8.x" is a stale plan, not a fact — annotate it or delete it.
+	const FUTURE_VERSION_TOKEN = "v0.8";
+	const HISTORICAL_MARKER = "(historical)";
+	const futureVersionHits = [];
+	for (const doc of PHASE_DOCS) {
+		const text = safeReadText(doc.path);
+		if (text === null) continue;
+		const lines = normalizeText(text).split("\n");
+		for (let i = 0; i < lines.length; i++) {
+			if (!lines[i].includes(FUTURE_VERSION_TOKEN)) continue;
+			if (lines[i].toLowerCase().includes(HISTORICAL_MARKER)) continue;
+			futureVersionHits.push(`${doc.label}:${i + 1}: ${lines[i].trim().slice(0, 120)}`);
+		}
+	}
+	if (futureVersionHits.length > 0) {
+		fail(
+			`cloud-sync docs contain "${FUTURE_VERSION_TOKEN}"`,
+			`${futureVersionHits.slice(0, 5).join(" | ")} — cloud-sync phases 0-2 shipped in v0.7.x; ` +
+				`remove the token, or mark the line historical by adding the literal "${HISTORICAL_MARKER}" to it`,
+		);
+	} else {
+		pass(`cloud-sync docs free of "${FUTURE_VERSION_TOKEN}" version speculation`);
 	}
 
 	// CHANGELOG.md: the top entry should be the current version
