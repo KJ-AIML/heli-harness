@@ -52,7 +52,7 @@ heli pull
 
 From a clean `main` worktree, run `npm run release -- <x.y.z> "summary"`. The command updates current version surfaces, runs `npm run check`, stages only release-managed paths, creates the commit and annotated tag, and refuses unrelated dirty files. Add `--push` to push `main` and the new tag.
 
-Pin a release when needed: `npx github:KJ-AIML/heli-harness#v0.6.0 install <path>`.
+Pin a release when needed: `npx github:KJ-AIML/heli-harness#v0.7.0 install <path>`.
 
 ## Manual workspace install
 
@@ -61,7 +61,7 @@ Pin a release when needed: `npx github:KJ-AIML/heli-harness#v0.6.0 install <path
 ```powershell
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.6.0
+git checkout v0.7.0
 .\install.ps1 -Parent "C:\your\workspace"
 ```
 
@@ -70,13 +70,13 @@ git checkout v0.6.0
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.6.0
+git checkout v0.7.0
 ./install.sh /path/to/workspace
 ```
 
 After a successful install, the source checkout can be removed; do not remove the installed `.heli-harness/` directory.
 
-### Clean install semantics (v0.6.0+)
+### Clean install semantics (v0.7.0+)
 
 `heli install` (and `install.sh` / `install.ps1` / Pi `/heli-install`) copies **distribution assets only** (HARNESS, adapters, skills, policies, safety, templates, manifest) then **constructs** idle operational state. It never copies live package dogfood such as:
 
@@ -197,8 +197,8 @@ Stage `.heli-harness/adapters/antigravity-plugin/` in the host plugin directory.
 ### Pi / AXGA package
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.6.0
-axga install git:github.com/KJ-AIML/heli-harness@v0.6.0
+pi install git:github.com/KJ-AIML/heli-harness@v0.7.0
+axga install git:github.com/KJ-AIML/heli-harness@v0.7.0
 ```
 
 This installs the agent package, not a workspace harness. Run `/heli-install` in Pi or AXGA to create the workspace harness.

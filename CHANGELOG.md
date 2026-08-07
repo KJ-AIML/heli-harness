@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.0 - Cloud sync Phase 0-1
 
 Cloud sync Phases 0–1 per [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md): carry a workspace's portable context (profiles, policies, safety overlays, task history) across devices, gcloud-style. Strictly optional — no governance path requires the service; workspaces stay fully offline-capable.
 
