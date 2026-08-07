@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+Agent-facing governance for cloud sync: every plugin now ships the rules, not just the user docs.
+
+### Added
+
+- `cloud-sync` skill (29th) in the canonical library and all five plugin trees: when agents may run sync commands (only on explicit user request), what never syncs, how to treat auto-push output, conflicts, and secret-scan blocks.
+- HARNESS.md **Cloud Sync Boundary**: local-only default, no unrequested sync commands, no hand-editing `state/sync.json`/credentials, no bypassing secret findings; skill routing points at `cloud-sync`.
+- Command-tier rules: `heli push` / `heli sync` (and `heli.mjs` forms) are T5 explicit-approval — uploading workspace context is egress, same class as `git push`.
+- `heli ws unlink` — return a linked workspace to local-only at any time; deliberately works without credentials (post-logout or dead-server escape hatch). Server copies remain until `heli ws delete`.
+
 ## v0.7.1 - Cloud sync Phase 2
 
 Cloud sync Phase 2 per [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md): full device restore, one-command sync, and client-side encryption.

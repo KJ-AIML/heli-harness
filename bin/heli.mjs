@@ -27,7 +27,7 @@ Commands:
   conflicts [--task id]
 
   auth login|logout|status|devices     (cloud sync)
-  ws create|link|list|versions|delete  (cloud sync)
+  ws create|link|unlink|list|versions|delete  (cloud sync; unlink = back to local-only)
   push | pull | sync [auto|e2e on|off] (cloud sync)
   init <name> [--dir p] [--clone]      (cloud sync: full device restore)
 

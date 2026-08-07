@@ -101,6 +101,7 @@ If a trigger condition applies, this is not optional or discretionary:
 - Use `test-validation` to validate repo profile commands, classify failures, and confirm safe non-mutating verification.
 - Use `heli-governance` / `heli-target` for parent-workspace and target discipline.
 - Use `branch`, `release`, `deps`, `incident`, and `gh-write` only when their scoped operation applies.
+- Use `cloud-sync` before running any `heli auth|ws|push|pull|sync|init` command or when sync state (`state/sync.json`, auto-push output) appears in a session.
 
 Record which skills actually applied (or "none applied" if genuinely none did) in `current-task.md`'s `Relevant skills consulted` field — that field existing is what makes a skipped skill a visible blank instead of a silent omission.
 
@@ -113,6 +114,20 @@ Record which skills actually applied (or "none applied" if genuinely none did) i
 | "There's no Skill-tool entry for this, so it must not apply here" | Read the skill file; it still applies. Host plugin activation may be missing. |
 | "I already know what this skill says" | Skills evolve. Read the current body instead of relying on memory of it. |
 | "This will slow me down" | An unaudited diff, an unverified fix, or a skipped impact check costs more later than reading one file now. |
+
+## Cloud Sync Boundary
+
+Cloud sync (`heli auth|ws|push|pull|sync|init`) is optional and user-owned. Local-only is the default: with no login and no linked workspace, nothing ever leaves the machine, and no governance path requires the network.
+
+The agent must:
+
+- Never run `heli auth login`, `heli ws create|link`, `heli push`, `heli pull`, `heli sync`, or `heli init` unless the user explicitly asked for that sync action. `heli push`/`heli sync` upload workspace context (profiles, policies, task history) to a server — treat as T5 egress; command-tier rules enforce this where hooks are live.
+- Never create, edit, or delete `state/sync.json` or `~/.heli/credentials.json` by hand — they are machine-local control-plane state, owned by the CLI.
+- Never disable, enable, or reconfigure auto-sync (`heli sync auto`, `heli sync e2e`) on its own initiative.
+- Treat auto-push output after `heli task complete` (`Pushed vN ...` / `sync.auto: push skipped ...`) as informational — a skipped auto-push is not a task failure and needs no retry.
+- Surface, not bypass, a blocked push (secret findings): report the findings to the user; only the user decides on `--allow-secrets`.
+
+The user opts out at any time with `heli ws unlink` (returns the workspace to local-only; server copies remain until `heli ws delete`).
 
 ## Adapter Boundary
 

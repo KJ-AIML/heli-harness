@@ -306,6 +306,16 @@ try {
 		"init pulls full context onto a fresh machine",
 	);
 
+	// ---- Governance: heli ws unlink returns to local-only (works without creds) ----
+	const unlink = ok(await cli(["ws", "unlink"], {}, { cwd: wsC }), "ws unlink without credentials");
+	assert.match(unlink.stdout, /local-only/);
+	assert.ok(!existsSync(join(wsC, ".heli-harness", "state", "sync.json")), "unlink removes sync.json");
+	const unlinkAgain = ok(await cli(["ws", "unlink"], {}, { cwd: wsC }), "ws unlink idempotent");
+	assert.match(unlinkAgain.stdout, /already local-only/);
+	const pushUnlinked = await cli(["push"], { ...cfgA, ...passphrase }, { cwd: wsC });
+	assert.equal(pushUnlinked.status, 1, "push after unlink must fail");
+	assert.match(pushUnlinked.stderr, /not linked/);
+
 	console.log("cloud sync smoke ok");
 } finally {
 	server.closeAllConnections?.();
