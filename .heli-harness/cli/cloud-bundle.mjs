@@ -10,10 +10,12 @@
  * is additive, not a migration.
  */
 import { readFileSync, readdirSync, statSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from "node:crypto";
 import { join, dirname } from "node:path";
 import { gzipSync, gunzipSync } from "node:zlib";
 
 export const BUNDLE_FORMAT = "heli-bundle-v1";
+const E2E_SCHEME = "aes-256-gcm-scrypt";
 
 // Portable subset — mirrors docs/architecture/cloud-sync.md. Machine-local
 // state (sessions/locks/bindings/yolo/target/sync.json) and reinstallable
@@ -52,11 +54,34 @@ export function collectBundleFiles(workspaceRoot) {
 	return files;
 }
 
-export function packBundle(files) {
-	return gzipSync(Buffer.from(JSON.stringify({ format: BUNDLE_FORMAT, encryption: "none", files }), "utf8"));
+function deriveKey(passphrase, salt) {
+	return scryptSync(passphrase, salt, 32);
 }
 
-export function unpackBundle(bytes) {
+export function packBundle(files, { passphrase = null } = {}) {
+	if (!passphrase) {
+		return gzipSync(Buffer.from(JSON.stringify({ format: BUNDLE_FORMAT, encryption: "none", files }), "utf8"));
+	}
+	const salt = randomBytes(16);
+	const iv = randomBytes(12);
+	const cipher = createCipheriv("aes-256-gcm", deriveKey(passphrase, salt), iv);
+	const plaintext = gzipSync(Buffer.from(JSON.stringify(files), "utf8"));
+	const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final(), cipher.getAuthTag()]);
+	return gzipSync(
+		Buffer.from(
+			JSON.stringify({
+				format: BUNDLE_FORMAT,
+				encryption: E2E_SCHEME,
+				salt: salt.toString("base64"),
+				iv: iv.toString("base64"),
+				data: ciphertext.toString("base64"),
+			}),
+			"utf8",
+		),
+	);
+}
+
+export function unpackBundle(bytes, { passphrase = null } = {}) {
 	let parsed;
 	try {
 		parsed = JSON.parse(gunzipSync(bytes).toString("utf8"));
@@ -66,11 +91,36 @@ export function unpackBundle(bytes) {
 	if (parsed.format !== BUNDLE_FORMAT) {
 		throw new Error(`Unsupported bundle format: ${parsed.format || "unknown"}`);
 	}
-	if (parsed.encryption && parsed.encryption !== "none") {
+	if (!parsed.encryption || parsed.encryption === "none") {
+		if (!parsed.files || typeof parsed.files !== "object") throw new Error("Bundle has no files map.");
+		return parsed.files;
+	}
+	if (parsed.encryption !== E2E_SCHEME) {
 		throw new Error(`Bundle encryption "${parsed.encryption}" is not supported by this CLI version.`);
 	}
-	if (!parsed.files || typeof parsed.files !== "object") throw new Error("Bundle has no files map.");
-	return parsed.files;
+	if (!passphrase) {
+		throw new Error("Bundle is end-to-end encrypted. Set HELI_E2E_PASSPHRASE and retry.");
+	}
+	const salt = Buffer.from(parsed.salt, "base64");
+	const iv = Buffer.from(parsed.iv, "base64");
+	const payload = Buffer.from(parsed.data, "base64");
+	const tag = payload.subarray(payload.length - 16);
+	const ciphertext = payload.subarray(0, payload.length - 16);
+	let plaintext;
+	try {
+		const decipher = createDecipheriv("aes-256-gcm", deriveKey(passphrase, salt), iv);
+		decipher.setAuthTag(tag);
+		plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+	} catch {
+		throw new Error("Decryption failed: wrong HELI_E2E_PASSPHRASE or corrupted bundle.");
+	}
+	return JSON.parse(gunzipSync(plaintext).toString("utf8"));
+}
+
+/** Stable content hash: same files -> same sha, independent of encryption randomness. */
+export function contentSha256(files) {
+	const canonical = JSON.stringify(Object.fromEntries(Object.entries(files).sort(([a], [b]) => (a < b ? -1 : 1))));
+	return createHash("sha256").update(canonical).digest("hex");
 }
 
 function isAllowedRel(rel) {

@@ -40,13 +40,20 @@ heli auth login --url https://<your-sync-server>   # OAuth device flow (GitHub)
 heli ws create my-lab                              # create + link this workspace
 heli push                                          # snapshot portable context
 
-# on another device, after heli install:
+# on another device (one command — installs, links, pulls, lists repos to clone):
 heli auth login
+heli init my-lab --dir /path/to/new-workspace
+
+# or step by step, after heli install:
 heli ws link my-lab
 heli pull
 ```
 
-`heli push` refuses bundles containing secret-shaped content (override false positives with `--allow-secrets`). Machine-local state (`sessions/`, `locks/`, `bindings/`, YOLO) and `repos/` never sync.
+Day-to-day: `heli sync` pushes when you are ahead, pulls when behind, and refuses cleanly on divergence. `heli sync auto on` auto-pushes after every `heli task complete`.
+
+End-to-end encryption (optional): `heli sync e2e on`, then set `HELI_E2E_PASSPHRASE` in your shell for push/pull. Bundles are encrypted client-side (AES-256-GCM, scrypt-derived key) — the server only ever stores ciphertext, and pulling an encrypted bundle latches e2e on locally so a device cannot silently downgrade the workspace to plaintext. Losing the passphrase means losing the synced copies; the local workspace is unaffected.
+
+`heli push` refuses bundles containing secret-shaped content (override false positives with `--allow-secrets`). Machine-local state (`sessions/`, `locks/`, `bindings/`, YOLO) and `repos/` never sync. Repo entries in `workspace/index.json` may carry a `remote` field — `heli init --clone` uses it to re-clone product repos automatically.
 
 ## Maintainer release
 

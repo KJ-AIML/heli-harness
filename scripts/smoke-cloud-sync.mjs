@@ -235,6 +235,77 @@ try {
 	const syncState = JSON.parse(readFileSync(join(wsA, ".heli-harness", "state", "sync.json"), "utf8"));
 	assert.equal(syncState.lastVersion, 3, "sync.json tracks pulled version");
 
+	// ---- Phase 2: heli sync ----
+	const upToDate = ok(await cli(["sync"], cfgA, { cwd: wsA }), "sync when aligned");
+	assert.match(upToDate.stdout, /Up to date \(v3\)/);
+	writeFileSync(join(wsA, ".heli-harness", "profiles", "demo.md"), "# demo v4\n");
+	const syncPush = ok(await cli(["sync"], cfgA, { cwd: wsA }), "sync pushes local changes");
+	assert.match(syncPush.stdout, /Pushed v4/);
+
+	// ---- Phase 2: auto-push on task complete ----
+	ok(await cli(["sync", "auto", "on"], cfgA, { cwd: wsA }), "enable sync.auto");
+	ok(await cli(["task", "create", "smoke-auto", "--work-item", "auto", "--repo", "demo"], cfgA, { cwd: wsA }), "task create");
+	const claim = ok(await cli(["task", "claim", "smoke-auto", "--mode", "write"], cfgA, { cwd: wsA }), "task claim");
+	const sessionId = /session: (\S+)/.exec(claim.stdout)[1];
+	const complete = ok(
+		await cli(["task", "complete", "smoke-auto"], { ...cfgA, HELI_SESSION_ID: sessionId }, { cwd: wsA }),
+		"task complete with sync.auto",
+	);
+	assert.match(complete.stdout, /Pushed v5/, "task complete must auto-push");
+	ok(await cli(["sync", "auto", "off"], cfgA, { cwd: wsA }), "disable sync.auto");
+
+	// ---- Phase 2: E2E encryption ----
+	const passphrase = { HELI_E2E_PASSPHRASE: "correct horse battery staple" };
+	ok(await cli(["sync", "e2e", "on"], cfgA, { cwd: wsA }), "enable e2e");
+	const noPass = await cli(["push"], cfgA, { cwd: wsA });
+	assert.equal(noPass.status, 1, "e2e push without passphrase must fail");
+	assert.match(noPass.stderr, /HELI_E2E_PASSPHRASE/);
+	writeFileSync(join(wsA, ".heli-harness", "profiles", "demo.md"), "# demo v6 secret contents\n");
+	const e2ePush = ok(await cli(["push"], { ...cfgA, ...passphrase }, { cwd: wsA }), "e2e push");
+	assert.match(e2ePush.stdout, /E2E encrypted/);
+
+	// Server-side bytes must be ciphertext: no plaintext marker in stored blob.
+	const storedBundle = await store.blobGet(`bundle:${syncState.workspaceId}:6`);
+	assert.ok(storedBundle, "server stores v6 blob");
+	const { gunzipSync } = await import("node:zlib");
+	const outer = JSON.parse(gunzipSync(Buffer.from(storedBundle)).toString("utf8"));
+	assert.equal(outer.encryption, "aes-256-gcm-scrypt", "stored bundle is encrypted");
+	assert.ok(!JSON.stringify(outer).includes("secret contents"), "no plaintext on the server");
+
+	// Device B was logged out above — log back in first, then test passphrase paths.
+	await login(url, cfgB, "tester");
+	const b2NoPass = await cli(["pull", "--force"], cfgB, { cwd: wsB });
+	assert.equal(b2NoPass.status, 1, "e2e pull without passphrase must fail");
+	assert.match(b2NoPass.stderr, /HELI_E2E_PASSPHRASE/);
+	const b2Wrong = await cli(["pull", "--force"], { ...cfgB, HELI_E2E_PASSPHRASE: "wrong" }, { cwd: wsB });
+	assert.equal(b2Wrong.status, 1, "wrong passphrase must fail");
+	assert.match(b2Wrong.stderr, /wrong HELI_E2E_PASSPHRASE/);
+	ok(await cli(["pull", "--force"], { ...cfgB, ...passphrase }, { cwd: wsB }), "e2e pull with passphrase");
+	// Pulling an encrypted bundle turns e2e on locally: no silent plaintext downgrade.
+	assert.equal(
+		JSON.parse(readFileSync(join(wsB, ".heli-harness", "state", "sync.json"), "utf8")).e2e,
+		true,
+		"e2e sticks after pulling an encrypted bundle",
+	);
+	assert.equal(
+		readFileSync(join(wsB, ".heli-harness", "profiles", "demo.md"), "utf8"),
+		"# demo v6 secret contents\n",
+		"e2e content round-trips",
+	);
+
+	// ---- Phase 2: heli init full device restore ----
+	const wsC = join(root, "ws-c");
+	const init = ok(
+		await cli(["init", "lab", "--dir", wsC], { ...cfgA, ...passphrase }),
+		"init restores a fresh device",
+	);
+	assert.match(init.stdout, /restored at/);
+	assert.equal(
+		readFileSync(join(wsC, ".heli-harness", "profiles", "demo.md"), "utf8"),
+		"# demo v6 secret contents\n",
+		"init pulls full context onto a fresh machine",
+	);
+
 	console.log("cloud sync smoke ok");
 } finally {
 	server.closeAllConnections?.();

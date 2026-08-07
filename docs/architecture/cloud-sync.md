@@ -1,7 +1,13 @@
 # Heli Cloud Sync — Design
 
-Status: **Phase 1 implemented** (owner-approved 2026-08-06; implementation same day)
+Status: **Phases 0–2 implemented** (owner-approved 2026-08-06; Phases 0–1 shipped in v0.7.0 with the service deployed; Phase 2 implemented 2026-08-07)
 Owner decision record: workspace task `cloud-sync-design`
+
+> Phase 2 amendments (2026-08-07):
+>
+> 4. **E2E passphrase comes from the `HELI_E2E_PASSPHRASE` environment variable**, not an interactive prompt — every heli command stays non-interactive/agent-safe. Scheme: `aes-256-gcm-scrypt` (scrypt-derived 256-bit key, random salt+iv per bundle, GCM tag appended). Pulling an encrypted bundle latches `e2e: on` in the machine-local sync state so a device cannot silently downgrade the workspace to plaintext.
+> 5. **Dirty detection hashes canonical content, not wire bytes** (`lastContentSha`) — encrypted bundles are non-deterministic, so the wire hash no longer identifies "same content".
+> 6. **Repo re-cloning** uses an optional `remote` field on `workspace/index.json` repo entries (`heli init --clone`); entries without a remote are listed as manual follow-ups.
 
 > Implementation amendments (2026-08-06), applied by the Phase 1 build:
 >

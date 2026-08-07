@@ -29,7 +29,8 @@ Commands:
 
   auth login|logout|status|devices     (cloud sync)
   ws create|link|list|versions|delete  (cloud sync)
-  push | pull                          (cloud sync)
+  push | pull | sync [auto|e2e on|off] (cloud sync)
+  init <name> [--dir p] [--clone]      (cloud sync: full device restore)
 
   heli yolo on|off|status [path] [--hours N]
 `);
@@ -71,7 +72,9 @@ try {
 		case "ws":
 		case "push":
 		case "pull":
-			runCloud(command, args).catch((error) => {
+		case "sync":
+		case "init":
+			runCloud(command, args, packageRoot).catch((error) => {
 				console.error(`Error: ${error.message}`);
 				process.exit(1);
 			});
