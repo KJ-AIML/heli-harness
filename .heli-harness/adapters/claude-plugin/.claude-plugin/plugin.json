@@ -1,7 +1,7 @@
 {
   "name": "heli-harness",
   "description": "Heli-Harness workspace governance for Claude Code.",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "author": {
     "name": "KJ-AIML"
   },

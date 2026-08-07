@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.2 - Doctor, hardened guards, audit response
 
 Agent-facing governance for cloud sync: every plugin now ships the rules, not just the user docs.
 
