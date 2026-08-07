@@ -19,6 +19,7 @@ function fail(message) {
 
 function run(command, commandArgs) {
 	const result = spawnSync(command, commandArgs, { cwd: root, encoding: "utf8", stdio: "inherit" });
+	if (result.error) console.error(`release: spawn error: ${result.error.message}`);
 	if (result.status !== 0) fail(`${command} ${commandArgs.join(" ")} failed`);
 }
 
@@ -92,7 +93,15 @@ if (unreleasedHeading.test(changelogText)) {
 	writeFileSync(changelog, changelogText.replace(/^# Changelog\r?\n/, `# Changelog\n\n## v${nextVersion} - ${summary}\n\n### Changed\n\n- Release metadata and validation updated.\n`));
 }
 
-run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "check"]);
+// Spawning "npm.cmd" directly EINVALs on current Node (CVE-2024-27980 hardening);
+// invoke npm's JS entry with the running node instead — no shell, fully portable.
+// npm_execpath is always set here because release runs via `npm run release`.
+const npmEntry = process.env.npm_execpath;
+if (npmEntry && !npmEntry.endsWith(".cmd") && !npmEntry.endsWith(".exe")) {
+	run(process.execPath, [npmEntry, "run", "check"]);
+} else {
+	run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "check"]);
+}
 run("git", ["diff", "--check"]);
 
 const stagePaths = [...new Set([...versionFiles, "CHANGELOG.md", "scripts/release.mjs", "scripts/lib/release-version.mjs"])];
