@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.8.0 - Root-Cause Convergence & Evidence-Gated Autonomy (candidate)
+## v0.8.0 - Root-Cause Convergence & Evidence-Gated Autonomy
 
 ### Added
 
@@ -15,9 +15,9 @@
 - Safety overlay updates merge newly shipped defaults by stable rule/action id while preserving local custom policy.
 - Skill manifest and plugin mirrors are synchronized with the full canonical skill tree.
 
-### Release boundary
+### Release
 
-- This is a locally prepared candidate. No npm publish, tag, GitHub release, push, or deployment is included.
+- Released from the independently reviewed commit and published as the `v0.8.0` npm package. No deployment or production mutation is included.
 
 ## v0.7.3 - Re-audit hardening
 
