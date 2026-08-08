@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "defaultsVersion": "0.8.0",
   "defaultTierGuidance": {
     "T0": "allow",
     "T1": "allow",

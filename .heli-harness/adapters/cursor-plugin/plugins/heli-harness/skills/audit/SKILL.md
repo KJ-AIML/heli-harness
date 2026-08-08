@@ -18,6 +18,8 @@ Rules:
 - Do not trust "tests pass" unless the agent reruns or inspects the evidence.
 - If the audit fails, cite file and line where possible.
 - If intent is missing and the diff makes surprising choices, ask for intent instead of inventing it.
+- Separate documented, advisory, smoke-proven, and runtime-enforced evidence. A skill or adapter file alone is not enforcement proof.
+- For Heli changes, inspect `diagnosis.json`/events, reroute behavior, retry gates, and generated host mirrors when those surfaces are in scope.
 
 Output:
 

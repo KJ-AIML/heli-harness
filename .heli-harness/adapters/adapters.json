@@ -1,5 +1,5 @@
 {
-  "version": "0.7.3",
+  "version": "0.8.0",
   "taxonomy": {
     "enforced": "Runtime hook/tool-call guard is verified and tested. Smoke test or interactive test exists.",
     "verified-plugin-wired": "Native plugin artifacts are shipped and smoke-tested, but runtime enforcement is not proven.",
@@ -25,11 +25,13 @@
       ],
       "enforcementSurfaces": [
         "tool_call hook (command blocking, file path blocking)",
+        "tool_call diagnosis/reroute/checkpoint and structured retry gate when task context is available",
         "before_agent_start hook (safety context injection)",
         "session_start hook (workspace detection)"
       ],
       "limitations": [
         "Requires host-compatible tool_call hooks",
+        "Failure results are not parsed from arbitrary host logs; record structured diagnosis runs explicitly",
         "Not a sandbox; best-effort local classification",
         "Does not replace host permissions or sandboxing"
       ]
@@ -87,6 +89,7 @@
       "enforcementSurfaces": [
         "Workspace AGENTS.md pointer file created by installer",
         "Native plugin manifest with skills, hook config, and marketplace manifest",
+        "Shared diagnosis/reroute/checkpoint/retry gate contract (node scripts/smoke-vnext-hooks.mjs)",
         "Synthetic SessionStart context hook smoke",
         "Synthetic PreToolUse deny hook smoke",
         "Live-verified: real `codex plugin marketplace add` + `plugin add` install/trust against the actual Codex CLI (isolated CODEX_HOME)",
@@ -95,6 +98,7 @@
       ],
       "limitations": [
         "Live proof requires `--dangerously-bypass-hook-trust`; the normal interactive hook-trust prompt flow is not separately verified",
+        "The shared vNext contract does not claim arbitrary log parsing or portable PostToolUse enforcement",
         "Guard rules only cover git push and .env-style writes today",
         "Pointer adapter remains the fallback path",
         "Codex must voluntarily follow AGENTS.md",
@@ -134,6 +138,7 @@
       "enforcementSurfaces": [
         "Workspace CLAUDE.md pointer file created by installer",
         "Native plugin manifest with skills and hook config",
+        "Shared diagnosis/reroute/checkpoint/retry gate contract (node scripts/smoke-vnext-hooks.mjs)",
         "Synthetic SessionStart context hook smoke",
         "Synthetic PreToolUse deny hook smoke",
         "Live-verified: real Claude Code session (`--plugin-dir`, isolated sandbox repo) denies `git push` and `.env` writes and reports them in the session's `permission_denials`",
@@ -141,6 +146,7 @@
       ],
       "limitations": [
         "Live proof used `--plugin-dir` (session-scoped local plugin loading), not the marketplace-installed-and-trusted flow (`claude plugin install`); that install/trust path is not separately verified",
+        "The shared vNext contract does not claim arbitrary log parsing or portable PostToolUse enforcement",
         "Guard rules only cover git push and .env-style writes today",
         "Pointer adapter (CLAUDE.md) remains the fallback path for hosts that don't load the native plugin",
         "Not a sandbox",
@@ -221,12 +227,14 @@
       ],
       "enforcementSurfaces": [
         "User hooks in ~/.grok/hooks/heli-harness.json via install-user-hooks.mjs",
+        "Shared PreToolUse diagnosis/reroute/checkpoint and structured retry gate when user hooks are installed",
         "Live-verified: real grok -p denies git push (debug-file shows pre_tool_use deny)",
         "Plugin install for skills (grok plugin install --trust)",
         "Synthetic PreToolUse smokes"
       ],
       "limitations": [
         "Plugin has_hooks inventory does not wire runtime PreToolUse on Grok 0.2.x — user hooks are required for enforcement",
+        "Failure results are not parsed from arbitrary host logs; record structured diagnosis runs explicitly",
         "SessionStart hooks must not set matcher (Grok v0)",
         "Guard rules cover git push, .env writes, stuck/mismatched task gates",
         "Not a sandbox"
@@ -254,13 +262,15 @@
       ],
       "enforcementSurfaces": [
         "Local JS plugin tool.execute.before throws to block",
+        "Shared tool.execute.before diagnosis/reroute/checkpoint and structured retry gate",
         "Live-verified: opencode run loads plugin and reports Heli-Harness blocks git push",
         "opencode.json plugin array registration"
       ],
       "limitations": [
         "Must register plugin in opencode.json (auto-scan of .opencode/plugins alone was empty on 1.2.26)",
         "Not a sandbox",
-        "experimental.session.compacting context only when host supports it"
+        "experimental.session.compacting context only when host supports it",
+        "Failure results are not parsed from arbitrary host logs; record structured diagnosis runs explicitly"
       ]
     },
     {
@@ -288,11 +298,13 @@
       ],
       "enforcementSurfaces": [
         "config.toml [[hooks]] PreToolUse via install-user-hooks.mjs",
+        "Shared PreToolUse diagnosis/reroute/checkpoint and structured retry gate when hooks are installed",
         "Live-verified: kimi -p reports Heli-Harness blocks git push",
         "kimi doctor config validates TOML"
       ],
       "limitations": [
         "Requires install-user-hooks.mjs (or manual merge) into ~/.kimi-code/config.toml",
+        "Failure results are not parsed from arbitrary host logs; record structured diagnosis runs explicitly",
         "kimi -p cannot combine with --yolo/--auto on current CLI",
         "Not a sandbox"
       ]
@@ -323,10 +335,12 @@
       "enforcementSurfaces": [
         "Pointer adapter ANTIGRAVITY.md",
         "Plugin marker plugin.json + hooks.json",
-        "Synthetic PreToolUse/SessionStart smokes using Antigravity tool names"
+        "Synthetic PreToolUse/SessionStart smokes using Antigravity tool names",
+        "Shared diagnosis/reroute/checkpoint and structured retry gate contract (no live host proof)"
       ],
       "limitations": [
         "No live agy CLI denial proof yet — status is verified-plugin-wired, not enforced",
+        "Failure results are not parsed from arbitrary host logs; record structured diagnosis runs explicitly",
         "Plugin staging path depends on Antigravity install layout",
         "Hooks invoke workspace-relative shared scripts (run from parent workspace)",
         "Not a sandbox"

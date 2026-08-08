@@ -19,6 +19,7 @@ import {
 import { resolveYolo, allowGitPushScoped, allowEnvWriteScoped } from "./concurrency/yolo-scope.mjs";
 import { sessionHoldsWriteLease, refreshLease } from "./concurrency/lease.mjs";
 import { findWorkspaceRoot } from "./concurrency/paths.mjs";
+import { evaluateDiagnosisWriteGate, readActionPolicy, readDiagnosis } from "./concurrency/diagnosis.mjs";
 
 export function field(text, label) {
 	const match = new RegExp(`^${label}:[ \\t]*(.*)$`, "m").exec(text);
@@ -219,6 +220,17 @@ export function isTaskStateWrite(paths) {
 	);
 }
 
+function taskRiskTier(ctx) {
+	const taskPath = ctx?.taskPaths?.currentTaskMd;
+	if (!taskPath || !existsSync(taskPath)) return "S1";
+	return field(readFileSync(taskPath, "utf8"), "Risk tier") || "S1";
+}
+
+function structuredHeliAction(toolInput) {
+	const action = toolInput?.heli_action ?? toolInput?.heliAction ?? toolInput?.metadata?.heli_action;
+	return action && typeof action === "object" && !Array.isArray(action) ? action : null;
+}
+
 export function isYoloActive(cwd = process.cwd(), env = process.env) {
 	const ctx = resolveExecutionContext({
 		cwd,
@@ -323,6 +335,25 @@ export function evaluatePreToolUse({
 		} catch {
 			/* ignore */
 		}
+	}
+
+	// Root-cause/reroute and structured expensive-action gates run before YOLO.
+	// YOLO may reduce legacy workflow friction, but it must not make stale
+	// diagnosis or unjustified costly retries silently executable.
+	const diagnosis = ctx.taskId ? readDiagnosis(ctx.workspaceRoot, ctx.taskId) : null;
+	const diagnosisGate = evaluateDiagnosisWriteGate(diagnosis, {
+		riskTier: taskRiskTier(ctx),
+		isWrite: isWrite && !isTaskStateWriteForContext(ctx, paths) && !isTaskStateWrite(paths),
+		action: structuredHeliAction(toolInput),
+		policy: readActionPolicy(ctx.workspaceRoot || cwd),
+	});
+	if (!diagnosisGate.allowed) {
+		return {
+			deny: true,
+			reason: withCliHint(diagnosisGate.reason || `Heli-Harness diagnosis gate: ${diagnosisGate.code}`),
+			code: diagnosisGate.code,
+			ctx,
+		};
 	}
 
 	const yolo = resolveYolo({

@@ -6,6 +6,7 @@
  *   - manifest.json parses and version matches package version
  *   - .heli-harness/manifest.json parses and version matches
  *   - .heli-harness/safety/command-rules.json parses
+ *   - .heli-harness/safety/expensive-actions.json parses and has unique action ids
  *   - .heli-harness/workspace/index.json parses (if present)
  *   - .heli-harness/workspace/target.json parses (if present)
  *   - bundled skill frontmatters are valid
@@ -234,6 +235,43 @@ function validateCommandRules(config) {
 	return { valid: warnings.length === 0, warnings };
 }
 
+const ACTION_COST_CLASSES = new Set(["normal", "expensive", "high", "repository-defined"]);
+
+function validateExpensiveActions(config) {
+	const warnings = [];
+	if (!config || typeof config !== "object" || Array.isArray(config)) {
+		return { valid: false, warnings: ["expensive-actions.json must be an object"] };
+	}
+	if (config.schemaVersion !== 1) warnings.push("schemaVersion must be 1");
+	if (!Array.isArray(config.actions)) {
+		warnings.push("actions must be an array");
+	} else {
+		const ids = new Set();
+		for (const [index, action] of config.actions.entries()) {
+			const label = `actions[${index}]`;
+			if (!action || typeof action !== "object" || Array.isArray(action)) {
+				warnings.push(`${label} must be an object`);
+				continue;
+			}
+			if (typeof action.id !== "string" || !action.id.trim()) {
+				warnings.push(`${label}.id must be a non-empty string`);
+			} else if (ids.has(action.id)) {
+				warnings.push(`${label}.id duplicates "${action.id}"`);
+			} else {
+				ids.add(action.id);
+			}
+			const matches = Array.isArray(action.match) ? action.match : [action.match];
+			if (!matches.some((match) => typeof match === "string" && match.trim())) {
+				warnings.push(`${label}.match must contain a non-empty string`);
+			}
+			if (typeof action.costClass !== "string" || !ACTION_COST_CLASSES.has(action.costClass)) {
+				warnings.push(`${label}.costClass must be normal, expensive, high, or repository-defined`);
+			}
+		}
+	}
+	return { valid: warnings.length === 0, warnings };
+}
+
 // ── 1. JSON / version checks ────────────────────────────────────────────────
 
 section("JSON and version checks");
@@ -285,6 +323,21 @@ if (!commandRules) {
 		pass(".heli-harness/safety/command-rules.json schema valid");
 	} else {
 		fail(".heli-harness/safety/command-rules.json schema", commandRuleValidation.warnings.join("; "));
+	}
+}
+
+const expensiveActions = safeReadJson(
+	join(root, ".heli-harness", "safety", "expensive-actions.json"),
+);
+if (!expensiveActions) {
+	fail(".heli-harness/safety/expensive-actions.json", "failed to parse");
+} else {
+	pass(".heli-harness/safety/expensive-actions.json parses");
+	const actionValidation = validateExpensiveActions(expensiveActions);
+	if (actionValidation.valid) {
+		pass(".heli-harness/safety/expensive-actions.json schema valid");
+	} else {
+		fail(".heli-harness/safety/expensive-actions.json schema", actionValidation.warnings.join("; "));
 	}
 }
 
@@ -351,6 +404,22 @@ if (skillFiles.length === 0) {
 		warn(`expected at least 24 bundled skills, found ${skillFiles.length}`);
 	} else {
 		pass(`bundled skill count ${skillFiles.length}`);
+	}
+	const manifestSkills = Array.isArray(harnessManifest?.skills) ? [...harnessManifest.skills].sort() : null;
+	const canonicalSkills = skillFiles.map((file) => file.split("/").slice(-2, -1)[0]).sort();
+	if (!manifestSkills) {
+		fail(".heli-harness/manifest.json skills", "skills must be an array");
+	} else if (JSON.stringify(manifestSkills) !== JSON.stringify(canonicalSkills)) {
+		fail(".heli-harness/manifest.json skills", `manifest and canonical directories differ (${manifestSkills.length} vs ${canonicalSkills.length})`);
+	} else {
+		pass("manifest skill inventory matches canonical skill directories");
+	}
+	const validationSkill = safeReadText(join(skillsDir, "test-validation", "SKILL.md")) || "";
+	const initSkillPath = join(skillsDir, "heli-init", "SKILL.md");
+	if (/route to `heli-init` for a profile correction/i.test(validationSkill) && isFile(initSkillPath)) {
+		pass("profile-correction route resolves to heli-init");
+	} else {
+		fail("profile-correction route", "test-validation must route profile correction to an existing heli-init skill");
 	}
 }
 
@@ -597,7 +666,18 @@ if (!currentVersion) {
 	for (const doc of PHASE_DOCS) {
 		const text = safeReadText(doc.path);
 		if (text === null) continue;
-		const lines = normalizeText(text).split("\n");
+		let scopedText = text;
+		if (doc.label === "ROADMAP.md") {
+			// The roadmap also contains the current candidate version. Only the
+			// Cloud Sync milestone is subject to the historical-v0.8 rule.
+			const start = /^## Milestone: Cloud Sync\b/im.exec(text)?.index;
+			if (start !== undefined) {
+				const rest = text.slice(start);
+				const nextHeading = /^## (?!Milestone: Cloud Sync\b)/im.exec(rest.slice("## Milestone: Cloud Sync".length));
+				scopedText = rest.slice(0, nextHeading ? "## Milestone: Cloud Sync".length + nextHeading.index : undefined);
+			}
+		}
+		const lines = normalizeText(scopedText).split("\n");
 		for (let i = 0; i < lines.length; i++) {
 			if (!lines[i].includes(FUTURE_VERSION_TOKEN)) continue;
 			if (lines[i].toLowerCase().includes(HISTORICAL_MARKER)) continue;
@@ -900,6 +980,7 @@ const requiredBenchmarkFiles = [
 	join(root, "benchmarks", "scenarios", "multi-repo-targeting.md"),
 	join(root, "benchmarks", "scenarios", "unsafe-command.md"),
 	join(root, "benchmarks", "scenarios", "tech-debt-pattern.md"),
+	join(root, "benchmarks", "scenarios", "vnext-root-cause-convergence.md"),
 	join(root, "benchmarks", "rubrics", "scoring-rubric.md"),
 	join(root, "benchmarks", "rubrics", "metrics.md"),
 	join(root, "benchmarks", "rubrics", "report-completeness.md"),
@@ -919,6 +1000,10 @@ for (const file of requiredBenchmarkFiles) {
 		fail(`${file.replace(root + "/", "")}`, "file not found");
 	}
 }
+const vnextScenarioPack = safeReadText(join(root, "benchmarks", "scenarios", "vnext-root-cause-convergence.md")) || "";
+const vnextScenarioCount = [...vnextScenarioPack.matchAll(/^\|\s*(\d+)\s*\|/gm)].length;
+if (vnextScenarioCount === 12) pass("vNext benchmark pack contains 12 deterministic scenarios");
+else fail("vNext benchmark pack", `expected 12 scenarios, found ${vnextScenarioCount}`);
 
 // ── 7. Adapter wiring verification ──────────────────────────────────────────
 

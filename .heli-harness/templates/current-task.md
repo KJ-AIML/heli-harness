@@ -8,6 +8,8 @@ Mode:
 
 Risk tier:
 
+Diagnosis: n/a (lazy; see task-local diagnosis.json when active)
+
 Plan: n/a
 
 Step count: 0

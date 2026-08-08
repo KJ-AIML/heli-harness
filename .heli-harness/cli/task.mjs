@@ -29,6 +29,7 @@ import {
 import { writeBinding } from "../adapters/shared/concurrency/binding.mjs";
 import { resolveWorktreeRoot, findWorkspaceRoot, canonicalizePath } from "../adapters/shared/concurrency/paths.mjs";
 import { isConcurrentMode } from "../adapters/shared/concurrency/schema.mjs";
+import { evaluateDiagnosisCompletion, readDiagnosis } from "../adapters/shared/concurrency/diagnosis.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -293,6 +294,15 @@ export function runTask(args) {
 			const cwd = positional[1] || process.cwd();
 			const workspaceRoot = requireWorkspace(cwd);
 			const sessionId = flags.sessionId || process.env.HELI_SESSION_ID || null;
+			const diagnosis = readDiagnosis(workspaceRoot, taskId);
+			const taskMd = readTaskMarkdown(workspaceRoot, taskId).currentTaskMd;
+			const riskTierMatch = /^Risk tier:[ \t]*(.*)$/m.exec(taskMd || "");
+			const completionGate = evaluateDiagnosisCompletion(diagnosis, { riskTier: riskTierMatch?.[1] || diagnosis.riskTier });
+			if (!completionGate.allowed) {
+				const error = new Error(`task ${taskId} completion blocked: ${completionGate.reason || completionGate.code}`);
+				error.code = completionGate.code;
+				throw error;
+			}
 			const lease = readLease(workspaceRoot, taskId);
 			if (lease && !isLeaseExpired(lease) && sessionId && lease.sessionId !== sessionId) {
 				throw new Error(

@@ -21,6 +21,7 @@ When `.heli-harness/workspace/schema.json` has `"mode": "concurrent"` (default i
 - Write leases: `.heli-harness/locks/tasks/`
 - `state/current-task.md` may hold a **non-authoritative projection** (neutral multi-task notice, or a single-task summary). Do not treat it as the source of truth in concurrent mode.
 - Workspace-level architectural decisions may still use `state/decisions.md`; per-task decisions use `tasks/<id>/decisions.md`.
+- Active diagnosis uses `tasks/<id>/diagnosis.json` plus the append-only `events.jsonl` history. It is lazy: simple successful S0/S1 work does not need a diagnosis record.
 
 ### CLI
 

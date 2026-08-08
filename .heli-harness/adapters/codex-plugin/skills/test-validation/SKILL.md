@@ -72,7 +72,8 @@ When a verification command fails, classify the failure:
 - Always verify post-run status after a supposedly non-mutating command.
 - If dependencies are missing, do not install silently — report, get confirmation, then hydrate only when allowed.
 - If a command fails, classify the failure before suggesting a fix.
-- If the profile is wrong, route to `profile-correction`.
+- If the profile is wrong, route to `heli-init` for a profile correction.
+- For a recorded failed run, validate the current failure signature and diagnosis gate before rerunning an expensive command.
 
 ## Output
 

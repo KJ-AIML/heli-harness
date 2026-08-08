@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.8.0 - Root-Cause Convergence & Evidence-Gated Autonomy (candidate)
+
+### Added
+
+- Lazy task-local `diagnosis.json` state and append-only evidence transitions for closest proven boundaries, hypothesis invalidation, failure-class rerouting, subsystem checkpoints, material decisions, verification, and completion claims.
+- `heli diagnosis show|init|record|route|gate` structured CLI surface and shared PreToolUse/tool-call evaluation for reroutes and generic expensive-action retries.
+- Deterministic vNext behavioral smokes covering false premises, contradicted hypotheses, same/new failures, subsystem changes, retry justifications, review boundaries, fresh installs, and update overlay merges.
+- `evidence-gates` skill and practical documentation distinguishing documented, advisory, smoke-proven, and runtime-enforced behavior.
+
+### Changed
+
+- S2/S3 diagnosis-aware material writes and task completion now require current evidence; YOLO does not bypass ownership, reroute, retry, S3, or production gates.
+- Safety overlay updates merge newly shipped defaults by stable rule/action id while preserving local custom policy.
+- Skill manifest and plugin mirrors are synchronized with the full canonical skill tree.
+
+### Release boundary
+
+- This is a locally prepared candidate. No npm publish, tag, GitHub release, push, or deployment is included.
+
 ## v0.7.3 - Re-audit hardening
 
 Response to the independent re-audit of v0.7.2 (8.1/10): its FAIL/PARTIAL claims and new-risk findings, converted.

@@ -1,6 +1,6 @@
 {
   "name": "heli-harness",
-  "version": "0.7.3",
+  "version": "0.8.0",
   "description": "Parent-workspace AI development harness for multi-repo, multi-agent engineering work.",
   "keywords": [
     "pi-package",
@@ -38,7 +38,7 @@
   ],
   "scripts": {
     "prepublishOnly": "npm run check",
-    "check": "node --check extensions/pi-extension.js && node --check bin/heli.mjs && node --check lib/concurrency/index.mjs && node scripts/sync-plugin-shared.mjs --check && node scripts/sync-plugin-skills.mjs --check && node scripts/sync-workspace-cli.mjs --check && node scripts/smoke-cli-entry.mjs && node scripts/smoke-cli-install.mjs && node scripts/smoke-cli-update.mjs && node scripts/smoke-cli-uninstall.mjs && node scripts/smoke-cli-target.mjs && node scripts/smoke-cli-task.mjs && node scripts/smoke-cli-status.mjs && node scripts/smoke-cli-doctor.mjs && node scripts/smoke-clean-install.mjs && node scripts/smoke-status-worktree.mjs && node scripts/smoke-extension-load.mjs && node scripts/smoke-update-preserves-local-state.mjs && node scripts/smoke-claude-adapter.mjs && node scripts/smoke-codex-adapter.mjs && node scripts/smoke-claude-plugin.mjs && node scripts/smoke-codex-plugin.mjs && node scripts/smoke-plugin-skills.mjs && node scripts/smoke-grok-adapter.mjs && node scripts/smoke-grok-plugin.mjs && node scripts/smoke-opencode-adapter.mjs && node scripts/smoke-opencode-plugin.mjs && node scripts/smoke-kimi-adapter.mjs && node scripts/smoke-kimi-plugin.mjs && node scripts/smoke-antigravity-adapter.mjs && node scripts/smoke-antigravity-plugin.mjs && node scripts/smoke-cursor-plugin.mjs && node scripts/smoke-yolo-mode.mjs && node scripts/smoke-concurrency-foundation.mjs && node scripts/smoke-cloud-sync.mjs && node scripts/quality-guard-strictness.mjs && node scripts/smoke-pack-artifact.mjs && node scripts/verify-adapters.mjs && node scripts/smoke-release-npm.mjs && node scripts/validate-release.mjs",
+		"check": "node --check extensions/pi-extension.js && node --check bin/heli.mjs && node --check lib/concurrency/index.mjs && node --check lib/cli/diagnosis.mjs && node scripts/sync-plugin-shared.mjs --check && node scripts/sync-plugin-skills.mjs --check && node scripts/sync-workspace-cli.mjs --check && node scripts/smoke-cli-entry.mjs && node scripts/smoke-cli-install.mjs && node scripts/smoke-cli-update.mjs && node scripts/smoke-cli-uninstall.mjs && node scripts/smoke-cli-target.mjs && node scripts/smoke-cli-task.mjs && node scripts/smoke-cli-diagnosis.mjs && node scripts/smoke-cli-status.mjs && node scripts/smoke-cli-doctor.mjs && node scripts/smoke-clean-install.mjs && node scripts/smoke-status-worktree.mjs && node scripts/smoke-extension-load.mjs && node scripts/smoke-update-preserves-local-state.mjs && node scripts/smoke-vnext-upgrade-0.7.3.mjs && node scripts/smoke-vnext-root-cause.mjs && node scripts/smoke-vnext-hooks.mjs && node scripts/smoke-claude-adapter.mjs && node scripts/smoke-codex-adapter.mjs && node scripts/smoke-claude-plugin.mjs && node scripts/smoke-codex-plugin.mjs && node scripts/smoke-plugin-skills.mjs && node scripts/smoke-grok-adapter.mjs && node scripts/smoke-grok-plugin.mjs && node scripts/smoke-opencode-adapter.mjs && node scripts/smoke-opencode-plugin.mjs && node scripts/smoke-kimi-adapter.mjs && node scripts/smoke-kimi-plugin.mjs && node scripts/smoke-antigravity-adapter.mjs && node scripts/smoke-antigravity-plugin.mjs && node scripts/smoke-cursor-plugin.mjs && node scripts/smoke-yolo-mode.mjs && node scripts/smoke-concurrency-foundation.mjs && node scripts/smoke-cloud-sync.mjs && node scripts/quality-guard-strictness.mjs && node scripts/smoke-pack-artifact.mjs && node scripts/verify-adapters.mjs && node scripts/smoke-release-npm.mjs && node scripts/validate-release.mjs",
     "sync:plugin-shared": "node scripts/sync-plugin-shared.mjs",
     "sync:plugin-skills": "node scripts/sync-plugin-skills.mjs",
     "live-verify:claude-concurrency": "node scripts/live-verify-claude-concurrency.mjs",
@@ -46,7 +46,7 @@
     "smoke": "node scripts/smoke-extension-load.mjs",
     "smoke:cli": "node scripts/smoke-cli-entry.mjs && node scripts/smoke-cli-install.mjs && node scripts/smoke-cli-update.mjs && node scripts/smoke-cli-uninstall.mjs && node scripts/smoke-cli-target.mjs && node scripts/smoke-cli-task.mjs && node scripts/smoke-cli-status.mjs && node scripts/smoke-cli-doctor.mjs",
     "smoke:doctor": "node scripts/smoke-cli-doctor.mjs",
-    "smoke:update": "node scripts/smoke-update-preserves-local-state.mjs",
+		"smoke:update": "node scripts/smoke-update-preserves-local-state.mjs && node scripts/smoke-vnext-upgrade-0.7.3.mjs",
     "smoke:claude": "node scripts/smoke-claude-adapter.mjs",
     "smoke:codex": "node scripts/smoke-codex-adapter.mjs",
     "smoke:claude-plugin": "node scripts/smoke-claude-plugin.mjs",
@@ -62,6 +62,7 @@
     "smoke:cursor-plugin": "node scripts/smoke-cursor-plugin.mjs",
     "smoke:yolo": "node scripts/smoke-yolo-mode.mjs",
     "smoke:concurrency": "node scripts/smoke-concurrency-foundation.mjs",
+    "smoke:vnext": "node scripts/smoke-vnext-root-cause.mjs && node scripts/smoke-vnext-hooks.mjs && node scripts/smoke-cli-diagnosis.mjs",
     "smoke:cloud": "node scripts/smoke-cloud-sync.mjs",
     "smoke:pack": "node scripts/smoke-pack-artifact.mjs",
     "smoke:release-npm": "node scripts/smoke-release-npm.mjs",

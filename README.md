@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.7.3-informational"></a>
+  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.8.0-informational"></a>
   <a href="https://github.com/KJ-AIML/heli-harness/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/KJ-AIML/heli-harness/ci.yml?branch=main&label=CI"></a>
   <a href="docs/ADAPTER_SUPPORT_MATRIX.md"><img alt="Adapters" src="https://img.shields.io/badge/adapters-Pi%20%C2%B7%20Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20Cursor-8A2BE2"></a>
 </p>
@@ -70,7 +70,7 @@ npm install -g heli-harness
 heli install .
 
 # or without installing: pin a release (recommended)
-npx github:KJ-AIML/heli-harness#v0.7.3 install .
+npx github:KJ-AIML/heli-harness#v0.8.0 install .
 
 # or latest main
 npx github:KJ-AIML/heli-harness install .
@@ -79,7 +79,7 @@ npx github:KJ-AIML/heli-harness install .
 Windows PowerShell (same idea):
 
 ```powershell
-npx github:KJ-AIML/heli-harness#v0.7.3 install .
+npx github:KJ-AIML/heli-harness#v0.8.0 install .
 ```
 
 Confirm:
@@ -249,6 +249,8 @@ The local, repeatable [benchmark pack](benchmarks/README.md) measures safety, ta
 - [INSTALL.md](INSTALL.md) — installation, updates, removal, and adapter setup.
 - [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) — status evidence and limits.
 - [Governance model](docs/architecture/governance-model.md) — the model in depth.
+- [Evidence-governed autonomy](docs/architecture/evidence-governed-autonomy.md) — diagnosis, reroute, checkpoints, and retry gates.
+- [Enforcement matrix](docs/ENFORCEMENT_MATRIX.md) — documented vs CLI/hook/test-proven behavior.
 - [Roadmap](ROADMAP.md) — shipped work, next steps, and non-goals.
 - [Security policy](SECURITY.md) — vulnerability reporting and security guidance.
 - [Contributing](CONTRIBUTING.md) — contribution guidance.

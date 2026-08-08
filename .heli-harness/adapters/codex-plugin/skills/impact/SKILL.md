@@ -28,6 +28,7 @@ Rules:
 - For S2/S3 impact, include rollback or mitigation notes.
 - If impact is broader than the task, stop and surface the scope change.
 - Fail-closed: prefer "missing attestation → no delete" over "prefix match → delete".
+- If the responsible subsystem changes, create the lightweight diagnosis checkpoint before selecting a broader fix.
 
 Output:
 

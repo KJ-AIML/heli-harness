@@ -55,6 +55,8 @@ Mode: ${task.mode || "strict"}
 
 Risk tier: S1
 
+Diagnosis: n/a (lazy; see task-local diagnosis.json when active)
+
 Plan: ${task.source?.planPath || "n/a"}
 
 Step count: 0

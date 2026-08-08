@@ -9,6 +9,7 @@ import {
 	evaluateOwnershipGate,
 	isTaskStateWriteForContext,
 } from "../.heli-harness/adapters/shared/concurrency/resolve.mjs";
+import { evaluateDiagnosisWriteGate, readActionPolicy, readDiagnosis } from "../.heli-harness/adapters/shared/concurrency/diagnosis.mjs";
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1522,6 +1523,20 @@ HELI_HOOK_OK`
 				lastToolGuardAt = new Date().toISOString();
 				return { block: true, reason: ownership.reason };
 			}
+		}
+		const diagnosis = execCtx.taskId ? readDiagnosis(execCtx.workspaceRoot, execCtx.taskId) : null;
+		const taskTextForDiagnosis = execCtx.taskPaths?.currentTaskMd ? safeReadText(execCtx.taskPaths.currentTaskMd) : "";
+		const riskTierForDiagnosis = taskField(taskTextForDiagnosis, "Risk tier") || "S1";
+		const structuredAction = input?.heli_action ?? input?.heliAction ?? input?.metadata?.heli_action;
+		const diagnosisGate = evaluateDiagnosisWriteGate(diagnosis, {
+				riskTier: riskTierForDiagnosis,
+				isWrite: isWriteTool && !isTaskStateWriteForContext(execCtx, writePathsEarly.map((p) => String(p).replaceAll("\\", "/"))),
+				action: structuredAction && typeof structuredAction === "object" ? structuredAction : null,
+				policy: readActionPolicy(execCtx.workspaceRoot || cwd),
+			});
+		if (!diagnosisGate.allowed) {
+			lastToolGuardAt = new Date().toISOString();
+			return { block: true, reason: diagnosisGate.reason || `Heli-Harness diagnosis gate: ${diagnosisGate.code}` };
 		}
 		// Opt-in YOLO: skip remaining Pi-local tool_call blocks for this turn (safety only).
 		if (isYoloActive(cwd)) {

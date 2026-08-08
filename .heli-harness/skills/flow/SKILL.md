@@ -15,6 +15,7 @@ Route:
 - Large feature -> `feature`
 - Failed tests or repeated fixes -> `fix-loop`
 - Read-only verification -> `audit`
+- New failure signature, contradicted hypothesis, subsystem change, or costly retry -> `evidence-gates` plus the scoped route
 - Dependency change -> `deps`
 - Branch/PR/release/GitHub write operation -> relevant scoped skill
 - Broad codebase review -> `workflow`
@@ -23,3 +24,4 @@ Rules:
 - Pick the smallest protocol that covers the risk.
 - If target repo is unclear, identify it before editing.
 - Update `state/current-task.md` before non-trivial edits.
+- If `diagnosis.json` reports a new failure class or pending reroute, stop the old fix-loop and route through `verify-premise`/`debug` before material writes.

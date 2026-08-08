@@ -38,6 +38,36 @@ Heli-Harness is the source of truth for this parent workspace. It is tool-neutra
 - `S2`: Cross-file, API, data, security, concurrency, user-flow, or production-impacting work. Requires plan, impact analysis, verification evidence, and rollback notes where relevant.
 - `S3`: One-way-door or high-blast-radius action such as production deploy, destructive migration, force push, bypassing protection, credential rotation, or irreversible data change. Requires explicit user approval and rollback or mitigation notes.
 
+## Evidence-Governed Diagnosis
+
+Heli vNext uses a lightweight claim → evidence → transition record when a
+premise is disputed, a failure is recorded, a subsystem changes, an expensive
+retry is requested, or a material completion claim is made. In concurrent mode,
+the machine-readable current state is
+`.heli-harness/tasks/<task-id>/diagnosis.json`; `events.jsonl` preserves the
+append-only history. Legacy workspaces use `.heli-harness/state/diagnosis.json`.
+
+The closest proven boundary is a fact, not a causal story. A new normalized
+failure class must re-enter `verify-premise`/`debug`/`impact`/`incident` routing;
+the old fix-loop context cannot continue silently. Contradicting evidence marks
+the active hypothesis `CONTRADICTED`. Same-class implementation failures use
+the diagnosis-specific attempt counter and trigger re-evaluation after two;
+different classes do not share that counter.
+
+Repeated costly work must carry structured `heli_action` metadata or pass
+`heli diagnosis gate`. The gate requires a relevant material change, new
+discriminating evidence after cheaper checks, a bounded transient policy, or
+explicit human override. S0/S1 work remains autonomous; S2 material work may
+continue with an independent-review requirement; S3 and production mutation
+remain human-controlled. YOLO does not bypass ownership, diagnosis reroute,
+retry, S3, or production gates.
+
+Runtime enforcement is host-specific. Supported PreToolUse/tool-call adapters
+call the shared evaluator and are covered by smoke/live evidence. Cursor,
+generic, AXGA without a proven hook contract, and other advisory hosts receive
+the protocol as context only; Markdown presence is never described as
+mechanical enforcement.
+
 ## Required Task State
 
 Before non-trivial edits, update `.heli-harness/state/current-task.md` with:

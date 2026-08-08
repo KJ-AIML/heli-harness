@@ -13,6 +13,7 @@ Scope:
 - Fix one cause at a time.
 - Run the smallest relevant check after each fix.
 - Track failed attempts.
+- Use the failure-class identity in `diagnosis.json`; do not share one attempt count across unrelated downstream failures.
 
 ## Failure classes (do not conflate)
 
@@ -25,6 +26,7 @@ Scope:
 Rules:
 - After two failed **implementation** attempts on the same issue, stop coding and write diagnosis.
 - Do not retry expensive loops hoping for green.
+- A same-class retry stays in fix-loop; a materially new class requires reroute and a new closest boundary. Expensive retries use `heli diagnosis gate`.
 - Do not mix unrelated fixes unless the repo profile permits batching.
 - Prefer script files over complex inline shell when friction repeats (see `.heli-harness/templates/windows-shell-recipes.md`).
 

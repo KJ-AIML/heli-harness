@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "defaultsVersion": "0.8.0",
+  "actions": [
+    {
+      "id": "provider-backed-generation",
+      "match": ["provider", "generation"],
+      "costClass": "expensive"
+    },
+    {
+      "id": "long-browser-e2e",
+      "match": ["browser", "e2e"],
+      "costClass": "expensive"
+    },
+    {
+      "id": "repository-defined-costly",
+      "match": ["repository-defined-costly"],
+      "costClass": "repository-defined"
+    }
+  ],
+  "notes": [
+    "Extend actions by id/match in a workspace overlay; do not encode provider-specific retry logic in the hook core.",
+    "A structured heli_action payload is required for host-hook enforcement of a costly operation.",
+    "Initial runs are recorded; repeated runs need material change, discriminating evidence, bounded transient policy, or human override."
+  ]
+}

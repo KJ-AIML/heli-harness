@@ -16,6 +16,11 @@ Facts describe. Policies decide. Safety enforces. Reports prove. Adapters transl
 - Reports prove: run reports show what happened, which checks ran, which deviations occurred, and what risk remains.
 - Adapters translate: tool-specific adapters map the same harness model into Codex, Claude Code, Cursor, Pi, AXGA, or generic agent contexts.
 
+For the v0.8.0 evidence transition model, see
+[Evidence-Governed Autonomy](evidence-governed-autonomy.md). It adds only a
+lazy task-local diagnosis sidecar and shared evaluators; it does not turn Heli
+into an agent runtime or graph executor.
+
 ## Separation of Concerns
 
 Heli should split:

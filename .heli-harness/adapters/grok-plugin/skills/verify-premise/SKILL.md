@@ -12,6 +12,7 @@ Scope:
 - Read cited files and nearby code.
 - Reproduce, trace, or disprove the behavior.
 - Decide whether the premise is confirmed.
+- Record the observed boundary separately from the interpretation in the active diagnosis state.
 
 Outcomes:
 - confirmed as stated
@@ -27,3 +28,4 @@ Rules:
 - **Manual smoke / UX "fails":** open existing e2e/Playwright/smoke contracts first. If the manual path disagrees with the contract (wrong entry URL, wrong CTA), treat it as agent/operator error until the product path is proven broken.
 - **Authorized ops request:** before mutating, map the request to a **supported control-plane action**. If no action exists (e.g. "rebind pin" but service only has pin-on-create), stop with a typed blocker such as `ACTION_UNSUPPORTED` — do not invent DB bypasses.
 - Do not write product-defect claims into plan Evidence until this skill confirms them.
+- A premise check does not establish root cause by itself; record supporting/contradicting evidence and a falsifier, then route to `debug` when confirmed but unexplained.

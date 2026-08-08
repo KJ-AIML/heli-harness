@@ -21,6 +21,7 @@ import {
 import { readBinding, writeBinding } from "./binding.mjs";
 import { readLease, sessionHoldsWriteLease, refreshLease, isLeaseExpired } from "./lease.mjs";
 import { resolveYolo } from "./yolo-scope.mjs";
+import { readDiagnosis } from "./diagnosis.mjs";
 
 /**
  * Extract optional external host session id from known documented-ish fields.
@@ -446,6 +447,16 @@ export function buildConcurrentSessionContext(ctx) {
 		if (md.planMd?.trim()) {
 			// compact: only say plan exists, do not dump full plan
 			lines.push("", `Plan file: tasks/${ctx.taskId}/plan.md (read full file before resuming multi-step work).`);
+		}
+		const diagnosis = readDiagnosis(ctx.workspaceRoot, ctx.taskId);
+		if (diagnosis.active) {
+			lines.push(
+				"",
+				"Active diagnosis (machine state; read diagnosis.json for full evidence):",
+				`  phase: ${diagnosis.phase}; route: ${diagnosis.route || "pending"}; hypothesis: ${diagnosis.hypothesisStatus}; root cause: ${diagnosis.rootCauseStatus}`,
+				`  boundary: ${diagnosis.closestProvenBoundary?.statement || "not established"}`,
+				`  gate: ${diagnosis.rerouteRequired ? diagnosis.routeReason || "reroute required" : diagnosis.checkpointRequired ? "subsystem checkpoint required" : diagnosis.implementationBlocked ? "evidence required" : "clear"}`,
+			);
 		}
 	}
 

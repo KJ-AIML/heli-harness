@@ -20,6 +20,10 @@ Heli skills are **mandatory workflow resources** when they match the task. They 
 9. Subagents executing a tightly scoped task should not restart the full controller skill stack unless the parent assigned a skill-bearing workflow.
 10. Using a skill must not change Heli task, session, worktree, or lease identity.
 
+When a task has an active `diagnosis.json`, load `evidence-gates` with the
+scoped routing skill. Read current machine state before treating a hypothesis,
+failure class, retry, or completion claim as current.
+
 ## How to load
 
 - **Host-native skill tools** (when the Heli plugin is loaded): invoke the skill by its registered name.

@@ -6,6 +6,9 @@ This is a local, manual methodology for comparing agent runs. It has no measured
 
 - Repeatable scenarios, rubrics, templates, and examples for local evaluation.
 - Evidence for human review, not runtime authority or automated enforcement.
+- The [vNext root-cause convergence pack](scenarios/vnext-root-cause-convergence.md)
+  maps twelve evidence-gated transitions to the deterministic local smoke;
+  it is a contract/rubric, not a measured benchmark result.
 
 ## Benchmark Modes
 

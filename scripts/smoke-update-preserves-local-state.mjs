@@ -147,7 +147,10 @@ try {
 	assert.equal(read(join(harnessRoot, "workspace", "index.json")), customIndex, "workspace/index.json should be preserved");
 	assert.equal(read(join(harnessRoot, "workspace", "target.json")), customTarget, "workspace/target.json should be preserved");
 	assert.equal(read(join(harnessRoot, "policies", "engineering.md")), customPolicy.trim(), "policies/engineering.md should be preserved");
-	assert.equal(read(join(harnessRoot, "safety", "command-rules.json")), customSafety, "safety/command-rules.json should be preserved");
+	const mergedSafety = JSON.parse(readFileSync(join(harnessRoot, "safety", "command-rules.json"), "utf8"));
+	assert.ok(mergedSafety.rules.some((rule) => rule.id === "custom"), "custom safety rule should be preserved");
+	assert.ok(mergedSafety.rules.some((rule) => rule.id === "heli-cloud-push"), "new shipped safety default should be merged");
+	assert.equal(mergedSafety.defaultsVersion, "0.8.0", "safety overlay should record merged defaults version");
 	assert.equal(read(join(harnessRoot, "state", "current-task.md")), customState.trim(), "state/current-task.md should be preserved");
 	assert.equal(read(join(harnessRoot, "profiles", "real-app.md")), customProfile.trim(), "profiles/real-app.md should be preserved");
 
