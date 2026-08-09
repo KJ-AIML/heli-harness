@@ -8,6 +8,10 @@ import { install } from "../lib/cli/install.mjs";
 import { update } from "../lib/cli/update.mjs";
 
 const sourceRoot = process.cwd();
+const expectedVersion = JSON.parse(readFileSync(join(sourceRoot, "package.json"), "utf8")).version;
+const expectedCommandRulesVersion = JSON.parse(
+	readFileSync(join(sourceRoot, ".heli-harness", "safety", "command-rules.json"), "utf8"),
+).defaultsVersion;
 const parent = mkdtempSync(join(tmpdir(), "heli-upgrade-0-7-3-"));
 
 function write(path, value) {
@@ -61,14 +65,14 @@ try {
 	update(join(sourceRoot, ".heli-harness"), parent);
 
 	const upgradedManifest = JSON.parse(read(join(harness, "manifest.json")));
-	assert.equal(upgradedManifest.version, "0.8.0");
+	assert.equal(upgradedManifest.version, expectedVersion);
 	assert.ok(existsSync(join(harness, "cli", "diagnosis.mjs")));
 	assert.ok(existsSync(join(harness, "adapters", "shared", "concurrency", "diagnosis.mjs")));
 	assert.ok(existsSync(join(harness, "skills", "evidence-gates", "SKILL.md")));
 	assert.ok(existsSync(join(harness, "safety", "expensive-actions.json")));
 
 	const commandRules = JSON.parse(read(join(harness, "safety", "command-rules.json")));
-	assert.equal(commandRules.defaultsVersion, "0.8.0");
+	assert.equal(commandRules.defaultsVersion, expectedCommandRulesVersion);
 	assert.ok(commandRules.rules.some((rule) => rule.id === "local-custom"));
 	assert.ok(commandRules.rules.some((rule) => rule.id === "heli-cloud-push"));
 	const expensiveActions = JSON.parse(read(join(harness, "safety", "expensive-actions.json")));
