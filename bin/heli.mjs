@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from "node:url";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { runInstall } from "../lib/cli/install.mjs";
 import { runUpdate } from "../lib/cli/update.mjs";
@@ -18,10 +19,25 @@ import { runDiagnosis } from "../lib/cli/diagnosis.mjs";
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [command, ...args] = process.argv.slice(2);
 
+function version() {
+	const candidates = [join(packageRoot, "package.json"), join(packageRoot, ".heli-harness", "manifest.json")];
+	for (const path of candidates) {
+		if (!existsSync(path)) continue;
+		try {
+			const metadata = JSON.parse(readFileSync(path, "utf8"));
+			if (typeof metadata.version === "string" && metadata.version) return metadata.version;
+		} catch {
+			// Try the next source; an installed workspace may only have its manifest.
+		}
+	}
+	return "unknown";
+}
+
 function usage() {
 	console.error(`Usage: heli <command> [args]
 
 Commands:
+  --version | -v  print the Heli-Harness version
   install | update | uninstall
   target | status | yolo
   doctor [path]  (workspace health: plugins, target, leases, sessions, sync)
@@ -41,6 +57,11 @@ Commands:
 }
 
 if (!command) usage();
+
+if (command === "--version" || command === "-v") {
+	console.log(version());
+	process.exit(0);
+}
 
 try {
 	switch (command) {

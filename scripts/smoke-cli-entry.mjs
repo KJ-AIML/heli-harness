@@ -8,6 +8,7 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
 const heliPath = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "heli.mjs");
+const packageVersion = JSON.parse(readFileSync(join(dirname(heliPath), "..", "package.json"), "utf8")).version;
 
 // Install -> status round trip through the real bin/heli.mjs subprocess (not the
 // exported lib/cli/*.mjs functions called in-process — this proves argv dispatch
@@ -92,6 +93,14 @@ const heliPath = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "hel
 	const result = spawnSync(process.execPath, [heliPath], { encoding: "utf8" });
 	assert.equal(result.status, 1);
 	assert.ok(result.stderr.includes("Usage: heli"));
+}
+
+// Version flags work without a workspace and report the package version.
+for (const flag of ["--version", "-v"]) {
+	const result = spawnSync(process.execPath, [heliPath, flag], { encoding: "utf8" });
+	assert.equal(result.status, 0, result.stderr);
+	assert.equal(result.stdout.trim(), packageVersion);
+	assert.equal(result.stderr, "");
 }
 
 // Unknown command falls through the switch's default: branch — a distinct code

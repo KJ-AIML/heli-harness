@@ -70,6 +70,9 @@ try {
 	const embedded = spawnSync("node", [join(harness, "heli.mjs"), "status", parent], { encoding: "utf8" });
 	assert.equal(embedded.status, 0, `embedded CLI failed:\n${embedded.stdout}\n${embedded.stderr}`);
 	assert.match(embedded.stdout, /Heli-Harness version/, "embedded CLI should print status");
+	const embeddedVersion = spawnSync("node", [join(harness, "heli.mjs"), "--version"], { encoding: "utf8" });
+	assert.equal(embeddedVersion.status, 0, `embedded version failed:\n${embeddedVersion.stdout}\n${embeddedVersion.stderr}`);
+	assert.equal(embeddedVersion.stdout.trim(), readJson(join(harness, "manifest.json")).version);
 
 	// Claim write, then complete: status flips, md syncs, lease releases
 	run(["task", "claim", "t1", "--mode", "write"], { env: { HELI_SESSION_ID: SESSION } });
