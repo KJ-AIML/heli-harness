@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.1 - CLI version reporting and Windows-safe release validation
+
+### Added
+
+- `heli --version` / `heli -v` report the package version from the standalone CLI and the embedded workspace manifest.
+
 ## v0.8.0 - Root-Cause Convergence & Evidence-Gated Autonomy
 
 ### Added
