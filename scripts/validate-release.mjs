@@ -23,7 +23,7 @@
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, resolve, dirname, relative } from "node:path";
+import { basename, join, resolve, dirname, relative } from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -406,7 +406,7 @@ if (skillFiles.length === 0) {
 		pass(`bundled skill count ${skillFiles.length}`);
 	}
 	const manifestSkills = Array.isArray(harnessManifest?.skills) ? [...harnessManifest.skills].sort() : null;
-	const canonicalSkills = skillFiles.map((file) => file.split("/").slice(-2, -1)[0]).sort();
+	const canonicalSkills = skillFiles.map((file) => basename(dirname(file))).sort();
 	if (!manifestSkills) {
 		fail(".heli-harness/manifest.json skills", "skills must be an array");
 	} else if (JSON.stringify(manifestSkills) !== JSON.stringify(canonicalSkills)) {
