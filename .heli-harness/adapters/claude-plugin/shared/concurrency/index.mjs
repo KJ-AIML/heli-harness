@@ -11,6 +11,7 @@ export * from "./session.mjs";
 export * from "./binding.mjs";
 export * from "./lease.mjs";
 export * from "./yolo-scope.mjs";
+export * from "./portable-targets.mjs";
 export * from "./diagnosis.mjs";
 export * from "./conflicts.mjs";
 export * from "./resolve.mjs";

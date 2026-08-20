@@ -124,6 +124,32 @@ exclude: sessions/  locks/  bindings/  state/yolo.json  state/sync.json
 
 (As implemented in `lib/cli/cloud-bundle.mjs` — `INCLUDE_DIRS` / `INCLUDE_FILES`.)
 
+Task targets have a portable/local split. New task metadata records
+`workspaceRelativeWorktreePath` and `workspaceRelativeRepositoryPath` as
+POSIX-style paths anchored at the workspace root. The existing absolute
+`worktreePath` is a destination-local compatibility cache; it is regenerated
+after restore and is removed from outbound task snapshots. `repositoryPath`
+remains the logical workspace-relative path used by target projection.
+
+The cloud upload command normalizes a copy of each `tasks/*/task.json` before
+packing it. This keeps a source machine's absolute checkout out of the bundle
+and keeps normalized content hashes stable when devices use different roots.
+
+The cloud restore command resolves relative targets against the receiving
+workspace root. Legacy v1 task files without relative companions are migrated
+only when the current workspace already contains the path or exactly one
+`workspace/index.json` repository entry matches the legacy path suffix.
+Basename-only, ambiguous, traversal, symlink-escaping, and outside-workspace
+guesses are rejected for both worktree and repository targets. Duplicate
+repository identities are also treated as ambiguous. Unsafe legacy absolute
+fields are removed and the task is retained with stale restore status so the
+status command never presents the source-machine path as current.
+
+A missing destination repository is represented by its expected destination
+candidate and reported stale until the product repository is cloned or created.
+Live sessions, write leases, and worktree bindings remain machine-local and
+continue to take precedence over task metadata.
+
 - `heli push`: pack the portable subset into a gzip'd `heli-bundle-v1` JSON bundle
   (payload is KBs) and POST the raw bytes with an `x-base-version` header. The API
   Durable Object compares that base version to the workspace's current version:

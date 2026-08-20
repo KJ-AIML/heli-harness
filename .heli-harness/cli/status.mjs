@@ -7,6 +7,7 @@ import { listActiveSessions, readSession } from "../adapters/shared/concurrency/
 import { readLease, isLeaseExpired } from "../adapters/shared/concurrency/lease.mjs";
 import { isConcurrentMode, readWorkspaceSchema } from "../adapters/shared/concurrency/schema.mjs";
 import { findWorkspaceRoot, canonicalizePath } from "../adapters/shared/concurrency/paths.mjs";
+import { projectTaskWorktree, readWorkspaceIndex } from "../adapters/shared/concurrency/portable-targets.mjs";
 import { listAllBindings } from "../adapters/shared/concurrency/binding.mjs";
 
 function readJson(path) {
@@ -47,6 +48,8 @@ export function resolveTaskWorktreeProjection(workspaceRoot, task, sessions = nu
 	let source = "unknown";
 	let writer = "none";
 	let leaseStatus = "none";
+	let worktreeStale = false;
+	let worktreeStaleReason = null;
 
 	if (activeLease) {
 		writer = activeLease.sessionId || "unknown";
@@ -112,12 +115,23 @@ export function resolveTaskWorktreeProjection(workspaceRoot, task, sessions = nu
 		}
 	}
 
-	const metaWt = task.target?.worktreePath ? canonicalizePath(task.target.worktreePath) : "";
+	const portableProjection = projectTaskWorktree(workspaceRoot, task.target || {}, readWorkspaceIndex(workspaceRoot));
+	const metaWt = portableProjection.worktree ? canonicalizePath(portableProjection.worktree) : "";
 	if (!worktree && metaWt) {
 		worktree = metaWt;
-		source = "task-metadata";
+		source = portableProjection.source;
+		worktreeStale = portableProjection.stale;
+		worktreeStaleReason = portableProjection.reason;
+		if (worktreeStale) warnings.push(`task metadata worktree is stale (${worktreeStaleReason || "unknown reason"})`);
+	} else if (!worktree && portableProjection.stale) {
+		source = portableProjection.source;
+		worktreeStale = true;
+		worktreeStaleReason = portableProjection.reason;
+		warnings.push(`task metadata worktree is stale (${worktreeStaleReason || "unknown reason"})`);
 	} else if (worktree && metaWt && worktree !== metaWt && activeLease) {
 		warnings.push(`task metadata worktree (${metaWt}) differs from live ${source} (${worktree})`);
+	} else if (worktree && portableProjection.stale && activeLease) {
+		warnings.push(`task metadata worktree is stale (${portableProjection.reason || "unknown reason"})`);
 	}
 
 	const yolo =
@@ -136,6 +150,8 @@ export function resolveTaskWorktreeProjection(workspaceRoot, task, sessions = nu
 		writer,
 		worktree: worktree || "unknown",
 		worktreeSource: source,
+		worktreeStale,
+		worktreeStaleReason,
 		repo: task.target?.repositoryId || "",
 		branch: task.target?.branch || "",
 		leaseStatus,
@@ -283,8 +299,9 @@ export function runStatus(args) {
 			console.log(t.taskId);
 			console.log(`  status: ${t.status}`);
 			console.log(`  writer: ${t.writer}`);
-			console.log(`  worktree: ${t.worktree || "unknown"}`);
+			console.log(`  worktree: ${t.worktree || "unknown"}${t.worktreeStale ? " (stale)" : ""}`);
 			console.log(`  worktree source: ${t.worktreeSource || "unknown"}`);
+			if (t.worktreeStaleReason) console.log(`  worktree stale reason: ${t.worktreeStaleReason}`);
 			console.log(`  lease: ${t.leaseStatus || "none"}`);
 			console.log(`  target: ${t.repo || "n/a"}`);
 			if (t.branch) console.log(`  branch: ${t.branch}`);

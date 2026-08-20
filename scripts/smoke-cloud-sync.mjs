@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createApi } from "../cloud/core.mjs";
+import { canonicalizePath } from "../lib/concurrency/index.mjs";
 
 const heliPath = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "heli.mjs");
 
@@ -169,8 +170,25 @@ try {
 
 	// Create + link from inside workspace A.
 	writeFileSync(join(wsA, ".heli-harness", "profiles", "demo.md"), "# demo\n\nfirst verify: npm test\n");
+	mkdirSync(join(wsA, "repos", "demo"), { recursive: true });
+	writeFileSync(
+		join(wsA, ".heli-harness", "workspace", "index.json"),
+		JSON.stringify({
+			schemaVersion: 1,
+			workspaceRoot: ".",
+			repos: [{ name: "demo", path: "repos/demo", gitRoot: "repos/demo" }],
+		}) + "\n",
+	);
 	ok(await cli(["ws", "create", "lab"], cfgA, { cwd: wsA }), "ws create");
 	assert.ok(existsSync(join(wsA, ".heli-harness", "state", "sync.json")), "ws create links workspace A");
+	ok(
+		await cli(
+			["task", "create", "portable-restore", "--work-item", "portable-restore", "--repo", "demo", "--worktree", join(wsA, "repos", "demo")],
+			cfgA,
+			{ cwd: wsA },
+		),
+		"create portable restore task",
+	);
 
 	// Secret scan blocks a push, --allow-secrets overrides.
 	const leakPath = join(wsA, ".heli-harness", "profiles", "leak.md");
@@ -187,6 +205,7 @@ try {
 
 	// Device B: link by name, pull, verify content round-trip.
 	ok(await cli(["ws", "link", "lab"], cfgB, { cwd: wsB }), "ws link on device B");
+	mkdirSync(join(wsB, "repos", "demo"), { recursive: true });
 	const pull1 = ok(await cli(["pull"], cfgB, { cwd: wsB }), "pull on device B");
 	assert.match(pull1.stdout, /Pulled v1/);
 	assert.equal(
@@ -194,6 +213,13 @@ try {
 		"# demo\n\nfirst verify: npm test\n",
 		"profile must round-trip byte-identical",
 	);
+	const restoredPortableTask = JSON.parse(
+		readFileSync(join(wsB, ".heli-harness", "tasks", "portable-restore", "task.json"), "utf8"),
+	);
+	assert.equal(restoredPortableTask.target.workspaceRelativeWorktreePath, "repos/demo");
+	assert.equal(restoredPortableTask.target.worktreePath, canonicalizePath(join(wsB, "repos", "demo")));
+	assert.equal(restoredPortableTask.target.worktreePath.includes(canonicalizePath(wsA)), false);
+	console.log("cloud sync smoke: cross-root task target restored");
 
 	// Version conflict: A pushes v2; B (still at v1 base) is rejected with guidance.
 	writeFileSync(join(wsA, ".heli-harness", "profiles", "demo.md"), "# demo v2\n");

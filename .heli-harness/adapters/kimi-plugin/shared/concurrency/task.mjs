@@ -11,6 +11,7 @@ import { pathsFor, taskPaths, gitBranch, gitRevParse, canonicalizePath } from ".
 import { fingerprintSource, slugTaskId } from "./ids.mjs";
 import { TASK_SCHEMA_VERSION, writeWorkspaceSchema, readWorkspaceSchema } from "./schema.mjs";
 import { appendTaskEvent } from "./events.mjs";
+import { addPortableTargetPaths, readWorkspaceIndex } from "./portable-targets.mjs";
 
 export function listTaskIds(workspaceRoot) {
 	const { tasksDir } = pathsFor(workspaceRoot);
@@ -165,6 +166,18 @@ export function createTask(workspaceRoot, {
 
 	const now = new Date().toISOString();
 	const wt = worktreePath ? canonicalizePath(worktreePath) : "";
+	const target = addPortableTargetPaths(
+		workspaceRoot,
+		{
+			repositoryId: repositoryId || "",
+			repositoryPath: repositoryPath || "",
+			worktreePath: wt,
+			branch: branch || (wt ? gitBranch(wt) : null),
+			baseSha: baseSha || (wt ? gitRevParse(wt, "HEAD") : null),
+			headSha: null,
+		},
+		readWorkspaceIndex(workspaceRoot),
+	);
 	const task = {
 		schemaVersion: TASK_SCHEMA_VERSION,
 		taskId: id,
@@ -177,14 +190,7 @@ export function createTask(workspaceRoot, {
 			workItemKey: workItemKey || id,
 			fingerprint: fp,
 		},
-		target: {
-			repositoryId: repositoryId || "",
-			repositoryPath: repositoryPath || "",
-			worktreePath: wt,
-			branch: branch || (wt ? gitBranch(wt) : null),
-			baseSha: baseSha || (wt ? gitRevParse(wt, "HEAD") : null),
-			headSha: null,
-		},
+		target,
 		mode: mode === "yolo" || mode === "unguarded" || mode === "dangerous" ? mode : "strict",
 		revision: 1,
 		pathClaims: pathClaims || { owns: [], reads: [], shared: [], forbidden: [] },
@@ -285,7 +291,16 @@ export function setTaskTarget(workspaceRoot, taskId, targetPatch, { sessionId = 
 		taskId,
 		(t) => {
 			t.target = { ...t.target, ...targetPatch };
-			if (targetPatch.worktreePath) t.target.worktreePath = canonicalizePath(targetPatch.worktreePath);
+			if (Object.prototype.hasOwnProperty.call(targetPatch, "worktreePath")) {
+				delete t.target.workspaceRelativeWorktreePath;
+				t.target.worktreePath = targetPatch.worktreePath ? canonicalizePath(targetPatch.worktreePath) : "";
+			}
+			if (Object.prototype.hasOwnProperty.call(targetPatch, "repositoryPath")) {
+				delete t.target.workspaceRelativeRepositoryPath;
+				t.target.repositoryPath = targetPatch.repositoryPath || "";
+			}
+			t.target = addPortableTargetPaths(workspaceRoot, t.target, readWorkspaceIndex(workspaceRoot));
+			delete t.target.restoreStatus;
 			return t;
 		},
 		{ expectedRevision, sessionId },

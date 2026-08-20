@@ -25,6 +25,8 @@ import {
 	packBundle,
 	unpackBundle,
 	writeBundleFiles,
+	normalizeTaskFilesForBundle,
+	restoreTaskFilesForWorkspace,
 	scanBundleSecrets,
 } from "./cloud-bundle.mjs";
 
@@ -377,7 +379,8 @@ async function runPull(args) {
 		throw new Error(data.error === "no_versions" ? "Nothing to pull: no versions pushed yet." : `Pull failed: ${data.error || response.status}`);
 	}
 	const bytes = Buffer.from(await response.arrayBuffer());
-	const files = unpackBundle(bytes, { passphrase: process.env.HELI_E2E_PASSPHRASE || null });
+	const unpackedFiles = unpackBundle(bytes, { passphrase: process.env.HELI_E2E_PASSPHRASE || null });
+	const files = restoreTaskFilesForWorkspace(workspaceRoot, unpackedFiles);
 	// If the server bundle was encrypted, latch e2e on locally so this machine's
 	// next push cannot silently downgrade the workspace to plaintext.
 	let wireEncrypted = false;
@@ -387,12 +390,13 @@ async function runPull(args) {
 	} catch {
 		// unpackBundle already validated the bundle; treat parse issues as plaintext
 	}
+	const portableFiles = normalizeTaskFilesForBundle(workspaceRoot, files);
 	const written = writeBundleFiles(workspaceRoot, files);
 	const version = Number(response.headers.get("x-version"));
 	writeJsonAtomic(syncStatePath(workspaceRoot), {
 		...state,
 		lastVersion: version,
-		lastContentSha: contentSha256(files),
+		lastContentSha: contentSha256(portableFiles),
 		e2e: Boolean(state.e2e || wireEncrypted),
 	});
 	console.log(`Pulled v${version} (${written} files) from "${state.name}".`);

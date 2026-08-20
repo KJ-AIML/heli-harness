@@ -142,6 +142,10 @@ function ok(name) {
 			pathClaims: { owns: ["packages/contracts/user.ts"], reads: [], shared: [], forbidden: [] },
 		});
 		assert.ok(isConcurrentMode(parent));
+		assert.equal(taskA.target.workspaceRelativeWorktreePath, "wt-a");
+		assert.equal(taskA.target.workspaceRelativeRepositoryPath, "repos/repo-a");
+		assert.equal(taskB.target.workspaceRelativeWorktreePath, "wt-b");
+		assert.equal(taskB.target.workspaceRelativeRepositoryPath, "repos/repo-b");
 		ok("created work-3a and work-3b");
 
 		// duplicate 3A
@@ -250,6 +254,8 @@ function ok(name) {
 		setTaskTarget(parent, "work-3b", { repositoryId: "repo-b", repositoryPath: "repos/repo-b" }, { sessionId: sesB.sessionId });
 		assert.equal(readTask(parent, "work-3a").target.repositoryId, "repo-a");
 		assert.equal(readTask(parent, "work-3b").target.repositoryId, "repo-b");
+		assert.equal(readTask(parent, "work-3a").target.workspaceRelativeRepositoryPath, "repos/repo-a");
+		assert.equal(readTask(parent, "work-3b").target.workspaceRelativeRepositoryPath, "repos/repo-b");
 		ok("targets isolated");
 
 		// YOLO isolation: B yolo, A strict
