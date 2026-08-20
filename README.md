@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.8.2-informational"></a>
+  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.8.3-informational"></a>
   <a href="https://github.com/KJ-AIML/heli-harness/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/KJ-AIML/heli-harness/ci.yml?branch=main&label=CI"></a>
   <a href="docs/ADAPTER_SUPPORT_MATRIX.md"><img alt="Adapters" src="https://img.shields.io/badge/adapters-Pi%20%C2%B7%20Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20Cursor-8A2BE2"></a>
 </p>
@@ -73,7 +73,7 @@ heli install .
 heli --version
 
 # or without installing: pin a release (recommended)
-npx github:KJ-AIML/heli-harness#v0.8.2 install .
+npx github:KJ-AIML/heli-harness#v0.8.3 install .
 
 # or latest main
 npx github:KJ-AIML/heli-harness install .
@@ -82,7 +82,7 @@ npx github:KJ-AIML/heli-harness install .
 Windows PowerShell (same idea):
 
 ```powershell
-npx github:KJ-AIML/heli-harness#v0.8.2 install .
+npx github:KJ-AIML/heli-harness#v0.8.3 install .
 ```
 
 Confirm:

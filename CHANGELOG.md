@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.3 - Cross-machine task target restore
+
+### Fixed
+
+- Cloud-sync task targets now use workspace-relative worktree and repository companions, rebuild destination-local absolute caches, preserve stable normalized hashes, and mark ambiguous or unsafe legacy metadata stale without overriding live coordination.
+
 ## v0.8.2 - Allow planning tools without write lease
 
 ### Changed
