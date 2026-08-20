@@ -183,6 +183,65 @@ export function patchPathsFrom(commandText, out = []) {
 	return out;
 }
 
+/**
+ * Host adapters may use different names for file tools, but planning tools
+ * such as `todo_write` are not repository mutations. Keep the known writer
+ * list explicit, then use a path-aware fallback for equivalent names.
+ */
+export const DEFAULT_FILE_WRITE_TOOL_NAMES = Object.freeze([
+	"Edit",
+	"Write",
+	"apply_patch",
+	"write",
+	"edit",
+	"WriteFile",
+	"StrReplaceFile",
+	"write_to_file",
+	"replace_file_content",
+	"multi_replace_file_content",
+	"multi_edit",
+	"file_write",
+	"file_edit",
+	"fs.write",
+	"filesystem.write",
+	"search_replace",
+]);
+
+const FILE_MUTATION_VERB_SEQUENCES = Object.freeze([
+	Object.freeze(["write"]),
+	Object.freeze(["edit"]),
+	Object.freeze(["replace"]),
+	Object.freeze(["strreplace"]),
+	Object.freeze(["str", "replace"]),
+	Object.freeze(["apply", "patch"]),
+	Object.freeze(["multi", "replace"]),
+]);
+
+function normalizedToolNameTokens(toolName) {
+	return String(toolName ?? "")
+		.toLowerCase()
+		.split(/[_\-.]+/)
+		.filter(Boolean);
+}
+
+function hasMutationVerb(tokens) {
+	return FILE_MUTATION_VERB_SEQUENCES.some((sequence) =>
+		tokens.some((_, start) => sequence.every((token, offset) => tokens[start + offset] === token)),
+	);
+}
+
+export function isFileMutationTool(
+	toolName,
+	{ paths = [], writeToolNames = DEFAULT_FILE_WRITE_TOOL_NAMES } = {},
+) {
+	const name = String(toolName ?? "");
+	for (const knownName of writeToolNames ?? DEFAULT_FILE_WRITE_TOOL_NAMES) {
+		if (String(knownName).toLowerCase() === name.toLowerCase()) return true;
+	}
+	if (!Array.isArray(paths) || paths.length === 0) return false;
+	return hasMutationVerb(normalizedToolNameTokens(name));
+}
+
 export function readTaskGate(cwd) {
 	const ctx = resolveExecutionContext({ cwd, createIfMissing: false, host: "legacy-gate" });
 	if (!ctx.workspaceRoot && !existsSync(join(cwd, ".heli-harness", "HARNESS.md"))) return null;
@@ -276,18 +335,7 @@ export function evaluatePreToolUse({
 	cwd,
 	toolName = "",
 	toolInput = {},
-	writeToolNames = [
-		"Edit",
-		"Write",
-		"apply_patch",
-		"write",
-		"edit",
-		"WriteFile",
-		"StrReplaceFile",
-		"write_to_file",
-		"replace_file_content",
-		"multi_replace_file_content",
-	],
+	writeToolNames = DEFAULT_FILE_WRITE_TOOL_NAMES,
 	host = "unknown",
 	hookPayload = null,
 	env = process.env,
@@ -311,9 +359,7 @@ export function evaluatePreToolUse({
 	);
 	const name = String(toolName);
 
-	const isWrite =
-		writeToolNames.some((t) => t.toLowerCase() === name.toLowerCase()) ||
-		/write|edit|replace|strreplace|apply_patch|multi_replace/i.test(name);
+	const isWrite = isFileMutationTool(name, { paths, writeToolNames });
 
 	// Ownership gates — NEVER bypassed by YOLO
 	if (isWrite && !isTaskStateWriteForContext(ctx, paths) && !isTaskStateWrite(paths)) {

@@ -819,4 +819,32 @@ assert.ok(
 	"heli-update handler should surface update()'s clear same-directory error, not a raw fs.cpSync crash",
 );
 
+// Concurrent classification regression: planning state is usable without a
+// write lease, while exact and path-bearing file tools remain ownership-gated.
+mkdirSync(join(tempDir, ".heli-harness", "tasks", "pi-concurrent"), { recursive: true });
+writeFileSync(
+	join(tempDir, ".heli-harness", "workspace", "schema.json"),
+	JSON.stringify({ schemaVersion: 1, mode: "concurrent" }),
+);
+writeFileSync(
+	join(tempDir, ".heli-harness", "tasks", "pi-concurrent", "task.json"),
+	JSON.stringify({
+		schemaVersion: 1,
+		taskId: "pi-concurrent",
+		status: "active",
+		mode: "strict",
+		revision: 1,
+		target: { repositoryId: "demo" },
+	}),
+);
+assert.equal(
+	await toolCall({ toolName: "todo_write", input: { todos: [{ content: "inspect", status: "pending" }] } }, {}),
+	undefined,
+);
+for (const toolName of ["multi_edit", "WriteFile"]) {
+	const blocked = await toolCall({ toolName, input: { file_path: "notes.txt" } }, {});
+	assert.equal(blocked?.block, true, `${toolName} should remain ownership-gated in concurrent mode`);
+	assert.match(blocked.reason || "", /session|lease|bound|mode/i);
+}
+
 console.log("extension smoke ok");

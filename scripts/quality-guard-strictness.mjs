@@ -426,6 +426,23 @@ const bootstrapDir = makeConcurrentDir("heli-strict-bootstrap-", {
 	schemaContent: JSON.stringify({ schemaVersion: 1, mode: "concurrent" }),
 });
 
+for (const [name, rel] of Object.entries(hooks)) {
+	hard(`${name}: planning tool is allowed without a write lease`, () => {
+		expectAllow(rel, {
+			tool_name: "todo_write",
+			tool_input: { todos: [{ content: "inspect", status: "pending" }] },
+		}, controlPlaneDir);
+	});
+	hard(`${name}: file writer still requires a write lease`, () => {
+		expectDeny(
+			rel,
+			{ tool_name: "Write", tool_input: { file_path: "src/x.ts" } },
+			/session|lease|bound|mode/i,
+			controlPlaneDir,
+		);
+	});
+}
+
 const controlPlaneProbes = [
 	{ label: "self-granted lease", file_path: ".heli-harness/locks/tasks/t1.write.lock/lease.json" },
 	{ label: "session rebind", file_path: ".heli-harness/sessions/heli-ses-fake.json" },
@@ -454,6 +471,40 @@ for (const [name, rel] of Object.entries(hooks)) {
 			tool_input: { file_path: ".heli-harness/state/current-task.md" },
 		}, controlPlaneDir);
 	});
+}
+
+const concurrentOpenCodePath = join(root, ".heli-harness", "adapters", "opencode-plugin", "heli-harness.mjs");
+if (existsSync(concurrentOpenCodePath)) {
+	console.log("\n▸ OpenCode concurrent planning classification\n");
+	const concurrentOpenCode = await import(pathToFileURL(concurrentOpenCodePath).href);
+	const concurrentOpenCodeHooks = await concurrentOpenCode.HeliHarness({ directory: controlPlaneDir });
+	try {
+		await concurrentOpenCodeHooks["tool.execute.before"](
+			{ tool: "todo_write" },
+			{ args: { todos: [{ content: "inspect", status: "pending" }] } },
+		);
+		results.hardPass++;
+		console.log("  ✅ HARD  opencode: planning tool is allowed without a write lease");
+	} catch (e) {
+		results.hardFail++;
+		console.log(`  ❌ HARD  opencode: planning tool is allowed without a write lease — ${e}`);
+	}
+	try {
+		await concurrentOpenCodeHooks["tool.execute.before"](
+			{ tool: "write" },
+			{ args: { filePath: "src/x.ts" } },
+		);
+		results.hardFail++;
+		console.log("  ❌ HARD  opencode: file writer still requires a write lease (did not throw)");
+	} catch (e) {
+		if (/session|lease|bound|mode/i.test(String(e.message || e))) {
+			results.hardPass++;
+			console.log("  ✅ HARD  opencode: file writer still requires a write lease");
+		} else {
+			results.hardFail++;
+			console.log(`  ❌ HARD  opencode: file writer still requires a write lease — ${e}`);
+		}
+	}
 }
 
 console.log("\n▸ Command-tier rules — T5/T6 must deny, safe commands and approvals allowed\n");

@@ -3,7 +3,7 @@ import { join, dirname, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { install } from "../lib/cli/install.mjs";
 import { update } from "../lib/cli/update.mjs";
-import { buildSessionContext } from "../.heli-harness/adapters/shared/hook-core.mjs";
+import { buildSessionContext, isFileMutationTool, pathsFrom } from "../.heli-harness/adapters/shared/hook-core.mjs";
 import {
 	resolveExecutionContext,
 	evaluateOwnershipGate,
@@ -224,29 +224,6 @@ const DANGEROUS_FILE_PATTERNS = [
 	{ pattern: /(^|\/)\.(npmrc|pypirc)$/, reason: "package registry config may contain secrets" },
 	{ pattern: /(^|\/)\.ssh\/id_[^/]+$/, reason: "SSH private keys contain secrets" },
 ];
-
-const FILE_WRITE_TOOL_NAMES = new Set([
-	"write",
-	"edit",
-	"multi_edit",
-	"file_write",
-	"file_edit",
-	"fs.write",
-	"filesystem.write",
-]);
-
-function getFileWritePaths(input) {
-	const paths = [];
-	if (input && typeof input.path === "string" && input.path) paths.push(input.path);
-	if (input && typeof input.filePath === "string" && input.filePath) paths.push(input.filePath);
-	if (input && typeof input.file_path === "string" && input.file_path) paths.push(input.file_path);
-	if (input && Array.isArray(input.paths)) {
-		for (const p of input.paths) {
-			if (typeof p === "string" && p) paths.push(p);
-		}
-	}
-	return paths;
-}
 
 const SECRET_CONTENT_PATTERNS = [
 	/sk-[A-Za-z0-9_-]{8,}/,
@@ -1515,9 +1492,9 @@ HELI_HOOK_OK`
 			// Never mint sessions on tool_call — resume via HELI_SESSION_ID / binding only.
 			createIfMissing: false,
 		});
-		const writePathsEarly = FILE_WRITE_TOOL_NAMES.has(String(toolName || "")) ? getFileWritePaths(input) : [];
-		const isWriteTool = writePathsEarly.length > 0 || /write|edit|replace|apply_patch/i.test(String(toolName || ""));
-		if (isWriteTool && !isTaskStateWriteForContext(execCtx, writePathsEarly.map((p) => String(p).replaceAll("\\", "/")))) {
+		const writePathsEarly = pathsFrom(input).map((path) => String(path).replaceAll("\\", "/"));
+		const isWriteTool = isFileMutationTool(toolName, { paths: writePathsEarly });
+		if (isWriteTool && !isTaskStateWriteForContext(execCtx, writePathsEarly)) {
 			const ownership = evaluateOwnershipGate(execCtx, { isWrite: true });
 			if (ownership.deny) {
 				lastToolGuardAt = new Date().toISOString();
@@ -1530,7 +1507,7 @@ HELI_HOOK_OK`
 		const structuredAction = input?.heli_action ?? input?.heliAction ?? input?.metadata?.heli_action;
 		const diagnosisGate = evaluateDiagnosisWriteGate(diagnosis, {
 				riskTier: riskTierForDiagnosis,
-				isWrite: isWriteTool && !isTaskStateWriteForContext(execCtx, writePathsEarly.map((p) => String(p).replaceAll("\\", "/"))),
+				isWrite: isWriteTool && !isTaskStateWriteForContext(execCtx, writePathsEarly),
 				action: structuredAction && typeof structuredAction === "object" ? structuredAction : null,
 				policy: readActionPolicy(execCtx.workspaceRoot || cwd),
 			});
@@ -1589,7 +1566,7 @@ HELI_HOOK_OK`
 			}
 		}
 
-		const writePaths = FILE_WRITE_TOOL_NAMES.has(String(toolName || "")) ? getFileWritePaths(input) : [];
+		const writePaths = writePathsEarly;
 		for (const path of writePaths) {
 			const resolvedPath = resolve(cwd, path);
 			const targetStatePath = resolve(getWorkspacePaths(cwd).targetPath);

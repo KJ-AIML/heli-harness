@@ -43,7 +43,7 @@ const {
 	writeJsonAtomic,
 } = await import(concurrencyUrl);
 
-const { evaluatePreToolUse, buildSessionContext, isYoloActive } = await import(
+const { evaluatePreToolUse, buildSessionContext, isFileMutationTool, isYoloActive } = await import(
 	pathToFileURL(join(root, ".heli-harness/adapters/shared/hook-core.mjs")).href
 );
 
@@ -182,6 +182,60 @@ function ok(name) {
 		assert.equal(readSession(parent, reviewer.sessionId).mode, "review");
 		assert.equal(sessionHoldsWriteLease(parent, "work-3a", reviewer.sessionId), false);
 		ok("review session attaches without write lease");
+
+		// Planning/state tools must not be mistaken for repository file mutation.
+		const classificationCases = [
+			{ toolName: "Write", paths: [], expected: true },
+			{ toolName: "search_replace", paths: ["notes.txt"], expected: true },
+			{ toolName: "document-replace", paths: ["notes.txt"], expected: true },
+			{ toolName: "todo_write", paths: [], expected: false },
+			{ toolName: "TodoWrite", paths: [], expected: false },
+			{ toolName: "read_file", paths: ["notes.txt"], expected: false },
+			{ toolName: "document-replace", paths: [], expected: false },
+			{ toolName: "rewrite_plan", paths: ["notes.txt"], expected: false },
+			{ toolName: "editorial_review", paths: ["notes.txt"], expected: false },
+			{ toolName: "bash", paths: [], expected: false },
+		];
+		for (const testCase of classificationCases) {
+			assert.equal(
+				isFileMutationTool(testCase.toolName, { paths: testCase.paths }),
+				testCase.expected,
+				`${testCase.toolName} classification mismatch`,
+			);
+		}
+		ok("file-mutation classifier distinguishes planning and file tools");
+
+		const planningCalls = [
+			{ tool_name: "todo_write", tool_input: { todos: [{ content: "inspect", status: "pending" }] } },
+			{ tool_name: "TodoWrite", tool_input: { todos: [] } },
+		];
+		for (const call of planningCalls) {
+			const planningPre = evaluatePreToolUse({
+				cwd: wtA,
+				host: "review",
+				env: { ...process.env, HELI_SESSION_ID: reviewer.sessionId },
+				toolName: call.tool_name,
+				toolInput: call.tool_input,
+			});
+			assert.equal(planningPre.deny, false, `${call.tool_name} should be allowed for a review session`);
+		}
+		ok("planning tools remain usable without a write lease");
+
+		for (const call of [
+			{ tool_name: "Write", tool_input: { file_path: "notes.txt" } },
+			{ tool_name: "search_replace", tool_input: { file_path: "notes.txt" } },
+		]) {
+			const filePre = evaluatePreToolUse({
+				cwd: wtA,
+				host: "review",
+				env: { ...process.env, HELI_SESSION_ID: reviewer.sessionId },
+				toolName: call.tool_name,
+				toolInput: call.tool_input,
+			});
+			assert.equal(filePre.deny, true, `${call.tool_name} should still require the write lease`);
+			assert.match(filePre.reason || "", /lease|bound|mode|session/i);
+		}
+		ok("file mutation tools still require the write lease");
 
 		// isolated markdown
 		writeTaskMarkdown(parent, "work-3a", { currentTaskMd: "# A\n\nTask: work-3a\n", planMd: "# Plan A\n", decisionsMd: "# Dec A\n" });
