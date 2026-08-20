@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.2 - Allow planning tools without write lease
+
+### Changed
+
+- Release metadata and validation updated.
+
 ## v0.8.1 - CLI version reporting and Windows-safe release validation
 
 ### Added
