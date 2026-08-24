@@ -10,7 +10,7 @@ import {
 } from "./lib/plugin-smoke-helpers.mjs";
 
 const root = process.cwd();
-const pluginRel = ".heli-harness/adapters/opencode-plugin/heli-harness.mjs";
+const pluginRel = ".heli-harness/adapters/opencode-plugin/heli-harness.js";
 const pluginPath = join(root, pluginRel);
 
 assertFile(pluginPath, "OpenCode plugin module");

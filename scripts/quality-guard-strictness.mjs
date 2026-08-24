@@ -299,7 +299,7 @@ for (const [name, rel] of Object.entries(hooks)) {
 
 console.log("\n▸ 7. OpenCode plugin API strictness\n");
 
-const ocPath = join(root, ".heli-harness", "adapters", "opencode-plugin", "heli-harness.mjs");
+const ocPath = join(root, ".heli-harness", "adapters", "opencode-plugin", "heli-harness.js");
 if (existsSync(ocPath)) {
 	const mod = await import(pathToFileURL(ocPath).href);
 	const hooksApi = await mod.HeliHarness({ directory: cleanDir });
@@ -473,7 +473,7 @@ for (const [name, rel] of Object.entries(hooks)) {
 	});
 }
 
-const concurrentOpenCodePath = join(root, ".heli-harness", "adapters", "opencode-plugin", "heli-harness.mjs");
+const concurrentOpenCodePath = join(root, ".heli-harness", "adapters", "opencode-plugin", "heli-harness.js");
 if (existsSync(concurrentOpenCodePath)) {
 	console.log("\n▸ OpenCode concurrent planning classification\n");
 	const concurrentOpenCode = await import(pathToFileURL(concurrentOpenCodePath).href);

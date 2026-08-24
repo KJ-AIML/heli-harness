@@ -2,8 +2,9 @@
  * OpenCode local plugin for Heli-Harness.
  * Uses shared hook-core evaluatePreToolUse / buildSessionContext.
  *
- * Copy to: .opencode/plugins/heli-harness.mjs
- * (prefer loading from .heli-harness/adapters/opencode-plugin when possible)
+ * Install: copy this whole directory's contents into .opencode/plugins/
+ * (OpenCode auto-loads .js/.ts files from that directory; .mjs is NOT
+ * auto-discovered, so keep this entry file named heli-harness.js).
  */
 
 import { evaluatePreToolUse, buildSessionContext } from "./shared/hook-core.mjs";

@@ -2,7 +2,7 @@
   "name": "heli-harness",
   "version": "0.8.3",
   "description": "Heli-Harness workspace governance for OpenCode (local JS plugin).",
-  "main": "heli-harness.mjs",
+  "main": "heli-harness.js",
   "type": "module",
   "author": "KJ-AIML",
   "license": "MIT"
