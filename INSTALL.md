@@ -192,7 +192,14 @@ For optional plugin skills, run `grok plugin install .heli-harness/adapters/grok
 
 ### OpenCode
 
-Copy `.heli-harness/adapters/opencode-plugin/heli-harness.mjs` to `.opencode/plugins/heli-harness.mjs`; OpenCode auto-loads project plugins from that directory. See `.heli-harness/adapters/opencode/install.md`.
+Copy the plugin directory contents into `.opencode/plugins/`; OpenCode auto-loads `.js`/`.ts` plugins from that directory (keep the `.js` entry name — `.mjs` is not auto-discovered):
+
+```bash
+mkdir -p .opencode/plugins
+cp -R .heli-harness/adapters/opencode-plugin/. .opencode/plugins/
+```
+
+See `.heli-harness/adapters/opencode/install.md`.
 
 ### Kimi Code CLI
 

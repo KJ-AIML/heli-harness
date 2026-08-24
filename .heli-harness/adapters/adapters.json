@@ -249,7 +249,7 @@
         ".heli-harness/adapters/opencode/install.md",
         ".heli-harness/adapters/opencode-plugin/plugin.json",
         ".heli-harness/adapters/opencode-plugin/hooks/hooks.json",
-        ".heli-harness/adapters/opencode-plugin/heli-harness.mjs",
+        ".heli-harness/adapters/opencode-plugin/heli-harness.js",
         "scripts/smoke-opencode-adapter.mjs",
         "scripts/smoke-opencode-plugin.mjs",
         "scripts/live-verify-opencode-plugin.mjs"
@@ -267,7 +267,7 @@
         "opencode.json plugin array registration"
       ],
       "limitations": [
-        "Must register plugin in opencode.json (auto-scan of .opencode/plugins alone was empty on 1.2.26)",
+        "Auto-discovery requires a .js/.ts entry file copied as a full tree; .mjs is not auto-discovered (verified on 1.2.26 and 1.18.21) and a single-file copy breaks the ./shared import",
         "Not a sandbox",
         "experimental.session.compacting context only when host supports it",
         "Failure results are not parsed from arbitrary host logs; record structured diagnosis runs explicitly"

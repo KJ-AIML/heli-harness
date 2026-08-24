@@ -6,6 +6,6 @@ Pointer adapter + local JS plugin for [OpenCode](https://opencode.ai/).
 |-------|------|
 | Instructions | `OPENCODE.md` |
 | Install notes | `install.md` |
-| Plugin | `../opencode-plugin/heli-harness.mjs` -> `.opencode/plugins/heli-harness.mjs` |
+| Plugin | `../opencode-plugin/` (whole tree) -> `.opencode/plugins/` |
 
-**Status:** `enforced` (synthetic import smoke; no live OpenCode CLI denial proof yet). OpenCode auto-loads project plugins from `.opencode/plugins/` and global plugins from `~/.config/opencode/plugins/`.
+**Status:** `enforced` (synthetic import smoke + live OpenCode CLI denial proof via `scripts/live-verify-opencode-plugin.mjs`). OpenCode auto-loads `.js`/`.ts` project plugins from `.opencode/plugins/` and global plugins from `~/.config/opencode/plugins/`; `.mjs` files are not auto-discovered, so copy the tree and keep the `heli-harness.js` entry name.

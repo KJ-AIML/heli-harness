@@ -64,7 +64,8 @@ Final reports should include summary, files changed, validation, remaining risks
 
 - This OpenCode adapter is instruction + local plugin based.
 - OpenCode plugins are JS/TS modules (`tool.execute.before` throws to block); they are not Claude-style stdin command hooks.
-- Plugin behavior is smoke-tested synthetically by importing the module; live OpenCode CLI denial proof is not yet shipped.
+- Auto-discovery requires the plugin tree in `.opencode/plugins/` with a `.js`/`.ts` entry file (`heli-harness.js`); OpenCode does not auto-discover `.mjs`, and a single-file copy breaks the plugin's `./shared/hook-core.mjs` import. Explicit `opencode.json` registration is the fallback for other layouts.
+- Live denial proof ships as `scripts/live-verify-opencode-plugin.mjs` (maintainer-only; real `opencode run` turn).
 - Session context injection uses `experimental.session.compacting` when available; it is not a full SessionStart equivalent.
 
 OpenCode-specific behavior belongs here. Core harness files must remain tool-neutral.
