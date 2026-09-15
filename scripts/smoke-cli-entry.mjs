@@ -6,6 +6,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import { canonicalizePath } from "../lib/concurrency/index.mjs";
 
 const heliPath = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "heli.mjs");
 const packageVersion = JSON.parse(readFileSync(join(dirname(heliPath), "..", "package.json"), "utf8")).version;
@@ -98,7 +99,7 @@ const packageVersion = JSON.parse(readFileSync(join(dirname(heliPath), "..", "pa
 		assert.equal(statusJson.command, "status");
 		assert.equal(statusJson.ok, true);
 		assert.equal(statusJson.data.installed, true);
-		assert.equal(statusJson.data.workspaceRoot, cwd.replaceAll("\\", "/"));
+		assert.equal(statusJson.data.workspaceRoot, canonicalizePath(cwd));
 		assert.ok(Array.isArray(statusJson.warnings));
 		assert.ok(Array.isArray(statusJson.errors));
 	} finally {
