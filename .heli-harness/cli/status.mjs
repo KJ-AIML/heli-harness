@@ -9,6 +9,8 @@ import { isConcurrentMode, readWorkspaceSchema } from "../adapters/shared/concur
 import { findWorkspaceRoot, canonicalizePath } from "../adapters/shared/concurrency/paths.mjs";
 import { projectTaskWorktree, readWorkspaceIndex } from "../adapters/shared/concurrency/portable-targets.mjs";
 import { listAllBindings } from "../adapters/shared/concurrency/binding.mjs";
+import { protocolOk } from "../protocol/result.mjs";
+import { printProtocolResult, stripOutputFlags, wantsJson } from "./output.mjs";
 
 function readJson(path) {
 	try {
@@ -199,7 +201,7 @@ function skillPackagingStatus(root) {
 
 export function status(cwd) {
 	const heliDir = join(cwd, ".heli-harness");
-	const workspaceRoot = findWorkspaceRoot(cwd) || (existsSync(heliDir) ? cwd : null);
+	const workspaceRoot = findWorkspaceRoot(cwd) || (existsSync(heliDir) ? canonicalizePath(cwd) : null);
 	if (!workspaceRoot) {
 		return { installed: false };
 	}
@@ -259,8 +261,14 @@ export function status(cwd) {
 }
 
 export function runStatus(args) {
-	const cwd = args[0] || process.cwd();
+	const json = wantsJson(args);
+	const positionalArgs = stripOutputFlags(args);
+	const cwd = positionalArgs[0] || process.cwd();
 	const result = status(cwd);
+	if (json) {
+		printProtocolResult(protocolOk("status", result));
+		return;
+	}
 	if (!result.installed) {
 		console.log(`No Heli-Harness install found at ${cwd}`);
 		return;
