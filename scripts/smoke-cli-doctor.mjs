@@ -32,7 +32,7 @@ function run(args, { env = {}, expectStatus = 0 } = {}) {
 		expectStatus,
 		`heli ${args.join(" ")} exited ${result.status}, expected ${expectStatus}:\n${out}`,
 	);
-	return { stdout: result.stdout, out };
+	return { stdout: result.stdout, stderr: result.stderr, out };
 }
 
 function readJson(path) {
@@ -63,6 +63,19 @@ try {
 		"doctor must not claim host plugin activation it cannot see",
 	);
 
+	const healthyJsonResult = run(["doctor", parent, "--json"]);
+	assert.equal(healthyJsonResult.stderr, "");
+	const healthyJson = JSON.parse(healthyJsonResult.stdout);
+	assert.equal(healthyJson.protocolVersion, 1);
+	assert.equal(healthyJson.command, "doctor");
+	assert.equal(healthyJson.ok, true);
+	assert.equal(healthyJson.data.healthy, true);
+	assert.equal(healthyJson.data.counts.fail, 0);
+	assert.ok(Array.isArray(healthyJson.data.entries));
+	assert.ok(healthyJson.data.entries.some((entry) => entry.line?.includes("workspace mode: concurrent")));
+	assert.ok(Array.isArray(healthyJson.warnings));
+	assert.ok(healthyJson.warnings.some((warning) => warning.includes("no target selected")));
+
 	// (b) Malformed schema.json is a FAIL: enforcement fails closed to concurrent.
 	const goodSchema = readFileSync(schemaPath, "utf8");
 	writeFileSync(schemaPath, "{ this is not json", "utf8");
@@ -70,6 +83,16 @@ try {
 	assert.match(broken.stdout, /schema\.json malformed/, "malformed schema should be flagged by name");
 	assert.match(broken.stdout, /fails closed to concurrent/, "malformed schema must explain fail-closed behavior");
 	assert.match(broken.stdout, /^doctor: \d+ ok, \d+ warnings, [1-9]\d* failures$/m, "failures must be counted");
+	const brokenJsonResult = run(["doctor", parent, "--json"], { expectStatus: 1 });
+	const brokenJson = JSON.parse(brokenJsonResult.stdout);
+	assert.equal(brokenJson.ok, true, "protocol execution succeeded even though workspace health failed");
+	assert.equal(brokenJson.data.healthy, false);
+	assert.ok(brokenJson.data.counts.fail > 0);
+	assert.ok(
+		brokenJson.data.entries.some(
+			(entry) => entry.level === "fail" && entry.line.includes("schema.json malformed"),
+		),
+	);
 	writeFileSync(schemaPath, goodSchema, "utf8");
 	run(["doctor", parent]);
 
@@ -124,6 +147,12 @@ try {
 	// The embedded workspace CLI must expose doctor too (offline, no npx).
 	const embedded = spawnSync(process.execPath, [join(harness, "heli.mjs"), "doctor", parent], { encoding: "utf8" });
 	assert.match(embedded.stdout, /^doctor: \d+ ok, /m, "embedded CLI should run doctor offline");
+	const embeddedJson = spawnSync(
+		process.execPath,
+		[join(harness, "heli.mjs"), "doctor", parent, "--json"],
+		{ encoding: "utf8" },
+	);
+	assert.equal(JSON.parse(embeddedJson.stdout).command, "doctor", "embedded CLI should expose doctor JSON offline");
 
 	console.log("cli doctor smoke ok");
 } finally {
