@@ -3,7 +3,7 @@ import { pathsFor } from "./paths.mjs";
 
 export const WORKSPACE_SCHEMA_VERSION = 1;
 export const TASK_SCHEMA_VERSION = 1;
-export const SESSION_SCHEMA_VERSION = 1;
+export const SESSION_SCHEMA_VERSION = 2;
 export const LEASE_SCHEMA_VERSION = 1;
 
 export function readWorkspaceSchema(workspaceRoot) {
@@ -13,11 +13,8 @@ export function readWorkspaceSchema(workspaceRoot) {
 	}
 	const data = readJson(schemaPath, null);
 	if (!data) {
-		// Fail closed: a schema file that exists but cannot be read must not
-		// silently downgrade to legacy (which disables all lease enforcement).
 		return { schemaVersion: WORKSPACE_SCHEMA_VERSION, mode: "concurrent", exists: true, malformed: true };
 	}
-	// Only an explicit "legacy" opts out of enforcement; unknown values fail closed.
 	const mode = data.mode === "legacy" ? "legacy" : "concurrent";
 	return {
 		schemaVersion: data.schemaVersion || WORKSPACE_SCHEMA_VERSION,
