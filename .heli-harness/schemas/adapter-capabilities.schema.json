@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://heli-harness.dev/schemas/adapter-capabilities.schema.json",
+  "title": "Heli Adapter Capabilities",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "session_start": { "$ref": "#/$defs/claim" },
+    "pre_tool": { "$ref": "#/$defs/claim" },
+    "post_tool": { "$ref": "#/$defs/claim" },
+    "permission_request": { "$ref": "#/$defs/claim" },
+    "subagent_start": { "$ref": "#/$defs/claim" },
+    "subagent_stop": { "$ref": "#/$defs/claim" },
+    "compaction": { "$ref": "#/$defs/claim" },
+    "structured_tool_input": { "$ref": "#/$defs/claim" },
+    "sandbox_attestation": { "$ref": "#/$defs/claim" },
+    "worktree_isolation": { "$ref": "#/$defs/claim" }
+  },
+  "$defs": {
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "declared": { "type": "boolean" },
+        "observed": { "type": "boolean" },
+        "effective": {
+          "type": "string",
+          "enum": [
+            "unsupported",
+            "documented",
+            "wired",
+            "observed",
+            "enforced",
+            "host-enforced"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}
