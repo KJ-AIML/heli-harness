@@ -9,6 +9,8 @@ export * from "./events.mjs";
 export * from "./task.mjs";
 export * from "./session.mjs";
 export * from "./authority.mjs";
+export * from "./attestation.mjs";
+export * from "./governance-decision.mjs";
 export * from "./binding.mjs";
 export * from "./lease.mjs";
 export * from "./yolo-scope.mjs";
