@@ -43,6 +43,7 @@ function protocolJsonRequested(commandName, values) {
 	if (index < 0) return false;
 	if (commandName !== "diagnosis") return true;
 	const next = values[index + 1];
+	// diagnosis historically uses --json <object> as its input payload.
 	return !(next && String(next).trim().startsWith("{"));
 }
 
@@ -78,6 +79,7 @@ Machine output:
 }
 
 if (!command) usage();
+
 if (command === "--version" || command === "-v") {
 	console.log(version());
 	process.exit(0);
