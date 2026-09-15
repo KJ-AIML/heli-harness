@@ -83,6 +83,24 @@ const packageVersion = JSON.parse(readFileSync(join(dirname(heliPath), "..", "pa
 			statusResult.stdout.includes("Skill packaging:") || statusResult.stdout.includes("Host skill activation:"),
 			"status should report skill packaging / activation surface",
 		);
+
+		// Machine consumers need a stable protocol envelope and must never parse the
+		// human-oriented status prose above.
+		const statusJsonResult = spawnSync(
+			process.execPath,
+			[heliPath, "status", cwd, "--json"],
+			{ encoding: "utf8" },
+		);
+		assert.equal(statusJsonResult.status, 0, statusJsonResult.stderr);
+		assert.equal(statusJsonResult.stderr, "");
+		const statusJson = JSON.parse(statusJsonResult.stdout);
+		assert.equal(statusJson.protocolVersion, 1);
+		assert.equal(statusJson.command, "status");
+		assert.equal(statusJson.ok, true);
+		assert.equal(statusJson.data.installed, true);
+		assert.equal(statusJson.data.workspaceRoot, cwd.replaceAll("\\", "/"));
+		assert.ok(Array.isArray(statusJson.warnings));
+		assert.ok(Array.isArray(statusJson.errors));
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
