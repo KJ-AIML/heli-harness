@@ -12,17 +12,18 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
-import { findWorkspaceRoot } from "../adapters/shared/concurrency/paths.mjs";
+import { canonicalizePath, findWorkspaceRoot } from "../adapters/shared/concurrency/paths.mjs";
 import { readWorkspaceSchema } from "../adapters/shared/concurrency/schema.mjs";
 import { listTasks, listActiveTasks } from "../adapters/shared/concurrency/task.mjs";
 import { readLease, isLeaseExpired } from "../adapters/shared/concurrency/lease.mjs";
 import { listSessions, listActiveSessions, readSession } from "../adapters/shared/concurrency/session.mjs";
 import { listAllBindings } from "../adapters/shared/concurrency/binding.mjs";
+import { protocolOk } from "../protocol/result.mjs";
+import { printProtocolResult, stripOutputFlags, wantsJson } from "./output.mjs";
 
 const ICON = { ok: "✅", warn: "⚠️", fail: "❌" };
 const TAG = { ok: "ok  ", warn: "WARN", fail: "FAIL" };
 
-/** Read JSON, distinguishing "absent" from "present but unparseable". */
 function loadJson(path) {
 	if (!existsSync(path)) return { present: false, data: null };
 	try {
@@ -37,35 +38,35 @@ function resolveRepoPath(workspaceRoot, p) {
 	return isAbsolute(p) ? p : resolve(workspaceRoot, p);
 }
 
-export function runDoctor(args) {
-	const cwd = (args || []).find((a) => a && !a.startsWith("--")) || process.cwd();
-	const counts = { ok: 0, warn: 0, fail: 0 };
+function buildDoctorResult(inputPath, workspaceRoot, counts, entries) {
+	return {
+		inputPath: canonicalizePath(inputPath),
+		workspaceRoot: workspaceRoot || null,
+		healthy: counts.fail === 0,
+		counts: { ...counts },
+		entries,
+	};
+}
 
+export function doctor(cwd = process.cwd()) {
+	const counts = { ok: 0, warn: 0, fail: 0 };
+	const entries = [];
 	const report = (level, line) => {
 		counts[level] += 1;
-		console.log(`${ICON[level]} ${TAG[level]}  ${line}`);
+		entries.push({ kind: "check", level, line });
 	};
-	// Advisory context — deliberately uncounted so honesty notes never inflate
-	// the ok/warn/fail tally.
-	const info = (line) => console.log(`         ${line}`);
-	const summary = () => {
-		console.log("");
-		console.log(`doctor: ${counts.ok} ok, ${counts.warn} warnings, ${counts.fail} failures`);
-		if (counts.fail > 0) process.exitCode = 1;
-	};
+	const info = (line) => entries.push({ kind: "info", line });
 
-	// ---------------------------------------------------------------- workspace
-	const workspaceRoot = findWorkspaceRoot(cwd) || (existsSync(join(cwd, ".heli-harness")) ? cwd : null);
+	const workspaceRoot =
+		findWorkspaceRoot(cwd) || (existsSync(join(cwd, ".heli-harness")) ? canonicalizePath(cwd) : null);
 	if (!workspaceRoot) {
-		console.log(`Heli doctor — ${cwd}`);
-		console.log("");
-		report("fail", `no Heli workspace found at or above ${cwd} — run: npx github:KJ-AIML/heli-harness install .`);
-		summary();
-		return;
+		report(
+			"fail",
+			`no Heli workspace found at or above ${cwd} — run: npx github:KJ-AIML/heli-harness install .`,
+		);
+		return buildDoctorResult(cwd, null, counts, entries);
 	}
 	const harness = join(workspaceRoot, ".heli-harness");
-	console.log(`Heli doctor — ${workspaceRoot}`);
-	console.log("");
 	report("ok", `workspace root: ${workspaceRoot}`);
 
 	const manifest = loadJson(join(harness, "manifest.json"));
@@ -77,7 +78,6 @@ export function runDoctor(args) {
 		report("ok", `manifest version: ${manifest.data.version || "unknown"}`);
 	}
 
-	// ------------------------------------------------------------------- schema
 	const schema = readWorkspaceSchema(workspaceRoot);
 	if (!schema.exists) {
 		report("warn", "workspace/schema.json missing — treated as legacy mode (no lease enforcement)");
@@ -91,7 +91,6 @@ export function runDoctor(args) {
 	}
 	const concurrent = schema.mode === "concurrent";
 
-	// -------------------------------------------------------------------- index
 	const index = loadJson(join(harness, "workspace", "index.json"));
 	let repos = [];
 	if (!index.present) {
@@ -112,7 +111,6 @@ export function runDoctor(args) {
 		}
 	}
 
-	// ------------------------------------------------------------------- target
 	const target = loadJson(join(harness, "workspace", "target.json"));
 	if (target.present && !target.data) {
 		report("fail", "workspace/target.json unparseable — target discipline cannot be enforced");
@@ -136,7 +134,6 @@ export function runDoctor(args) {
 		}
 	}
 
-	// -------------------------------------------------------------------- tasks
 	const tasks = listTasks(workspaceRoot);
 	const byStatus = new Map();
 	for (const t of tasks) {
@@ -177,7 +174,6 @@ export function runDoctor(args) {
 		}
 	}
 
-	// ------------------------------------------------------- sessions / bindings
 	const sessions = listSessions(workspaceRoot);
 	report("ok", `sessions: ${sessions.length} (${listActiveSessions(workspaceRoot).length} active)`);
 
@@ -190,14 +186,12 @@ export function runDoctor(args) {
 		}
 	}
 
-	// ------------------------------------------------------------- embedded CLI
 	if (existsSync(join(harness, "heli.mjs")) && existsSync(join(harness, "cli"))) {
 		report("ok", "embedded CLI present: node .heli-harness/heli.mjs <cmd> works offline");
 	} else {
 		report("fail", "embedded CLI missing (.heli-harness/heli.mjs + cli/) — run: npx github:KJ-AIML/heli-harness update .");
 	}
 
-	// ------------------------------------------------------------- host plugins
 	if (existsSync(join(harness, "adapters"))) {
 		report("ok", "host adapter/plugin files present under .heli-harness/adapters");
 	} else {
@@ -207,7 +201,6 @@ export function runDoctor(args) {
 		"host plugin activation: not verifiable from files — plugin PreToolUse is live only when the host loaded the Heli plugin this session (SessionStart marker). File/pointer installs without the plugin are advisory.",
 	);
 
-	// -------------------------------------------------------------- cloud sync
 	const sync = loadJson(join(harness, "state", "sync.json"));
 	if (!sync.present) {
 		report("ok", "cloud sync: local-only (default)");
@@ -224,7 +217,6 @@ export function runDoctor(args) {
 		}
 	}
 
-	// -------------------------------------------------------------------- yolo
 	const yolo = loadJson(join(harness, "state", "yolo.json"));
 	if (!yolo.present) {
 		report("ok", "yolo: off (strict guards)");
@@ -248,5 +240,37 @@ export function runDoctor(args) {
 	}
 	info("yolo env vars (HELI_YOLO / HELI_GUARDS) are per-shell and not visible here — check: heli yolo status");
 
-	summary();
+	return buildDoctorResult(cwd, workspaceRoot, counts, entries);
+}
+
+function renderHuman(result) {
+	console.log(`Heli doctor — ${result.workspaceRoot || result.inputPath}`);
+	console.log("");
+	for (const entry of result.entries) {
+		if (entry.kind === "info") {
+			console.log(`         ${entry.line}`);
+			continue;
+		}
+		console.log(`${ICON[entry.level]} ${TAG[entry.level]}  ${entry.line}`);
+	}
+	console.log("");
+	console.log(
+		`doctor: ${result.counts.ok} ok, ${result.counts.warn} warnings, ${result.counts.fail} failures`,
+	);
+}
+
+export function runDoctor(args) {
+	const json = wantsJson(args || []);
+	const positionalArgs = stripOutputFlags(args || []);
+	const cwd = positionalArgs.find((a) => a && !a.startsWith("--")) || process.cwd();
+	const result = doctor(cwd);
+	if (json) {
+		const warnings = result.entries
+			.filter((entry) => entry.kind === "check" && entry.level === "warn")
+			.map((entry) => entry.line);
+		printProtocolResult(protocolOk("doctor", result, { warnings }));
+	} else {
+		renderHuman(result);
+	}
+	if (!result.healthy) process.exitCode = 1;
 }
