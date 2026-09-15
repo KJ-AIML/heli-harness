@@ -26,6 +26,7 @@ export const DISTRIBUTION_ENTRIES = [
 	"manifest.json",
 	"heli.mjs",
 	"cli",
+	"protocol",
 	"adapters",
 	"skills",
 	"policies",
