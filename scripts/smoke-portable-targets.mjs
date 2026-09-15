@@ -108,7 +108,7 @@ try {
 	try {
 		const restored = cloudBundle.restoreTaskFilesForWorkspace(destination, sourceFiles);
 		const restoredTask = JSON.parse(restored[sourceTaskRel]);
-		assert.equal(restoredTask.target.worktreePath, join(canonicalizePath(destination), "repos", "moved-demo"));
+		assert.equal(restoredTask.target.worktreePath, canonicalizePath(join(destination, "repos", "moved-demo")));
 		assert.equal(restoredTask.target.workspaceRelativeWorktreePath, "repos/moved-demo");
 		assert.equal(restoredTask.target.restoreStatus, undefined);
 		const normalizedDestination = cloudBundle.normalizeTaskFilesForBundle(destination, restored);
@@ -125,7 +125,7 @@ try {
 		const legacyRestored = cloudBundle.restoreTaskFilesForWorkspace(destination, legacyFiles);
 		const rebasedLegacy = JSON.parse(legacyRestored[sourceTaskRel]);
 		assert.equal(rebasedLegacy.target.workspaceRelativeWorktreePath, "repos/demo");
-		assert.equal(rebasedLegacy.target.worktreePath, join(canonicalizePath(destination), "repos", "demo"));
+		assert.equal(rebasedLegacy.target.worktreePath, canonicalizePath(join(destination, "repos", "demo")));
 		console.log("smoke-portable-targets: legacy index suffix rebase is safe");
 
 		const unmappedRepository = portable.migrateTaskTargetForRestore(
