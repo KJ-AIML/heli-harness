@@ -58,7 +58,7 @@
     "smoke:opencode-plugin": "node scripts/smoke-opencode-plugin.mjs",
     "smoke:kimi": "node scripts/smoke-kimi-adapter.mjs",
     "smoke:kimi-plugin": "node scripts/smoke-kimi-plugin.mjs",
-    "smoke:antigravity": "node scripts/smoke-antigravity.mjs",
+    "smoke:antigravity": "node scripts/smoke-antigravity-adapter.mjs",
     "smoke:antigravity-plugin": "node scripts/smoke-antigravity-plugin.mjs",
     "smoke:cursor-plugin": "node scripts/smoke-cursor-plugin.mjs",
     "smoke:yolo": "node scripts/smoke-yolo-mode.mjs",
