@@ -81,9 +81,15 @@ try {
 
 	// Existing diagnosis payload syntax remains human/legacy compatible: a JSON
 	// object immediately after --json is input, not a request for protocol mode.
+	const legacyPayload = {
+		symptom: "machine CLI compatibility fixture failed",
+		closestProvenBoundary: "legacy --json payload reached diagnosis init",
+		responsibleSubsystem: "cli",
+		riskTier: "S1",
+	};
 	const legacy = spawnSync(
 		"node",
-		[packageCli, "diagnosis", "init", "machine-smoke", "--json", JSON.stringify({ trigger: "smoke" }), workspace],
+		[packageCli, "diagnosis", "init", "machine-smoke", "--json", JSON.stringify(legacyPayload), workspace],
 		{ encoding: "utf8" },
 	);
 	assert.equal(legacy.status, 0, `legacy diagnosis payload broke:\n${legacy.stdout}\n${legacy.stderr}`);
