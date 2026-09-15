@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "profiles": {
+    "S0_QUERY": {
+      "required": ["target_resolved", "read_only", "answer_grounded"],
+      "escalate": {
+        "write_required": "S1_CHANGE",
+        "risk_expanded": "S2_INVESTIGATION"
+      }
+    },
+    "S1_CHANGE": {
+      "required": ["target_resolved", "smallest_useful_change", "focused_verification", "changed_files_checked", "completion_evidence"],
+      "escalate": {
+        "premise_invalid": "verify-premise",
+        "repeated_failure": "diagnosis",
+        "impact_expanded": "S2_INVESTIGATION"
+      }
+    },
+    "S1_FIX": {
+      "required": ["target_resolved", "premise_reproduced", "focused_change", "focused_verification", "changed_files_checked", "completion_evidence"],
+      "escalate": {
+        "premise_invalid": "verify-premise",
+        "repeated_failure": "diagnosis",
+        "impact_expanded": "S2_INVESTIGATION"
+      }
+    },
+    "S2_INVESTIGATION": {
+      "required": ["target_resolved", "plan_recorded", "premise_verified", "impact_reviewed", "evidence_recorded", "verification_recorded"],
+      "escalate": {
+        "high_risk": "S3_HIGH_RISK",
+        "repeated_failure": "diagnosis"
+      }
+    },
+    "S3_HIGH_RISK": {
+      "required": ["target_resolved", "plan_recorded", "premise_verified", "impact_reviewed", "explicit_approval", "verification_recorded", "completion_evidence"],
+      "escalate": {}
+    }
+  }
+}

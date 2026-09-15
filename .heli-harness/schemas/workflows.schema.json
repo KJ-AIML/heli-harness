@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://heli-harness.dev/schemas/workflows.schema.json",
+  "title": "Heli Workflow Profiles",
+  "type": "object",
+  "required": ["schemaVersion", "profiles"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "profiles": {
+      "type": "object",
+      "required": ["S0_QUERY", "S1_CHANGE", "S1_FIX", "S2_INVESTIGATION", "S3_HIGH_RISK"],
+      "additionalProperties": false,
+      "properties": {
+        "S0_QUERY": { "$ref": "#/$defs/profile" },
+        "S1_CHANGE": { "$ref": "#/$defs/profile" },
+        "S1_FIX": { "$ref": "#/$defs/profile" },
+        "S2_INVESTIGATION": { "$ref": "#/$defs/profile" },
+        "S3_HIGH_RISK": { "$ref": "#/$defs/profile" }
+      }
+    }
+  },
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "required": ["required", "escalate"],
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "escalate": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

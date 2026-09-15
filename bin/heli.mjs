@@ -15,6 +15,8 @@ import { runSession } from "../lib/cli/session-cmd.mjs";
 import { runConflicts } from "../lib/cli/conflicts-cmd.mjs";
 import { runCloud } from "../lib/cli/cloud.mjs";
 import { runDiagnosis } from "../lib/cli/diagnosis.mjs";
+import { runExplain } from "../lib/cli/explain.mjs";
+import { runTrace } from "../lib/cli/trace.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [command, ...args] = process.argv.slice(2);
@@ -45,6 +47,8 @@ Commands:
   diagnosis show|init|record|route|gate
   session start|attach|status|list|close
   conflicts [--task id]
+  explain authority|task|guard|capabilities [--task id] [path]
+  trace show --task <id> [path]
 
   auth login|logout|status|devices     (cloud sync)
   ws create|link|unlink|list|versions|delete  (cloud sync; unlink = back to local-only)
@@ -97,6 +101,12 @@ try {
 			break;
 		case "conflicts":
 			runConflicts(args);
+			break;
+		case "explain":
+			runExplain(args);
+			break;
+		case "trace":
+			runTrace(args);
 			break;
 		case "auth":
 		case "ws":
