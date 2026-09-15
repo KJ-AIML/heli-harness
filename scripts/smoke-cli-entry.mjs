@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+// Keep the protocol-machine black-box smoke in the mandatory CLI entry gate.
+// This import runs first and fails the check if JSON-mode dispatch regresses.
+import "./smoke-cli-machine.mjs";
+
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
