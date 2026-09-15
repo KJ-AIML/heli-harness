@@ -62,6 +62,12 @@ try {
 	assert.equal(created.command, "task.create");
 	assert.equal(created.ok, true);
 	assert.equal(created.data.task.taskId, "machine-smoke");
+	assert.equal(created.data.reused, false, "new task creation must not be reported as reuse");
+
+	const reusableCreated = invoke(packageCli, ["task", "create", "machine-reuse", "--repo", "demo", "--reuse", "--json", workspace]);
+	assert.equal(reusableCreated.data.reused, false, "--reuse permits reuse but must not claim it happened on first creation");
+	const reusableExisting = invoke(packageCli, ["task", "create", "machine-reuse", "--repo", "demo", "--reuse", "--json", workspace]);
+	assert.equal(reusableExisting.data.reused, true, "existing task returned under --reuse must be reported as reused");
 
 	const listed = invoke(packageCli, ["task", "list", "--json", workspace]);
 	assert.equal(listed.command, "task.list");
