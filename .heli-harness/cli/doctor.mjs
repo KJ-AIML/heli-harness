@@ -24,6 +24,7 @@ import { printProtocolResult, stripOutputFlags, wantsJson } from "./output.mjs";
 const ICON = { ok: "✅", warn: "⚠️", fail: "❌" };
 const TAG = { ok: "ok  ", warn: "WARN", fail: "FAIL" };
 
+/** Read JSON, distinguishing "absent" from "present but unparseable". */
 function loadJson(path) {
 	if (!existsSync(path)) return { present: false, data: null };
 	try {
@@ -48,6 +49,10 @@ function buildDoctorResult(inputPath, workspaceRoot, counts, entries) {
 	};
 }
 
+/**
+ * Build the doctor report without rendering it. This is the canonical machine
+ * projection used by both human output and Protocol v1 JSON.
+ */
 export function doctor(cwd = process.cwd()) {
 	const counts = { ok: 0, warn: 0, fail: 0 };
 	const entries = [];
