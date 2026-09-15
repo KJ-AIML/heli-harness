@@ -18,6 +18,7 @@ import { runCloud } from "./cli/cloud.mjs";
 import { runDiagnosis } from "./cli/diagnosis.mjs";
 import { runExplain } from "./cli/explain.mjs";
 import { runTrace } from "./cli/trace.mjs";
+import { runTargetMachine, runTaskMachine, runDiagnosisMachine, runConflictsMachine } from "./cli/machine.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [command, ...args] = process.argv.slice(2);
@@ -36,6 +37,15 @@ function version() {
 	return "unknown";
 }
 
+function protocolJsonRequested(commandName, values) {
+	if (values.includes("--output-json")) return true;
+	const index = values.indexOf("--json");
+	if (index < 0) return false;
+	if (commandName !== "diagnosis") return true;
+	const next = values[index + 1];
+	return !(next && String(next).trim().startsWith("{"));
+}
+
 function usage() {
 	console.error(`Usage: heli <command> [args]
 
@@ -46,10 +56,16 @@ Commands:
   doctor [path]  (workspace health: plugins, target, leases, sessions, sync)
   task create|list|show|migrate-legacy|claim|release|takeover
   diagnosis show|init|record|route|gate
-  session start|attach|status|list|close
+  session start|attach|transfer-write|status|list|close
   conflicts [--task id]
   explain authority|task|guard|capabilities [--task id] [path]
   trace show --task <id> [path]
+
+Machine output:
+  status/doctor/session: add --json
+  task/target/conflicts: add --json
+  diagnosis show: add --json
+  diagnosis mutations: add --json --payload-json '<object>'
 
   auth login|logout|status|devices     (cloud sync)
   ws create|link|unlink|list|versions|delete  (cloud sync; unlink = back to local-only)
@@ -62,7 +78,6 @@ Commands:
 }
 
 if (!command) usage();
-
 if (command === "--version" || command === "-v") {
 	console.log(version());
 	process.exit(0);
@@ -70,45 +85,19 @@ if (command === "--version" || command === "-v") {
 
 try {
 	switch (command) {
-		case "install":
-			runInstall(packageRoot, args);
-			break;
-		case "update":
-			runUpdate(packageRoot, args);
-			break;
-		case "uninstall":
-			runUninstall(args);
-			break;
-		case "target":
-			runTarget(args);
-			break;
-		case "status":
-			runStatus(args);
-			break;
-		case "doctor":
-			runDoctor(args);
-			break;
-		case "yolo":
-			runYolo(args);
-			break;
-		case "task":
-			runTask(args);
-			break;
-		case "diagnosis":
-			runDiagnosis(args);
-			break;
-		case "session":
-			runSession(args);
-			break;
-		case "conflicts":
-			runConflicts(args);
-			break;
-		case "explain":
-			runExplain(args);
-			break;
-		case "trace":
-			runTrace(args);
-			break;
+		case "install": runInstall(packageRoot, args); break;
+		case "update": runUpdate(packageRoot, args); break;
+		case "uninstall": runUninstall(args); break;
+		case "target": protocolJsonRequested(command, args) ? runTargetMachine(args) : runTarget(args); break;
+		case "status": runStatus(args); break;
+		case "doctor": runDoctor(args); break;
+		case "yolo": runYolo(args); break;
+		case "task": protocolJsonRequested(command, args) ? runTaskMachine(args) : runTask(args); break;
+		case "diagnosis": protocolJsonRequested(command, args) ? runDiagnosisMachine(args) : runDiagnosis(args); break;
+		case "session": runSession(args); break;
+		case "conflicts": protocolJsonRequested(command, args) ? runConflictsMachine(args) : runConflicts(args); break;
+		case "explain": runExplain(args); break;
+		case "trace": runTrace(args); break;
 		case "auth":
 		case "ws":
 		case "push":
@@ -120,11 +109,14 @@ try {
 				process.exit(1);
 			});
 			break;
-		default:
-			usage();
+		default: usage();
 	}
 } catch (error) {
-	console.error(`Error: ${error.message}`);
-	if (error.code) console.error(`Code: ${error.code}`);
+	if (protocolJsonRequested(command, args)) {
+		process.stdout.write(`${JSON.stringify({ protocolVersion: 1, command, ok: false, data: null, warnings: [], errors: [{ code: error.code || "COMMAND_FAILED", message: error.message }] }, null, 2)}\n`);
+	} else {
+		console.error(`Error: ${error.message}`);
+		if (error.code) console.error(`Code: ${error.code}`);
+	}
 	process.exit(1);
 }
