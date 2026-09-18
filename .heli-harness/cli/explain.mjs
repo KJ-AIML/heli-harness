@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { findWorkspaceRoot } from "../adapters/shared/concurrency/paths.mjs";
-import { resolveExecutionContext } from "../adapters/shared/concurrency/resolve.mjs";
+import { resolveExecutionContext, evaluateOwnershipGate } from "../adapters/shared/concurrency/resolve.mjs";
 import { readTask, listActiveTasks } from "../adapters/shared/concurrency/task.mjs";
 import { readLease, isLeaseExpired } from "../adapters/shared/concurrency/lease.mjs";
 import { taskPaths } from "../adapters/shared/concurrency/paths.mjs";
@@ -34,20 +34,13 @@ function argsForExplain(args) {
 function authorityExplanation(ctx) {
 	const lease = ctx.taskId ? readLease(ctx.workspaceRoot, ctx.taskId) : null;
 	const activeLease = lease && !lease.invalid && !isLeaseExpired(lease) ? lease : null;
+	const gate = evaluateOwnershipGate(ctx, { isWrite: true });
+	const writable = !gate.deny;
 	const reasons = [];
-	let writable = false;
-	if (!ctx.concurrentMode) {
-		writable = true;
-		reasons.push("legacy workspace mode does not enforce task write leases");
-	} else if (!ctx.sessionId) reasons.push("no session identity resolved");
-	else if (!ctx.taskId || !ctx.bound) reasons.push("session is not bound to a task");
-	else if (ctx.mode !== "write") reasons.push(`session mode is ${ctx.mode || "unknown"}, not write`);
-	else if (!activeLease) reasons.push("no active write lease for the bound task");
-	else if (activeLease.sessionId !== ctx.sessionId) reasons.push(`write lease is owned by ${activeLease.sessionId}`);
-	else {
-		writable = true;
-		reasons.push("bound write session owns the active task lease");
-	}
+	if (gate.reason) reasons.push(gate.reason);
+	else if (gate.bootstrap) reasons.push("concurrent bootstrap write is allowed because no task exists yet");
+	else if (gate.renewalRequired) reasons.push("write is allowed subject to renewing the expired own lease before execution");
+	else reasons.push("canonical ownership evaluator allows the write");
 	return {
 		workspaceRoot: ctx.workspaceRoot,
 		workspaceMode: ctx.concurrentMode ? "concurrent" : "legacy",
@@ -56,13 +49,11 @@ function authorityExplanation(ctx) {
 		mode: ctx.mode || null,
 		target: ctx.target?.targetRepo || null,
 		worktree: ctx.worktreeRoot || null,
-		lease: lease ? {
-			owner: lease.sessionId || null,
-			expiresAt: lease.expiresAt || null,
-			active: Boolean(activeLease),
-			invalid: Boolean(lease.invalid),
-		} : null,
+		lease: lease ? { owner: lease.sessionId || null, expiresAt: lease.expiresAt || null, active: Boolean(activeLease), invalid: Boolean(lease.invalid) } : null,
 		writable,
+		decisionCode: gate.code || (writable ? "ALLOW" : "DENY"),
+		bootstrap: Boolean(gate.bootstrap),
+		renewalRequired: Boolean(gate.renewalRequired),
 		reasons,
 	};
 }

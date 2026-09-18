@@ -19,7 +19,14 @@ import {
 	writeSession,
 } from "./session.mjs";
 import { readBinding, writeBinding } from "./binding.mjs";
-import { readLease, sessionHoldsWriteLease, refreshLease, isLeaseExpired } from "./lease.mjs";
+import {
+	readLease,
+	sessionHoldsWriteLease,
+	refreshLease,
+	isLeaseExpired,
+	findActiveWriteLeaseForWorktree,
+} from "./lease.mjs";
+import { effectiveSessionAuthority } from "./authority.mjs";
 import { resolveYolo } from "./yolo-scope.mjs";
 import { readDiagnosis } from "./diagnosis.mjs";
 
@@ -315,6 +322,15 @@ export function evaluateOwnershipGate(ctx, { isWrite = false } = {}) {
 			code: "UNBOUND_SESSION",
 		};
 	}
+	const delegated = effectiveSessionAuthority(ctx.workspaceRoot, ctx.sessionId);
+	if (delegated.delegationActive === false) {
+		return {
+			deny: true,
+			reason: `Heli-Harness concurrent mode: delegated authority is inactive (${delegated.reason}).`,
+			code: delegated.reason || "DELEGATION_INACTIVE",
+			authority: delegated,
+		};
+	}
 	if (ctx.mode !== "write") {
 		return {
 			deny: true,
@@ -333,14 +349,20 @@ export function evaluateOwnershipGate(ctx, { isWrite = false } = {}) {
 		}
 		if (lease && isLeaseExpired(lease)) {
 			if (lease.sessionId === ctx.sessionId) {
-				// Own expired lease (e.g. idle overnight): self-renew instead of
-				// forcing a takeover ceremony against yourself.
-				try {
-					refreshLease(ctx.workspaceRoot, ctx.taskId, { sessionId: ctx.sessionId, allowExpiredOwn: true });
-					return { deny: false, ok: true, selfRenewed: true };
-				} catch {
-					/* fall through to the stale denial below */
+				const conflict = findActiveWriteLeaseForWorktree(
+					ctx.workspaceRoot,
+					lease.worktreePath || ctx.worktreeRoot || "",
+					{ exceptSessionId: ctx.sessionId },
+				);
+				if (!conflict) {
+					return { deny: false, ok: true, renewalRequired: true, code: "LEASE_RENEWAL_REQUIRED" };
 				}
+				return {
+					deny: true,
+					reason: `Heli-Harness concurrent mode: expired lease cannot renew because worktree authority is now held by task ${conflict.taskId}, session ${conflict.lease.sessionId}.`,
+					code: "WORKTREE_WRITER_HELD",
+					lease: conflict.lease,
+				};
 			}
 			return {
 				deny: true,
@@ -537,27 +559,18 @@ export function readPlanGateForContext(ctx) {
 }
 
 export function isTaskStateWriteForContext(ctx, paths) {
-	const normalized = paths.map((p) => p.replaceAll("\\", "/").toLowerCase());
-	const endsWithAny = (suffixes) =>
-		normalized.some((path) => suffixes.some((s) => path.endsWith(s.toLowerCase())));
-
-	if (
-		endsWithAny([
-			".heli-harness/state/current-task.md",
-			".heli-harness/state/plan.md",
-			".heli-harness/workspace/target.json",
-			".heli-harness/state/yolo.json",
-		])
-	) {
-		return true;
-	}
-	if (ctx.taskId) {
-		const prefix = `.heli-harness/tasks/${ctx.taskId.toLowerCase()}/`;
-		if (normalized.some((p) => p.includes(prefix))) return true;
-	}
-	// Control-plane files (sessions/, bindings/, locks/, workspace/schema.json)
-	// are deliberately NOT exempt: hand-writing a lease or flipping the workspace
-	// mode must go through the ownership gate, not around it. The CLI and hooks
-	// write these via fs directly and are not path-gated.
-	return false;
+	const normalized = (paths || []).map((p) => p.replaceAll("\\", "/").toLowerCase());
+	if (!normalized.length) return false;
+	const globalSuffixes = [
+		".heli-harness/state/current-task.md",
+		".heli-harness/state/plan.md",
+		".heli-harness/workspace/target.json",
+		".heli-harness/state/yolo.json",
+	];
+	const taskPrefix = ctx.taskId ? `.heli-harness/tasks/${ctx.taskId.toLowerCase()}/` : null;
+	return normalized.every((path) => {
+		if (globalSuffixes.some((suffix) => path.endsWith(suffix))) return true;
+		if (taskPrefix && path.includes(taskPrefix)) return true;
+		return false;
+	});
 }

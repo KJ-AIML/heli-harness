@@ -242,6 +242,21 @@ export function isFileMutationTool(
 	return hasMutationVerb(normalizedToolNameTokens(name));
 }
 
+export function isLikelyShellMutation(toolName, commandText) {
+	const name = String(toolName ?? "").toLowerCase();
+	if (!/(^|[_\-.])(bash|shell|terminal|exec|run_command|run-command)($|[_\-.])/.test(name)) return false;
+	const command = String(commandText ?? "").toLowerCase();
+	if (!command.trim()) return false;
+	// Best-effort common mutation detection only; this is not a sandbox.
+	if (/(^|[^<])>>?\s*[^&|]/m.test(command)) return true;
+	if (/\b(tee|touch|mkdir|rmdir|rm|mv|cp|truncate)\b/.test(command)) return true;
+	if (/\bsed\s+[^\n;|&]*-i(?:\s|$)/.test(command)) return true;
+	if (/\bperl\s+[^\n;|&]*-p?i(?:\s|$)/.test(command)) return true;
+	if (/\bgit\s+(add|commit|checkout|switch|restore|reset|clean|rm|mv)\b/.test(command)) return true;
+	if (/\b(npm|pnpm|yarn|bun)\s+(install|add|remove|uninstall|update|upgrade)\b/.test(command)) return true;
+	return false;
+}
+
 export function readTaskGate(cwd) {
 	const ctx = resolveExecutionContext({ cwd, createIfMissing: false, host: "legacy-gate" });
 	if (!ctx.workspaceRoot && !existsSync(join(cwd, ".heli-harness", "HARNESS.md"))) return null;
@@ -267,9 +282,10 @@ export function withCliHint(reason) {
 }
 
 export function isTaskStateWrite(paths) {
-	// Control-plane paths (sessions/, locks/, bindings/, workspace/schema.json)
-	// are deliberately excluded — hand-writes there must face the ownership gate.
-	return paths.some(
+	// Exempt only when EVERY affected path is task/projection state. A mixed
+	// task-state + source patch must still face the ownership gate.
+	if (!Array.isArray(paths) || paths.length === 0) return false;
+	return paths.every(
 		(path) =>
 			path.endsWith(".heli-harness/state/current-task.md") ||
 			path.endsWith(".heli-harness/state/plan.md") ||
@@ -359,27 +375,42 @@ export function evaluatePreToolUse({
 	);
 	const name = String(toolName);
 
-	const isWrite = isFileMutationTool(name, { paths, writeToolNames });
+	const shellMutation = isLikelyShellMutation(name, rawCommand);
+	const isWrite = isFileMutationTool(name, { paths, writeToolNames }) || shellMutation;
+	const taskStateOnly = isTaskStateWriteForContext(ctx, paths) || isTaskStateWrite(paths);
+	let ownershipDecision = null;
 
-	// Ownership gates — NEVER bypassed by YOLO
-	if (isWrite && !isTaskStateWriteForContext(ctx, paths) && !isTaskStateWrite(paths)) {
-		const ownership = evaluateOwnershipGate(ctx, { isWrite: true });
-		if (ownership.deny) {
-			return { deny: true, reason: withCliHint(ownership.reason), code: ownership.code, ctx };
+	// Ownership gates — NEVER bypassed by YOLO.
+	if (isWrite && !taskStateOnly) {
+		ownershipDecision = evaluateOwnershipGate(ctx, { isWrite: true });
+		if (ownershipDecision.deny) {
+			return {
+				deny: true,
+				reason: withCliHint(ownershipDecision.reason),
+				code: ownershipDecision.code,
+				ctx,
+				coverage: shellMutation ? "shell-mutation-best-effort" : "structured-write",
+			};
 		}
 	}
 
-	if (
-		isWrite &&
-		ctx.concurrentMode &&
-		ctx.taskId &&
-		ctx.sessionId &&
-		sessionHoldsWriteLease(ctx.workspaceRoot, ctx.taskId, ctx.sessionId)
-	) {
-		try {
-			refreshLease(ctx.workspaceRoot, ctx.taskId, { sessionId: ctx.sessionId });
-		} catch {
-			/* ignore */
+	if (isWrite && !taskStateOnly && ctx.concurrentMode && ctx.taskId && ctx.sessionId) {
+		const activeOwner = sessionHoldsWriteLease(ctx.workspaceRoot, ctx.taskId, ctx.sessionId);
+		if (activeOwner || ownershipDecision?.renewalRequired) {
+			try {
+				refreshLease(ctx.workspaceRoot, ctx.taskId, {
+					sessionId: ctx.sessionId,
+					allowExpiredOwn: Boolean(ownershipDecision?.renewalRequired),
+				});
+			} catch (error) {
+				return {
+					deny: true,
+					reason: withCliHint(`Heli-Harness could not establish current write authority before execution: ${error.message}`),
+					code: error.code || "LEASE_REFRESH_FAILED",
+					ctx,
+					coverage: shellMutation ? "shell-mutation-best-effort" : "structured-write",
+				};
+			}
 		}
 	}
 
