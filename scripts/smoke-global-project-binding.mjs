@@ -24,6 +24,10 @@ const data = join(root, "data");
 const heli = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "heli.mjs");
 mkdirSync(join(project, "src"), { recursive: true });
 const env = { ...process.env, HELI_CONFIG_DIR: config, HELI_DATA_DIR: data };
+const oldConfig = process.env.HELI_CONFIG_DIR;
+const oldData = process.env.HELI_DATA_DIR;
+process.env.HELI_CONFIG_DIR = config;
+process.env.HELI_DATA_DIR = data;
 
 function run(args, status = 0) {
 	const result = spawnSync(process.execPath, [heli, ...args], { encoding: "utf8", env });
@@ -106,5 +110,9 @@ try {
 
 	console.log("global project binding smoke ok");
 } finally {
+	if (oldConfig == null) delete process.env.HELI_CONFIG_DIR;
+	else process.env.HELI_CONFIG_DIR = oldConfig;
+	if (oldData == null) delete process.env.HELI_DATA_DIR;
+	else process.env.HELI_DATA_DIR = oldData;
 	rmSync(root, { recursive: true, force: true });
 }
