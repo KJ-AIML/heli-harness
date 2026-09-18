@@ -2,15 +2,18 @@
 import { ensureGlobalSetup, readWorkspaceRegistry } from "../adapters/shared/concurrency/project-binding.mjs";
 import { wantsJson, stripOutputFlags, printProtocolResult } from "./output.mjs";
 import { protocolOk } from "../protocol/result.mjs";
+import { ensureDefaultUserPolicy, userPolicyPath } from "../adapters/shared/concurrency/policy-composition.mjs";
 
 export function setupHeli({ env = process.env } = {}) {
 	const setup = ensureGlobalSetup(env);
+	ensureDefaultUserPolicy(env);
 	return {
 		configDir: setup.configDir,
 		dataDir: setup.dataDir,
 		machineId: setup.machine.machineId,
 		registryPath: setup.registryPath,
 		registryEntries: readWorkspaceRegistry(env).workspaces.length,
+		userPolicyPath: userPolicyPath(env),
 	};
 }
 
@@ -26,6 +29,7 @@ export function runSetup(args = []) {
 	console.log(`  data: ${result.dataDir}`);
 	console.log(`  machine: ${result.machineId}`);
 	console.log(`  registry: ${result.registryPath} (locator only, not authority)`);
+	console.log(`  trusted user policy: ${result.userPolicyPath}`);
 	console.log("Next: cd <project> && heli link");
 	return result;
 }

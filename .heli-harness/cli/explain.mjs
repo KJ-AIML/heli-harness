@@ -15,6 +15,8 @@ import { parseEventJsonl, latestEvent } from "../protocol/events.mjs";
 import { protocolOk, protocolError } from "../protocol/result.mjs";
 import { HELI_CAPABILITY_NAMES, composeCapabilityClaims } from "../protocol/capabilities.mjs";
 import { wantsJson, stripOutputFlags, printProtocolResult } from "./output.mjs";
+import { resolvePolicyComposition } from "../adapters/shared/concurrency/policy-composition.mjs";
+import { listGrants } from "../adapters/shared/concurrency/grant.mjs";
 
 function readJson(path, fallback = null) {
 	try {
@@ -151,6 +153,12 @@ export function runExplain(args = []) {
 	} else if (subject === "capabilities") data = explainCapabilities(workspaceRoot, ctx);
 	else if (subject === "guard") data = explainGuard(workspaceRoot, explicitTaskId || ctx.taskId || null);
 	else if (subject === "decision") data = explainDecision(workspaceRoot, decisionId, explicitTaskId);
+	else if (subject === "config") {
+		data = {
+			policy: resolvePolicyComposition(workspaceRoot),
+			activeGrants: listGrants(workspaceRoot, { activeOnly: true }),
+		};
+	}
 	else {
 		const result = protocolError(`explain.${subject}`, "UNKNOWN_EXPLAIN_SUBJECT", `Unknown explain subject: ${subject}`);
 		if (json) printProtocolResult(result);

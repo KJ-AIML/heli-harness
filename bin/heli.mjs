@@ -19,6 +19,7 @@ import { runExplain } from "../lib/cli/explain.mjs";
 import { runTrace } from "../lib/cli/trace.mjs";
 import { runSetup } from "../lib/cli/setup.mjs";
 import { runLink } from "../lib/cli/link.mjs";
+import { runGrant } from "../lib/cli/grant.mjs";
 import { runTargetMachine, runTaskMachine, runDiagnosisMachine, runConflictsMachine } from "../lib/cli/machine.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -54,6 +55,7 @@ function usage() {
 Commands:
   --version | -v  print the Heli-Harness version
   setup | link
+  grant issue|list|revoke
   install | update | uninstall
   target | status | yolo
   doctor [path]  (workspace health: plugins, target, leases, sessions, sync)
@@ -91,6 +93,7 @@ try {
 	switch (command) {
 		case "setup": runSetup(args); break;
 		case "link": runLink(packageRoot, args); break;
+		case "grant": runGrant(args); break;
 		case "install": runInstall(packageRoot, args); break;
 		case "update": runUpdate(packageRoot, args); break;
 		case "uninstall": runUninstall(args); break;
