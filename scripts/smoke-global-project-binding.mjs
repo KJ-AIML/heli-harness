@@ -48,6 +48,10 @@ try {
 	assert.match(linkedJson.data.executionId, /^heli-exec-/);
 	assert.ok(existsSync(join(project, ".heli", "workspace.json")));
 	assert.ok(existsSync(join(project, ".heli", "heli.lock")));
+	assert.ok(
+		existsSync(join(project, ".heli", "safety", "command-rules.json")),
+		"fresh linked project should receive built-in safety defaults without overwriting project-owned files",
+	);
 	assert.equal(findWorkspaceRoot(join(project, "src")), project.replaceAll("\\", "/"));
 
 	const firstPaths = pathsFor(project);

@@ -57,8 +57,19 @@ function activeEmbeddedLeases(projectRoot) {
 }
 
 function copyIfMissing(from, to) {
-	if (!existsSync(from) || existsSync(to)) return false;
-	cpSync(from, to, { recursive: true, force: false });
+	if (!existsSync(from)) return false;
+	const source = statSync(from);
+	if (source.isDirectory()) {
+		ensureDir(to);
+		let copied = false;
+		for (const name of readdirSync(from)) {
+			copied = copyIfMissing(join(from, name), join(to, name)) || copied;
+		}
+		return copied;
+	}
+	if (existsSync(to)) return false;
+	ensureDir(join(to, ".."));
+	cpSync(from, to, { force: false });
 	return true;
 }
 
