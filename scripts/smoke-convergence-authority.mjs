@@ -7,7 +7,10 @@ import { createTask } from "../lib/concurrency/task.mjs";
 import { createSession, attachSession, closeSession } from "../lib/concurrency/session.mjs";
 import { acquireWriteLease, readLease } from "../lib/concurrency/lease.mjs";
 import { effectiveSessionAuthority, transferWriteAuthority } from "../lib/concurrency/authority.mjs";
-import { evaluatePreToolUse } from "../.heli-harness/adapters/shared/hook-core.mjs";
+import {
+	evaluatePreToolUse,
+	resolveExecutionContext,
+} from "../.heli-harness/adapters/shared/hook-core.mjs";
 
 function fixture() {
 	const root = mkdtempSync(join(tmpdir(), "heli-convergence-authority-"));
@@ -92,3 +95,46 @@ function fixture() {
 	}
 }
 console.log("smoke-convergence-authority: passed");
+
+
+{
+	const root = fixture();
+	try {
+		const claude = createSession(root, {
+			sessionId: "host-claude",
+			host: "claude",
+			externalHostSessionId: "same-external-id",
+			worktreePath: root,
+		});
+		const opencode = createSession(root, {
+			sessionId: "host-opencode",
+			host: "opencode",
+			externalHostSessionId: "same-external-id",
+			worktreePath: root,
+		});
+		const claudeCtx = resolveExecutionContext({
+			cwd: root,
+			host: "claude",
+			hookPayload: { session_id: "same-external-id" },
+			createIfMissing: false,
+		});
+		const opencodeCtx = resolveExecutionContext({
+			cwd: root,
+			host: "opencode",
+			hookPayload: { session_id: "same-external-id" },
+			createIfMissing: false,
+		});
+		assert.equal(claudeCtx.sessionId, claude.sessionId);
+		assert.equal(opencodeCtx.sessionId, opencode.sessionId);
+		const unknownHost = resolveExecutionContext({
+			cwd: root,
+			host: "other-host",
+			hookPayload: { session_id: "same-external-id" },
+			createIfMissing: false,
+		});
+		assert.equal(unknownHost.sessionId, null, "explicit unmatched host session must not inherit another host binding");
+		console.log("ok: external host session identity is namespaced by host");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+}

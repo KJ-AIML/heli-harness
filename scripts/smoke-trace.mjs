@@ -24,6 +24,8 @@ try {
 	assert.equal(trace.data.taskId, "trace-t1");
 	assert.equal(trace.data.events.length, 1);
 	assert.equal(trace.data.events[0].eventSchemaVersion, 1);
+	assert.equal(trace.data.completeness.guardDecisionPersistence, "denials-only");
+	assert.equal(trace.data.completeness.allowsPersisted, false);
 	console.log("trace smoke ok");
 } finally {
 	rmSync(parent, { recursive: true, force: true });

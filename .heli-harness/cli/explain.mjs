@@ -3,11 +3,17 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { findWorkspaceRoot } from "../adapters/shared/concurrency/paths.mjs";
 import { resolveExecutionContext, evaluateOwnershipGate } from "../adapters/shared/concurrency/resolve.mjs";
-import { readTask, listActiveTasks } from "../adapters/shared/concurrency/task.mjs";
+import { readTask, listActiveTasks, listTasks } from "../adapters/shared/concurrency/task.mjs";
+import {
+	observedCapabilityMap,
+	currentObservedCapabilityMap,
+	runtimeObservationStatus,
+} from "../adapters/shared/concurrency/attestation.mjs";
 import { readLease, isLeaseExpired } from "../adapters/shared/concurrency/lease.mjs";
 import { taskPaths } from "../adapters/shared/concurrency/paths.mjs";
 import { parseEventJsonl, latestEvent } from "../protocol/events.mjs";
 import { protocolOk, protocolError } from "../protocol/result.mjs";
+import { HELI_CAPABILITY_NAMES, composeCapabilityClaims } from "../protocol/capabilities.mjs";
 import { wantsJson, stripOutputFlags, printProtocolResult } from "./output.mjs";
 
 function readJson(path, fallback = null) {
@@ -28,7 +34,10 @@ function argsForExplain(args) {
 		if (clean[i] === "--task" && clean[i + 1]) taskId = clean[++i];
 		else if (!clean[i].startsWith("--")) positional.push(clean[i]);
 	}
-	return { json, subject, taskId, cwd: positional[0] || process.cwd() };
+	if (subject === "decision") {
+		return { json, subject, taskId, decisionId: positional[0] || null, cwd: positional[1] || process.cwd() };
+	}
+	return { json, subject, taskId, decisionId: null, cwd: positional[0] || process.cwd() };
 }
 
 function authorityExplanation(ctx) {
@@ -61,21 +70,57 @@ function authorityExplanation(ctx) {
 function explainCapabilities(workspaceRoot, ctx) {
 	const manifest = readJson(join(workspaceRoot, ".heli-harness", "adapters", "adapters.json"), { adapters: [] });
 	const adapters = Array.isArray(manifest?.adapters) ? manifest.adapters : [];
-	const selected = adapters.find((adapter) => adapter.id === ctx.host) || null;
-	return {
-		host: ctx.host || "unknown",
-		selectedAdapter: selected ? {
-			id: selected.id,
-			status: selected.status,
-			capabilities: selected.capabilities || {},
-		} : null,
-		adapters: adapters.map((adapter) => ({
-			id: adapter.id,
-			status: adapter.status,
-			capabilities: adapter.capabilities || {},
-		})),
-		note: "declared package metadata is not proof that a host loaded the adapter in this session",
+	const session = ctx.session || null;
+	const host = session?.host || ctx.host || "unknown";
+	const selected = adapters.find((adapter) => adapter.id === host) || null;
+	const rawObserved = observedCapabilityMap(session);
+	const criteria = {
+		host,
+		hostSessionId: session?.externalHostSessionId || null,
+		runtimeInstanceId: process.env.HELI_RUNTIME_INSTANCE_ID || null,
+		adapterDigest: process.env.HELI_ADAPTER_DIGEST || null,
+		configHash: process.env.HELI_CONFIG_HASH || null,
 	};
+	const currentObserved = currentObservedCapabilityMap(session, criteria);
+	const claims = composeCapabilityClaims({
+		declared: selected?.capabilities || {},
+		observed: currentObserved,
+		names: HELI_CAPABILITY_NAMES,
+	});
+	const observations = Object.fromEntries(
+		Object.entries(rawObserved).map(([name, observation]) => [
+			name,
+			{ ...observation, freshness: runtimeObservationStatus(observation, criteria) },
+		]),
+	);
+	return {
+		host,
+		sessionId: session?.sessionId || null,
+		selectedAdapter: selected ? { id: selected.id, status: selected.status, capabilities: selected.capabilities || {} } : null,
+		claims,
+		observations,
+		adapters: adapters.map((adapter) => ({ id: adapter.id, status: adapter.status, capabilities: adapter.capabilities || {} })),
+		note: "declared metadata and live callback observations are distinct; observed does not imply full enforcement",
+	};
+}
+
+function explainDecision(workspaceRoot, decisionId, explicitTaskId = null) {
+	if (!decisionId) return { decisionId: null, event: null, warnings: ["decision id required"] };
+	const tasks = explicitTaskId ? [{ taskId: explicitTaskId }] : listTasks(workspaceRoot);
+	for (const task of tasks) {
+		const path = taskPaths(workspaceRoot, task.taskId).eventsJsonl;
+		if (!existsSync(path)) continue;
+		const parsed = parseEventJsonl(readFileSync(path, "utf8"));
+		const event = parsed.events.find(
+			(item) =>
+				(item.type === "guard.decision" || item.type === "guard_decision") &&
+				item.decision?.decisionId === decisionId,
+		);
+		if (event) {
+			return { decisionId, taskId: task.taskId, event, decision: event.decision || null, warnings: parsed.warnings, replay: "recorded-receipt" };
+		}
+	}
+	return { decisionId, event: null, warnings: ["recorded decision not found"] };
 }
 
 function explainGuard(workspaceRoot, taskId) {
@@ -88,7 +133,7 @@ function explainGuard(workspaceRoot, taskId) {
 }
 
 export function runExplain(args = []) {
-	const { json, subject, taskId: explicitTaskId, cwd } = argsForExplain(args);
+	const { json, subject, taskId: explicitTaskId, decisionId, cwd } = argsForExplain(args);
 	const workspaceRoot = findWorkspaceRoot(cwd);
 	if (!workspaceRoot) {
 		const result = protocolError(`explain.${subject}`, "WORKSPACE_NOT_FOUND", `No Heli workspace found from ${cwd}`);
@@ -105,6 +150,7 @@ export function runExplain(args = []) {
 		data = { taskId, task: taskId ? readTask(workspaceRoot, taskId) : null };
 	} else if (subject === "capabilities") data = explainCapabilities(workspaceRoot, ctx);
 	else if (subject === "guard") data = explainGuard(workspaceRoot, explicitTaskId || ctx.taskId || null);
+	else if (subject === "decision") data = explainDecision(workspaceRoot, decisionId, explicitTaskId);
 	else {
 		const result = protocolError(`explain.${subject}`, "UNKNOWN_EXPLAIN_SUBJECT", `Unknown explain subject: ${subject}`);
 		if (json) printProtocolResult(result);

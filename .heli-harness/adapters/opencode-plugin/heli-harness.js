@@ -14,6 +14,12 @@ import { recordGuardDecision } from "./shared/concurrency/governance-decision.mj
 export const HeliHarness = async (ctx) => {
 	const directory = ctx?.directory || process.cwd();
 	const host = "opencode";
+	const externalSessionId = (input) =>
+		input?.sessionID ??
+		input?.sessionId ??
+		input?.session_id ??
+		input?.session?.id ??
+		null;
 	return {
 		"tool.execute.before": async (input, output) => {
 			const tool = String(input?.tool ?? "");
@@ -29,7 +35,11 @@ export const HeliHarness = async (ctx) => {
 				toolName: tool,
 				toolInput,
 				host,
-				hookPayload: { tool_name: tool, tool_input: toolInput },
+				hookPayload: {
+					tool_name: tool,
+					tool_input: toolInput,
+					session_id: externalSessionId(input),
+				},
 			});
 			if (result.ctx?.workspaceRoot && result.ctx?.sessionId) {
 				observeRuntimeCapability(result.ctx.workspaceRoot, result.ctx.sessionId, { host, capability: "pre_tool", source: "tool.execute.before" });
@@ -38,10 +48,16 @@ export const HeliHarness = async (ctx) => {
 			recordGuardDecision(result, { host, toolName: tool, source: "tool.execute.before" });
 			if (result.deny) throw new Error(result.reason);
 		},
-		"experimental.session.compacting": async (_input, output) => {
+		"experimental.session.compacting": async (input, output) => {
 			if (output && Array.isArray(output.context)) {
 				output.context.push(buildSessionContext(directory, { host }));
-				const resolved = resolveExecutionContext({ cwd: directory, host, createIfMissing: false, refreshLeaseOnResolve: false });
+				const resolved = resolveExecutionContext({
+					cwd: directory,
+					host,
+					hookPayload: { session_id: externalSessionId(input) },
+					createIfMissing: false,
+					refreshLeaseOnResolve: false,
+				});
 				if (resolved.workspaceRoot && resolved.sessionId) {
 					observeRuntimeCapability(resolved.workspaceRoot, resolved.sessionId, { host, capability: "compaction", source: "experimental.session.compacting" });
 				}

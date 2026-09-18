@@ -131,7 +131,7 @@ export function resolveExecutionContext({
 
 	// 2. Documented external host session id (metadata mapping only)
 	if (!session && externalHostSessionId) {
-		session = findSessionByExternalId(workspaceRoot, externalHostSessionId);
+		session = findSessionByExternalId(workspaceRoot, externalHostSessionId, { host });
 		if (session) {
 			sessionId = session.sessionId;
 			identitySource = "externalHostSessionId";
@@ -155,8 +155,10 @@ export function resolveExecutionContext({
 		}
 	}
 
-	// 3. Unique active session binding for canonical worktree
-	if (!session) {
+	// 3. Unique active session binding for canonical worktree.
+	// Never substitute a worktree-bound actor when the host supplied an explicit
+	// external session identity that did not match this host.
+	if (!session && !externalHostSessionId) {
 		const binding = readBinding(workspaceRoot, worktreeRoot);
 		if (binding?.defaultSessionId) {
 			const bound = readSession(workspaceRoot, binding.defaultSessionId);

@@ -15,6 +15,10 @@ export function newEventId() {
 	return `heli-evt-${randomUUID()}`;
 }
 
+export function newDecisionId() {
+	return `heli-dec-${randomUUID()}`;
+}
+
 export function hashCanonicalPath(canonicalPath) {
 	return createHash("sha256").update(String(canonicalPath)).digest("hex").slice(0, 24);
 }

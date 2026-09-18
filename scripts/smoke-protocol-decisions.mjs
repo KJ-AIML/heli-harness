@@ -24,12 +24,19 @@ assert.equal(deny.deny, true);
 assert.equal(deny.reason, "claim write first");
 assert.equal(deny.code, "NO_LEASE");
 assert.deepEqual(deny.decision, {
+	decisionSchemaVersion: 1,
+	decisionId: null,
 	code: "NO_LEASE",
 	effect: "deny",
 	rule: "ownership",
 	source: "ownership_gate",
+	host: null,
 	taskId: "task-a",
 	sessionId: "hs-a",
+	toolName: null,
+	reason: "claim write first",
+	coverage: null,
+	at: null,
 });
 
 const allow = withStructuredDecision({ deny: false, ctx: {} }, { source: "pre_tool" });
