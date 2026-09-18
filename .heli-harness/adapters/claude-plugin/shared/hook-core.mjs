@@ -646,7 +646,7 @@ export function evaluateCommandTierRules(workspaceRoot, command, env = process.e
 				`Heli-Harness ${kind} "${rule.match}" (rule ${rule.id}, tier ${rule.tier}): ${rule.reason || "see safety/command-rules.json"}. ` +
 				(rule.tier === "T6"
 					? "This is a hard deny; scoped grants do not override it."
-					: `Preferred opt-in: \`heli grant issue --action command.approval.${rule.id} --scope once\`. Emergency/debug overrides remain HELI_ALLOW_COMMAND/YOLO.`),
+					: `Preferred opt-in: \`heli grant issue --action command.approval.${rule.id} --scope once\`. Emergency/debug overrides remain HELI_ALLOW_COMMAND=${rule.id} or YOLO.`),
 		};
 	}
 	return null;
