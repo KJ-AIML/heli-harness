@@ -55,7 +55,7 @@ const protocolFiles = existsSync(join(root, "lib", "protocol"))
 	: [];
 const expected = new Map([
 	["heli.mjs", renderEntry()],
-	["project-binding.mjs", HEADER + lf(readFileSync(join(root, "lib", "project-binding.mjs"), "utf8")),
+	["project-binding.mjs", HEADER + lf(readFileSync(join(root, "lib", "project-binding.mjs"), "utf8"))],
 ]);
 for (const name of cliFiles) {
 	expected.set(join("cli", name).replaceAll("\\", "/"), renderCliModule(name));
