@@ -19,7 +19,7 @@ import { runDiagnosis } from "./cli/diagnosis.mjs";
 import { runExplain } from "./cli/explain.mjs";
 import { runTrace } from "./cli/trace.mjs";
 import { runTargetMachine, runTaskMachine, runDiagnosisMachine, runConflictsMachine } from "./cli/machine.mjs";
-import { writeProjectBinding } from "../lib/project-binding.mjs";
+import { writeProjectBinding } from "./project-binding.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [command, ...args] = process.argv.slice(2);
