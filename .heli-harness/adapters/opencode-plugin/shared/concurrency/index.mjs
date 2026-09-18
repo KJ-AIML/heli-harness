@@ -19,3 +19,5 @@ export * from "./diagnosis.mjs";
 export * from "./conflicts.mjs";
 export * from "./resolve.mjs";
 export * from "./task-transitions.mjs";
+export * from "./project-binding.mjs";
+export * from "./resource-authority.mjs";
