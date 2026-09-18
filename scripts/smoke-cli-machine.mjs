@@ -77,6 +77,20 @@ try {
 	assert.equal(shown.command, "task.show");
 	assert.equal(shown.data.task.taskId, "machine-smoke");
 
+	// Machine lifecycle uses the same canonical transitions as human CLI.
+	// Takeover may mint/attach a session exactly like the human surface.
+	const takeover = invoke(packageCli, ["task", "takeover", "machine-smoke", "--confirm", "--json", workspace]);
+	assert.equal(takeover.command, "task.takeover");
+	assert.equal(takeover.data.session.taskId, "machine-smoke");
+	assert.equal(takeover.data.lease.sessionId, takeover.data.sessionId);
+	const completed = invoke(
+		packageCli,
+		["task", "complete", "machine-smoke", "--session", takeover.data.sessionId, "--json", workspace],
+	);
+	assert.equal(completed.command, "task.complete");
+	assert.equal(completed.data.task.status, "complete");
+	assert.ok(completed.data.releasedLease, "completion by writer should release the active lease");
+
 	const diagnosis = invoke(packageCli, ["diagnosis", "show", "machine-smoke", "--json", workspace]);
 	assert.equal(diagnosis.command, "diagnosis.show");
 	assert.equal(diagnosis.data.taskId, "machine-smoke");

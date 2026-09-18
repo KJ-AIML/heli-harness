@@ -18,3 +18,4 @@ export * from "./portable-targets.mjs";
 export * from "./diagnosis.mjs";
 export * from "./conflicts.mjs";
 export * from "./resolve.mjs";
+export * from "./task-transitions.mjs";
