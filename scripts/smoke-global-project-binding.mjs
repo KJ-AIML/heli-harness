@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import {
+	canonicalizePath,
 	findWorkspaceRoot,
 	pathsFor,
 } from "../lib/concurrency/index.mjs";
@@ -52,7 +53,7 @@ try {
 		existsSync(join(project, ".heli", "safety", "command-rules.json")),
 		"fresh linked project should receive built-in safety defaults without overwriting project-owned files",
 	);
-	assert.equal(findWorkspaceRoot(join(project, "src")), project.replaceAll("\\", "/"));
+	assert.equal(findWorkspaceRoot(join(project, "src")), canonicalizePath(project));
 
 	const firstPaths = pathsFor(project);
 	assert.equal(firstPaths.linked, true);
