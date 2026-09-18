@@ -32,15 +32,15 @@ function error(code, message, extra = {}) {
 	return value;
 }
 
-export function localExecutionGrantIdentity(workspaceRoot) {
-	const linked = resolveExecutionIdentity(workspaceRoot);
+export function localExecutionGrantIdentity(workspaceRoot, { env = process.env } = {}) {
+	const linked = resolveExecutionIdentity(workspaceRoot, { env });
 	if (linked) return linked.executionId;
 	return `heli-exec-embedded-${hashCanonicalPath(canonicalizePath(workspaceRoot))}`;
 }
 
 export function grantStorePaths(workspaceRoot, { env = process.env } = {}) {
 	const workspaceKey = projectWorkspaceKey(workspaceRoot, { env });
-	const executionId = localExecutionGrantIdentity(workspaceRoot);
+	const executionId = localExecutionGrantIdentity(workspaceRoot, { env });
 	const dir = join(
 		globalDataDir(env),
 		"grants",

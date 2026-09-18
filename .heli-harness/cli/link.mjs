@@ -27,7 +27,8 @@ import { IDLE_CURRENT_TASK } from "./seed-workspace.mjs";
 import { wantsJson, stripOutputFlags, printProtocolResult } from "./output.mjs";
 import { protocolOk } from "../protocol/result.mjs";
 
-const OPERATIONAL_DIRS = ["state", "sessions", "tasks", "bindings", "locks", "workspace"];
+const PORTABLE_OPERATIONAL_DIRS = ["tasks", "workspace"];
+const PORTABLE_STATE_FILES = ["current-task.md", "decisions.md"];
 const PROJECT_OVERLAYS = ["profiles", "policies", "safety", "skills"];
 
 function error(code, message) {
@@ -169,8 +170,18 @@ export function linkProject(packageRoot, projectRoot, {
 	ensureDir(operationalRoot);
 
 	if (firstLink && existsSync(embeddedRoot)) {
-		for (const name of OPERATIONAL_DIRS) {
+		// Evidence/work records may move. Authorization/runtime identity must not:
+		// never copy sessions, bindings, locks, yolo, sync state, grants, or
+		// capability observations into the linked execution namespace.
+		for (const name of PORTABLE_OPERATIONAL_DIRS) {
 			copyIfMissing(join(embeddedRoot, name), join(operationalRoot, name));
+		}
+		ensureDir(join(operationalRoot, "state"));
+		for (const name of PORTABLE_STATE_FILES) {
+			copyIfMissing(
+				join(embeddedRoot, "state", name),
+				join(operationalRoot, "state", name),
+			);
 		}
 		for (const name of PROJECT_OVERLAYS) {
 			copyIfMissing(join(embeddedRoot, name), join(projectConfigDir(root), name));

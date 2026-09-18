@@ -6,7 +6,7 @@
  * by a short-lived local mutex. This is cooperative local authority, not an OS
  * sandbox or remote fencing mechanism.
  */
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
 	claimDirExclusive,
 	ensureDir,
@@ -98,11 +98,18 @@ export function listResourceLeases(workspaceRoot) {
 
 export function readResourceLeaseForTask(workspaceRoot, taskId) {
 	if (!taskId) return null;
-	return listResourceLeases(workspaceRoot).find((lease) => !lease.invalid && lease.taskId === taskId) || null;
+	const leases = listResourceLeases(workspaceRoot);
+	const valid = leases.find((lease) => !lease.invalid && lease.taskId === taskId);
+	if (valid) return valid;
+	// Preserve malformed-state truthfulness when the raw payload still identifies
+	// the task; callers can then fail closed as MALFORMED_LEASE.
+	return leases.find(
+		(lease) => lease.invalid && String(lease.raw?.taskId || "") === String(taskId),
+	) || null;
 }
 
 function withResourceMutex(paths, fn) {
-	ensureDir(join(paths.mutexDir, ".."));
+	ensureDir(dirname(paths.mutexDir));
 	const claimed = claimDirExclusive(paths.mutexDir);
 	if (!claimed.ok) {
 		throw error(
