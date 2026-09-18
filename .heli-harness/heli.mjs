@@ -3,7 +3,7 @@
 
 import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { runInstall } from "./cli/install.mjs";
 import { runUpdate } from "./cli/update.mjs";
 import { runUninstall } from "./cli/uninstall.mjs";
@@ -19,6 +19,7 @@ import { runDiagnosis } from "./cli/diagnosis.mjs";
 import { runExplain } from "./cli/explain.mjs";
 import { runTrace } from "./cli/trace.mjs";
 import { runTargetMachine, runTaskMachine, runDiagnosisMachine, runConflictsMachine } from "./cli/machine.mjs";
+import { writeProjectBinding } from "../lib/project-binding.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [command, ...args] = process.argv.slice(2);
@@ -37,6 +38,26 @@ function version() {
 	return "unknown";
 }
 
+function runLink(values) {
+	const overwrite = values.includes("--force");
+	const positionals = values.filter((value) => value !== "--force");
+	if (positionals.length > 1) throw Object.assign(new Error("Usage: heli link [path] [--force]"), { code: "INVALID_ARGUMENTS" });
+	const projectRoot = resolve(positionals[0] || process.cwd());
+	const runtimeVersion = version();
+	if (runtimeVersion === "unknown") throw Object.assign(new Error("cannot link project without a resolvable Heli runtime version"), { code: "RUNTIME_VERSION_UNKNOWN" });
+	const workspaceId = basename(projectRoot);
+	const binding = writeProjectBinding(projectRoot, {
+		schemaVersion: 1,
+		workspaceId,
+		resources: { root: "." },
+		policyProfile: "default",
+	}, {
+		schemaVersion: 1,
+		pins: { runtimePackage: `heli-harness@${runtimeVersion}` },
+	}, { overwrite });
+	console.log(`Linked ${binding.workspace.workspaceId} -> ${projectRoot}`);
+}
+
 function protocolJsonRequested(commandName, values) {
 	if (values.includes("--output-json")) return true;
 	const index = values.indexOf("--json");
@@ -53,6 +74,7 @@ function usage() {
 Commands:
   --version | -v  print the Heli-Harness version
   install | update | uninstall
+  link [path] [--force]  commit-safe local project binding (.heli/workspace.json + heli.lock)
   target | status | yolo
   doctor [path]  (workspace health: plugins, target, leases, sessions, sync)
   task create|list|show|migrate-legacy|claim|release|takeover
@@ -90,6 +112,7 @@ try {
 		case "install": runInstall(packageRoot, args); break;
 		case "update": runUpdate(packageRoot, args); break;
 		case "uninstall": runUninstall(args); break;
+		case "link": runLink(args); break;
 		case "target": protocolJsonRequested(command, args) ? runTargetMachine(args) : runTarget(args); break;
 		case "status": runStatus(args); break;
 		case "doctor": runDoctor(args); break;
