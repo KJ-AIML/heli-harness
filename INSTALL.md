@@ -1,272 +1,216 @@
-# Install
+# Install — Heli-Harness v0.10.0
 
-The workspace harness is the primary install mode. It installs `.heli-harness/` into a parent workspace, alongside `AGENTS.md` and `CLAUDE.md` pointer files.
+**Current release:** `v0.10.0`  
+**Primary model:** shared/global distribution + explicit project binding  
+**Architecture:** [docs/architecture/README.md](docs/architecture/README.md)
 
-## Fast path
+## Recommended v0.10 setup
 
-Ask your agent:
+The npm registry publication for `0.10.0` may lag the GitHub release. The pinned GitHub package is the authoritative install path until `npm view heli-harness@0.10.0` succeeds.
+
+```bash
+npm install -g github:KJ-AIML/heli-harness#v0.10.0
+heli --version
+heli setup
+```
+
+`heli setup` initializes the trusted user/global environment, including machine identity, user policy, and the rebuildable workspace registry. The registry is a locator only; it does not own live project authority.
+
+Link a project:
+
+```bash
+cd /path/to/project
+heli link
+heli doctor
+heli status
+```
+
+A linked project receives:
 
 ```text
-Install https://github.com/KJ-AIML/heli-harness into this folder as a parent-workspace harness. Use the latest stable tag, do not install globally, and confirm that .heli-harness/HARNESS.md, AGENTS.md, and CLAUDE.md exist.
+.heli/
+├── workspace.json
+├── heli.lock
+├── policies/
+├── profiles/
+├── safety/
+└── skills/
 ```
 
-## CLI
+`.heli/workspace.json` contains logical project/resource identity. `.heli/heli.lock` pins behavior-relevant runtime/protocol/schema information.
 
-Global install from the npm registry (package name is `heli-harness` — `heli` is taken — but the command it installs is `heli`):
+Neither file may contain live sessions, writer authority, grants, credentials, runtime capability observations, process handles, or other execution-local authorization.
+
+## What `heli link` does
+
+For a fresh project, `heli link`:
+
+- creates or reuses a logical workspace ID;
+- declares the project root as a worktree resource;
+- writes the v0.10 runtime/protocol/schema lock;
+- creates a machine/execution-specific operational namespace outside committed project binding;
+- seeds default project policy/safety/profile material when missing;
+- registers the project in the global locator;
+- creates a fresh execution identity.
+
+Cloning the repository preserves logical project identity but creates a new machine/execution identity and does not inherit grants, sessions, leases/authority, YOLO state, or capability observations.
+
+## Migrating an existing embedded workspace
+
+The self-contained `.heli-harness/` installation remains supported as a compatibility/hermetic mode.
+
+First update it to a linked-workspace-capable runtime, then ensure no embedded writer authority is active:
 
 ```bash
-npm install -g heli-harness
-heli install <path>
-heli status
-heli doctor
-heli --version
+# use the current v0.10 CLI
+heli status /path/to/workspace
+heli link /path/to/workspace
 ```
 
-`heli doctor [path]` is a purely offline health check: it verifies the workspace schema, index, target, task leases, sessions, worktree bindings, embedded CLI, plugin files, and cloud-sync link, then exits non-zero only when something is actually broken.
+The first link fails closed if active embedded write leases exist.
 
-Or run without installing:
+During migration:
+
+- project overlays may move into `.heli/`;
+- durable work/evidence may move to the linked execution namespace;
+- live sessions, bindings, leases, YOLO, grants, credentials, sync runtime state, and capability observations do **not** migrate as authority.
+
+## Hermetic / embedded compatibility install
+
+Use this only when you intentionally need a self-contained workspace bundle:
 
 ```bash
-npx github:KJ-AIML/heli-harness install <path>
-npx github:KJ-AIML/heli-harness update <path>
-npx github:KJ-AIML/heli-harness target list
-npx github:KJ-AIML/heli-harness status
+npx github:KJ-AIML/heli-harness#v0.10.0 install /path/to/workspace
 ```
 
-After install, the workspace embeds the CLI: `node .heli-harness/heli.mjs <cmd>` runs every command offline (no npx, no network, no PATH setup). Agent-facing denial messages reference this path.
-
-## Cloud sync (optional)
-
-Carry a workspace's portable context (profiles, policies, safety overlays, task history) across devices. Fully optional — everything else works offline with no account. Design and boundaries: [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md); server deploy: [cloud/README.md](cloud/README.md).
-
-```bash
-heli auth login --url https://<your-sync-server>   # OAuth device flow (GitHub)
-heli ws create my-lab                              # create + link this workspace
-heli push                                          # snapshot portable context
-
-# on another device (one command — installs, links, pulls, lists repos to clone):
-heli auth login
-heli init my-lab --dir /path/to/new-workspace
-
-# or step by step, after heli install:
-heli ws link my-lab
-heli pull
-```
-
-Day-to-day: `heli sync` pushes when you are ahead, pulls when behind, and refuses cleanly on divergence. `heli sync auto on` auto-pushes after every `heli task complete`.
-
-End-to-end encryption (optional): `heli sync e2e on`, then set `HELI_E2E_PASSPHRASE` in your shell for push/pull. Bundles are encrypted client-side (AES-256-GCM, scrypt-derived key) — the server only ever stores ciphertext, and pulling an encrypted bundle latches e2e on locally so a device cannot silently downgrade the workspace to plaintext. Losing the passphrase means losing the synced copies; the local workspace is unaffected.
-
-`heli push` refuses bundles containing secret-shaped content (override false positives with `--allow-secrets`). Machine-local state (`sessions/`, `locks/`, `bindings/`, YOLO) and `repos/` never sync. Repo entries in `workspace/index.json` may carry a `remote` field — `heli init --clone` uses it to re-clone product repos automatically.
-
-**Local-only is the default** — with no login and no linked workspace, nothing ever leaves the machine. `heli ws unlink` returns a linked workspace to local-only at any time (server copies remain until `heli ws delete`). For agents, sync is governed: the `cloud-sync` skill and the Cloud Sync Boundary in `HARNESS.md` forbid unrequested sync commands, and `heli push`/`heli sync` are T5 (explicit-approval) in the command-tier rules — same class as `git push`.
-
-## Maintainer release
-
-From a clean `main` worktree, run `npm run release -- <x.y.z> "summary"`. The command updates current version surfaces, runs `npm run check`, stages only release-managed paths, creates the commit and annotated tag, and refuses unrelated dirty files. Add `--push` to push `main` and the new tag.
-
-Pin a release when needed: `npx github:KJ-AIML/heli-harness#v0.10.0 install <path>`.
-
-## Manual workspace install
-
-### Windows (PowerShell)
-
-```powershell
-git clone https://github.com/KJ-AIML/heli-harness.git hh-source
-cd hh-source
-git checkout v0.10.0
-.\install.ps1 -Parent "C:\your\workspace"
-```
-
-### macOS / Linux (bash)
+or from a source checkout:
 
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
 git checkout v0.10.0
 ./install.sh /path/to/workspace
+# Windows:
+# .\install.ps1 -Parent "C:\your\workspace"
 ```
 
-After a successful install, the source checkout can be removed; do not remove the installed `.heli-harness/` directory.
+The embedded installer copies distribution assets and seeds idle operational state. It must not copy package dogfood sessions/tasks/locks/bindings into the destination.
 
-### Clean install semantics (v0.10.0+)
+`heli update` preserves user operational state and local overlays while refreshing shipped distribution assets.
 
-`heli install` (and `install.sh` / `install.ps1` / Pi `/heli-install`) copies **distribution assets only** (HARNESS, adapters, skills, policies, safety, templates, manifest) then **constructs** idle operational state. It never copies live package dogfood such as:
+## Host activation
 
-- `state/current-task.md` / `plan.md` / `yolo.json` from the source checkout
-- `tasks/`, `sessions/`, `bindings/`, `locks/`, reports, or machine-specific targets
+Project binding and host activation are separate. A linked or embedded project does not prove that a host hook/plugin is active.
 
-A fresh install always starts **idle**, **no target selected**, and **strict YOLO** (no `yolo.json`).
-
-### Update semantics
-
-`heli update` preserves user operational state (`state/`, `tasks/`, `sessions/`, `bindings/`, `locks/`) and local overlays (`profiles/`, `workspace/`, `policies/`, `safety/`). It updates shipped distribution assets only. Use `heli update --reset-state` to reseed idle operational runtime without importing package dogfood. Package checkout sessions/tasks never land in the destination.
-
-## First use
-
-Start the agent from the parent workspace. It should read `.heli-harness/HARNESS.md`, identify the target repository, read its profile when present, and update `.heli-harness/state/current-task.md` before non-trivial edits.
-
-In a multi-repo workspace, map repositories in `.heli-harness/workspace/index.json` and select one with `/heli-target set <repo>` before write workflows.
-
-In concurrent mode, `heli status` shows each active task’s **live** writer session, worktree (from write lease → session → binding → task metadata), lease expiry, target, mode, and reviewer/observer counts.
-
-### Workspace install vs host-native skills
-
-`heli install` installs **workspace governance** (`.heli-harness/`, pointer files, Markdown skill library on disk). It does **not** by itself register host-native skills or hooks with Codex/Claude/other hosts.
-
-Host-native skill inventory requires a second step -- activate the host plugin (see Adapter setup below). Until then:
-
-- skills exist as files under `.heli-harness/skills/` and under adapter plugin trees;
-- SessionStart skill bootstrap and PreToolUse guardrails run only when the host plugin is loaded;
-- `heli status` reports skill packaging counts and `host activation: installed / activation not verifiable` -- file presence is not live activation proof.
-
-## Adapter setup
-
-Install the workspace harness first. Adapter status, tested scope, and limitations are maintained in [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md).
+Use the [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) for current evidence and limitations.
 
 ### Codex
 
-The workspace `AGENTS.md` points to `.heli-harness/adapters/codex/AGENTS.md`.
-
-#### Recommended: Git marketplace (Ponytail-style, upgradeable)
-
-Install from the published repo so Codex treats the marketplace as **Git** and `marketplace upgrade` works (same flow as `DietrichGebert/ponytail`):
+Recommended Git marketplace:
 
 ```bash
 codex plugin marketplace add KJ-AIML/heli-harness
 codex plugin add heli-harness@heli-harness
-```
-
-Upgrade later:
-
-```bash
 codex plugin marketplace upgrade heli-harness
 ```
 
-Requires a root Codex marketplace manifest at `.agents/plugins/marketplace.json` (indexes the nested plugin under `./.heli-harness/adapters/codex-plugin`). If you previously added a **local** marketplace with the same name, remove it first:
-
-```bash
-codex plugin marketplace remove heli-harness
-codex plugin remove heli-harness@heli-harness
-```
-
-#### Workspace-local dogfood (after `heli install`; not upgradeable)
-
-Use this only when dogfooding the plugin tree that was copied into the parent workspace. Codex requires a real path form (`./…` or absolute) — a bare `.heli-harness/…` source is rejected as invalid:
+For workspace-local dogfood of an embedded copy:
 
 ```bash
 codex plugin marketplace add ./.heli-harness/adapters/codex-plugin
 codex plugin add heli-harness@heli-harness
 ```
 
-Local marketplaces cannot be refreshed with `codex plugin marketplace upgrade` (that command only upgrades Git marketplaces).
-
 ### Claude Code
 
-The workspace `CLAUDE.md` points to `.heli-harness/adapters/claude/CLAUDE.md`. To install the native plugin from the installed workspace:
+For an embedded/local plugin tree:
 
 ```bash
 claude plugin install .heli-harness/adapters/claude-plugin
 ```
 
+Use the support matrix for the currently proven load/enforcement surface.
+
 ### Cursor
 
-For local marketplace testing, select `.heli-harness/adapters/cursor-plugin/` in Cursor. It contains `.cursor-plugin/marketplace.json`, which indexes the plugin under `plugins/heli-harness/`. Alternatively, copy `.heli-harness/adapters/cursor-plugin/plugins/heli-harness/` to `~/.cursor/plugins/local/heli-harness/`, then restart Cursor or run `Developer: Reload Window`.
-
-The existing pointer adapter remains available for parent-workspace setup:
-
-- Cursor reads `.heli-harness/adapters/cursor/CURSOR.md`.
-
-### Generic agents
-- Other agents can use `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md`.
+Use `.heli-harness/adapters/cursor-plugin/` as a local marketplace or copy its nested `plugins/heli-harness/` directory to Cursor's local plugin directory.
 
 ### Grok Build
-
-Install user hooks from the installed workspace:
 
 ```bash
 node .heli-harness/adapters/grok-plugin/install-user-hooks.mjs
 ```
 
-For optional plugin skills, run `grok plugin install .heli-harness/adapters/grok-plugin --trust`. See `.heli-harness/adapters/grok/install.md`.
-
 ### OpenCode
 
-Copy the plugin directory contents into `.opencode/plugins/`; OpenCode auto-loads `.js`/`.ts` plugins from that directory (keep the `.js` entry name — `.mjs` is not auto-discovered):
+Use the packaged OpenCode plugin tree as documented under `.heli-harness/adapters/opencode-plugin/`.
+
+### Kimi / Antigravity / Pi / AXGA / Generic
+
+Use the corresponding adapter directory and the [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md). Adapter documentation must not be treated as enforcement proof by itself.
+
+## Scoped grants
+
+For actions that require temporary approval, prefer scoped grants:
 
 ```bash
-mkdir -p .opencode/plugins
-cp -R .heli-harness/adapters/opencode-plugin/. .opencode/plugins/
+heli grant issue --action git.push --scope once
+heli grant list
+heli grant revoke <grant-id>
 ```
 
-See `.heli-harness/adapters/opencode/install.md`.
+A grant is bounded by action/resource/execution and can additionally be bounded by host session, expiration, and usage count.
 
-### Kimi Code CLI
+T6 hard-deny rules are not made grantable by normal temporary approval.
+
+## Work records and concurrency
+
+A named task is optional for ordinary reversible work in the linked v0.10 model.
+
+Use durable task/work records when work spans sessions, requires handoff, coordinates multiple actors, carries significant verifier obligations, or needs investigation/evidence history.
+
+Resource authority—not the task name—is the write-conflict boundary for modeled linked resources.
+
+Embedded compatibility mode still supports the legacy/concurrent task/session commands and state layout.
+
+## Cloud sync
+
+Cloud sync is optional. It transports portable evidence/context; it must not transfer live authorization.
 
 ```bash
-node .heli-harness/adapters/kimi-plugin/install-user-hooks.mjs
-kimi doctor config
+heli auth login --url https://<your-sync-server>
+heli ws create my-project
+heli push
+heli pull
+heli sync
 ```
 
-See `.heli-harness/adapters/kimi/install.md`.
+Linked portability excludes live sessions, bindings, locks/resource authority, grants, YOLO state, credentials, and runtime capability observations.
 
-### Antigravity CLI
+See [Cloud Sync](docs/architecture/cloud-sync.md).
 
-Stage `.heli-harness/adapters/antigravity-plugin/` in the host plugin directory. See `.heli-harness/adapters/antigravity/install.md`.
+## Maintainer release
 
-### Pi / AXGA package
+Release validation is automated in CI. `v0.10.0` has a GitHub Release and annotated tag.
+
+The repository Release workflow:
+
+1. resolves package/tag/npm state;
+2. runs the full release gate;
+3. packs the artifact;
+4. publishes to npm when `NPM_TOKEN` is configured and that package version is missing;
+5. creates tag/GitHub Release only when the tag does not already exist.
+
+The retry path deliberately allows npm publication after a GitHub tag already exists.
+
+## Verify installation
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.10.0
-axga install git:github.com/KJ-AIML/heli-harness@v0.10.0
+heli --version
+heli doctor
+heli status
+heli explain authority
+heli explain capabilities
 ```
 
-This installs the agent package, not a workspace harness. Run `/heli-install` in Pi or AXGA to create the workspace harness.
-
-## Update
-
-### Workspace harness
-
-```bash
-npx github:KJ-AIML/heli-harness update /path/to/workspace
-```
-
-Or, from a source checkout, run `./update.sh /path/to/workspace` on macOS/Linux or `.\update.ps1 -Parent "C:\your\workspace"` on Windows.
-
-`heli update` refreshes **workspace** distribution assets only. It does **not** upgrade host-native plugins or Codex marketplace snapshots. After updating the workspace, refresh host plugins separately.
-
-### Codex plugin (Git marketplace)
-
-If you installed with `codex plugin marketplace add KJ-AIML/heli-harness`:
-
-```bash
-codex plugin marketplace upgrade heli-harness
-```
-
-If you previously used a **local** path marketplace (`./.heli-harness/adapters/codex-plugin`), switch once so Upgrade works:
-
-```bash
-codex plugin remove heli-harness@heli-harness
-codex plugin marketplace remove heli-harness
-codex plugin marketplace add KJ-AIML/heli-harness
-codex plugin add heli-harness@heli-harness
-```
-
-Then future updates are:
-
-```bash
-npx github:KJ-AIML/heli-harness update /path/to/workspace
-codex plugin marketplace upgrade heli-harness
-```
-
-## Uninstall
-
-```bash
-npx github:KJ-AIML/heli-harness uninstall /path/to/workspace
-```
-
-Or, from a source checkout, run `./uninstall.sh /path/to/workspace` on macOS/Linux or `.\uninstall.ps1 -Parent "C:\your\workspace"` on Windows. Remove `AGENTS.md` and `CLAUDE.md` afterwards only if they are no longer needed.
-
-## Maintainer-only live verification
-
-The `scripts/live-verify-*.mjs` commands are release-proof commands, not user setup. Run them only with isolated credentials and disposable workspaces: they may make API calls and consume provider usage. Their evidence and limitations are recorded in [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md).
+Expected package version for this documentation: **0.10.0**.
