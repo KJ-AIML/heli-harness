@@ -1,9 +1,9 @@
 # Heli v1 Architecture Convergence RFC
 
-**Status:** Accepted architecture contract; implemented through the `v0.10.0` baseline  
-**Date:** 2026-09-18; baseline accepted/implemented 2026-09-19  
-**Scope:** Canonical architecture contract; historical planning sections are retained for provenance  
-**Applies to:** Heli `v0.10.0` and the path to v1.0  
+**Status:** Accepted architecture contract; implemented through the `v0.10.0` baseline
+**Date:** 2026-09-18; baseline accepted/implemented 2026-09-19
+**Scope:** Canonical architecture contract; historical planning sections are retained for provenance
+**Applies to:** Heli `v0.10.0` and the path to v1.0
 **Current architecture index:** `docs/architecture/README.md`
 
 > **Current-baseline note:** sections that describe v0.8/v0.9 branches or a proposed release sequence are historical rationale for how the v0.10.0 architecture was reached. They are not current install or authority instructions.
