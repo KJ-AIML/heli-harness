@@ -1,6 +1,6 @@
 # Adapter Support Matrix
 
-**Current release:** `v0.10.0`  
+**Current release:** `v0.10.0`
 **Architecture:** [Current Heli architecture](architecture/README.md)
 
 This is the authoritative, evidence-based adapter-status reference. Statuses describe tested host behavior, not a security boundary; every hook remains a guardrail rather than a sandbox.
