@@ -1,5 +1,6 @@
 import { pathExists, readJson, writeJsonAtomic, ensureDir } from "./fs-atomic.mjs";
 import { pathsFor } from "./paths.mjs";
+import { readProjectBinding } from "./project-binding.mjs";
 
 export const WORKSPACE_SCHEMA_VERSION = 1;
 export const TASK_SCHEMA_VERSION = 1;
@@ -9,6 +10,15 @@ export const LEASE_SCHEMA_VERSION = 1;
 export function readWorkspaceSchema(workspaceRoot) {
 	const { schemaPath } = pathsFor(workspaceRoot);
 	if (!pathExists(schemaPath)) {
+		const binding = readProjectBinding(workspaceRoot);
+		if (binding) {
+			return {
+				schemaVersion: WORKSPACE_SCHEMA_VERSION,
+				mode: binding.mode === "legacy" ? "legacy" : "concurrent",
+				exists: false,
+				linkedDefault: true,
+			};
+		}
 		return { schemaVersion: WORKSPACE_SCHEMA_VERSION, mode: "legacy", exists: false };
 	}
 	const data = readJson(schemaPath, null);

@@ -18,6 +18,7 @@ import {
 	readWorkspaceIndex,
 	sanitizeTaskTargetForBundle,
 } from "../adapters/shared/concurrency/portable-targets.mjs";
+import { heliDir as workspaceHeliDir } from "../adapters/shared/concurrency/paths.mjs";
 
 export const BUNDLE_FORMAT = "heli-bundle-v1";
 const E2E_SCHEME = "aes-256-gcm-scrypt";
@@ -92,9 +93,14 @@ export function restoreTaskFilesForWorkspace(workspaceRoot, files) {
 	);
 }
 
-/** Collect the portable subset from <workspaceRoot>/.heli-harness as { rel: text }. */
+/**
+ * Collect the portable operational subset.
+ * Embedded workspaces read .heli-harness; linked workspaces read their
+ * execution-local operational root. Project-bound .heli/ config remains
+ * project/Git state and is not copied into authority/evidence bundles.
+ */
 export function collectBundleFiles(workspaceRoot) {
-	const heliDir = join(workspaceRoot, ".heli-harness");
+	const heliDir = workspaceHeliDir(workspaceRoot);
 	const files = {};
 	const rels = [];
 	for (const dir of INCLUDE_DIRS) {
@@ -186,9 +192,12 @@ function isAllowedRel(rel) {
 	);
 }
 
-/** Write bundle files under .heli-harness, refusing anything outside the portable subset. */
+/**
+ * Restore portable operational files into the active layout. This never writes
+ * sessions, bindings, locks, grants, capability observations, or project identity.
+ */
 export function writeBundleFiles(workspaceRoot, files) {
-	const heliDir = join(workspaceRoot, ".heli-harness");
+	const heliDir = workspaceHeliDir(workspaceRoot);
 	let written = 0;
 	for (const [rel, content] of Object.entries(files)) {
 		if (!isAllowedRel(rel) || typeof content !== "string") {

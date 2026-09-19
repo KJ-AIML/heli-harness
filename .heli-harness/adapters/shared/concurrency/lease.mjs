@@ -16,12 +16,25 @@ import {
 import { newLeaseId } from "./ids.mjs";
 import { LEASE_SCHEMA_VERSION } from "./schema.mjs";
 import { appendTaskEvent } from "./events.mjs";
+import { isLinkedWorkspace } from "./project-binding.mjs";
+import {
+	acquireResourceWriteAuthority,
+	findActiveResourceLeaseForWorktree,
+	readResourceLeaseForTask,
+	refreshResourceWriteAuthority,
+	releaseResourceWriteAuthority,
+	sessionHoldsResourceWriteAuthority,
+	takeoverResourceWriteAuthority,
+} from "./resource-authority.mjs";
 
 /**
  * Read and validate a lease. Malformed / partial leases return
  * { invalid: true, raw } rather than a usable active lease.
  */
 export function readLease(workspaceRoot, taskId) {
+	if (isLinkedWorkspace(workspaceRoot)) {
+		return readResourceLeaseForTask(workspaceRoot, taskId);
+	}
 	const path = leasePath(workspaceRoot, taskId);
 	if (!pathExists(path)) return null;
 	const raw = readJson(path, null);
@@ -93,6 +106,9 @@ function buildLease({ taskId, sessionId, worktreePath, ttlSeconds, revision }) {
  * (different session), even if the task id differs.
  */
 export function findActiveWriteLeaseForWorktree(workspaceRoot, worktreePath, { exceptSessionId = null } = {}) {
+	if (isLinkedWorkspace(workspaceRoot)) {
+		return findActiveResourceLeaseForWorktree(workspaceRoot, worktreePath, { exceptSessionId });
+	}
 	const canonical = canonicalizePath(worktreePath || "");
 	if (!canonical) return null;
 	const { locksDir } = pathsFor(workspaceRoot);
@@ -117,6 +133,14 @@ export function acquireWriteLease(workspaceRoot, {
 	worktreePath = "",
 	ttlSeconds = DEFAULT_LEASE_TTL_SECONDS,
 } = {}) {
+	if (isLinkedWorkspace(workspaceRoot)) {
+		return acquireResourceWriteAuthority(workspaceRoot, {
+			taskId,
+			sessionId,
+			worktreePath,
+			ttlSeconds,
+		});
+	}
 	if (!taskId || !sessionId) {
 		const err = new Error("taskId and sessionId required for write lease");
 		err.code = "INVALID_LEASE_ARGS";
@@ -129,9 +153,25 @@ export function acquireWriteLease(workspaceRoot, {
 	}
 	if (existing) {
 		if (existing.sessionId === sessionId) {
-			// Own lease — renew even if expired. Nobody else took over (takeover
-			// replaces sessionId), so re-claiming your own stale lease is safe and
-			// beats forcing a takeover ceremony after an idle overnight session.
+			// Re-claiming an active own lease is a refresh. Re-claiming an expired
+			// own lease is a NEW conflict check: another task may have acquired the
+			// same worktree after this lease expired.
+			if (isLeaseExpired(existing)) {
+				const conflict = findActiveWriteLeaseForWorktree(
+					workspaceRoot,
+					existing.worktreePath || worktreePath,
+					{ exceptSessionId: sessionId },
+				);
+				if (conflict) {
+					const err = new Error(
+						`worktree already has an active write lease (task ${conflict.taskId}, session ${conflict.lease.sessionId}); expired owner ${sessionId} cannot self-renew`,
+					);
+					err.code = "WORKTREE_WRITER_HELD";
+					err.lease = conflict.lease;
+					err.taskId = conflict.taskId;
+					throw err;
+				}
+			}
 			return refreshLease(workspaceRoot, taskId, { sessionId, allowExpiredOwn: true });
 		}
 		if (!isLeaseExpired(existing)) {
@@ -200,6 +240,13 @@ export function acquireWriteLease(workspaceRoot, {
 }
 
 export function refreshLease(workspaceRoot, taskId, { sessionId, ttlSeconds, allowExpiredOwn = false } = {}) {
+	if (isLinkedWorkspace(workspaceRoot)) {
+		return refreshResourceWriteAuthority(workspaceRoot, taskId, {
+			sessionId,
+			ttlSeconds,
+			allowExpiredOwn,
+		});
+	}
 	const lease = readLease(workspaceRoot, taskId);
 	if (!lease) {
 		const err = new Error(`no lease to refresh for task ${taskId}`);
@@ -214,13 +261,27 @@ export function refreshLease(workspaceRoot, taskId, { sessionId, ttlSeconds, all
 		throw err;
 	}
 	if (isLeaseExpired(lease)) {
-		// Renewing your own expired lease is safe (owner unchanged); anonymous
-		// or non-owner refresh of a stale lease still requires takeover.
+		// An expired own lease may be renewed only after re-checking the resource.
+		// The previous owner identity does not reserve the worktree after expiry.
 		const ownRenewal = allowExpiredOwn && sessionId && lease.sessionId === sessionId;
 		if (!ownRenewal) {
 			const err = new Error(`lease expired for task ${taskId}; use takeover`);
 			err.code = "STALE_LEASE";
 			err.lease = lease;
+			throw err;
+		}
+		const conflict = findActiveWriteLeaseForWorktree(
+			workspaceRoot,
+			lease.worktreePath || "",
+			{ exceptSessionId: sessionId },
+		);
+		if (conflict) {
+			const err = new Error(
+				`worktree already has an active write lease (task ${conflict.taskId}, session ${conflict.lease.sessionId}); expired lease cannot refresh`,
+			);
+			err.code = "WORKTREE_WRITER_HELD";
+			err.lease = conflict.lease;
+			err.taskId = conflict.taskId;
 			throw err;
 		}
 	}
@@ -240,6 +301,9 @@ export function refreshLease(workspaceRoot, taskId, { sessionId, ttlSeconds, all
 }
 
 export function releaseWriteLease(workspaceRoot, taskId, { sessionId, force = false } = {}) {
+	if (isLinkedWorkspace(workspaceRoot)) {
+		return releaseResourceWriteAuthority(workspaceRoot, taskId, { sessionId, force });
+	}
 	const lease = readLease(workspaceRoot, taskId);
 	if (!lease) {
 		// Only clear orphan lock dir when force is explicit — never as anonymous release.
@@ -298,6 +362,15 @@ export function takeoverWriteLease(workspaceRoot, {
 	ttlSeconds = DEFAULT_LEASE_TTL_SECONDS,
 	confirm = false,
 } = {}) {
+	if (isLinkedWorkspace(workspaceRoot)) {
+		return takeoverResourceWriteAuthority(workspaceRoot, {
+			taskId,
+			sessionId,
+			worktreePath,
+			ttlSeconds,
+			confirm,
+		});
+	}
 	if (!confirm) {
 		const err = new Error("takeover requires --confirm");
 		err.code = "CONFIRM_REQUIRED";
@@ -318,6 +391,9 @@ export function takeoverWriteLease(workspaceRoot, {
 }
 
 export function sessionHoldsWriteLease(workspaceRoot, taskId, sessionId) {
+	if (isLinkedWorkspace(workspaceRoot)) {
+		return sessionHoldsResourceWriteAuthority(workspaceRoot, taskId, sessionId);
+	}
 	const lease = readLease(workspaceRoot, taskId);
 	if (!lease || lease.invalid || !sessionId) return false;
 	if (lease.sessionId !== sessionId) return false;

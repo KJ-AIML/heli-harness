@@ -20,7 +20,8 @@ try {
 	assert.equal(authority.command, "explain.authority");
 	assert.equal(authority.ok, true);
 	assert.equal(authority.data.workspaceMode, "concurrent");
-	assert.equal(authority.data.writable, false);
+	assert.equal(authority.data.writable, true);
+	assert.equal(authority.data.bootstrap, true);
 	const capabilities = JSON.parse(run(["explain", "capabilities", parent, "--json"]));
 	assert.equal(capabilities.ok, true);
 	assert.ok(Array.isArray(capabilities.data.adapters));

@@ -40,7 +40,10 @@ function renderCliModule(name) {
 
 function renderProtocolModule(name) {
 	const src = lf(readFileSync(join(root, "lib", "protocol", name), "utf8"));
-	return PROTOCOL_HEADER + src;
+	return PROTOCOL_HEADER + src.replaceAll(
+		'from "../concurrency/',
+		'from "../adapters/shared/concurrency/',
+	);
 }
 
 const cliFiles = readdirSync(join(root, "lib", "cli")).filter((f) => f.endsWith(".mjs")).sort();
