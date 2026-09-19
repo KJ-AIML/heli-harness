@@ -1,2 +1,3 @@
 #!/usr/bin/env node
-import "../shared/claude-style-pre-tool-use.mjs";
+process.env.HELI_ADAPTER_ID = "antigravity";
+await import("../shared/claude-style-pre-tool-use.mjs");

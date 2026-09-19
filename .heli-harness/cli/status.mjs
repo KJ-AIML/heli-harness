@@ -6,9 +6,16 @@ import { listActiveTasks, listTasks } from "../adapters/shared/concurrency/task.
 import { listActiveSessions, readSession } from "../adapters/shared/concurrency/session.mjs";
 import { readLease, isLeaseExpired } from "../adapters/shared/concurrency/lease.mjs";
 import { isConcurrentMode, readWorkspaceSchema } from "../adapters/shared/concurrency/schema.mjs";
-import { findWorkspaceRoot, canonicalizePath } from "../adapters/shared/concurrency/paths.mjs";
+import { findWorkspaceRoot, canonicalizePath, pathsFor } from "../adapters/shared/concurrency/paths.mjs";
+import {
+	readProjectBinding,
+	readWorkspaceLock,
+	resolveExecutionIdentity,
+} from "../adapters/shared/concurrency/project-binding.mjs";
 import { projectTaskWorktree, readWorkspaceIndex } from "../adapters/shared/concurrency/portable-targets.mjs";
 import { listAllBindings } from "../adapters/shared/concurrency/binding.mjs";
+import { protocolOk } from "../protocol/result.mjs";
+import { printProtocolResult, stripOutputFlags, wantsJson } from "./output.mjs";
 
 function readJson(path) {
 	try {
@@ -175,8 +182,19 @@ function countSkillDirs(skillsRoot) {
 	}
 }
 
-function skillPackagingStatus(root) {
-	const workspaceSkills = countSkillDirs(join(root, ".heli-harness", "skills"));
+function skillPackagingStatus(root, linked = false) {
+	const workspaceSkills = countSkillDirs(
+		linked ? join(root, ".heli", "skills") : join(root, ".heli-harness", "skills"),
+	);
+	if (linked) {
+		return {
+			workspaceSkillCount: workspaceSkills,
+			codexPluginSkillCount: 0,
+			claudePluginSkillCount: 0,
+			pluginFilesAvailable: null,
+			hostActivation: "global distribution / runtime observation required",
+		};
+	}
 	const codexPluginSkills = countSkillDirs(
 		join(root, ".heli-harness", "adapters", "codex-plugin", "skills"),
 	);
@@ -199,22 +217,30 @@ function skillPackagingStatus(root) {
 
 export function status(cwd) {
 	const heliDir = join(cwd, ".heli-harness");
-	const workspaceRoot = findWorkspaceRoot(cwd) || (existsSync(heliDir) ? cwd : null);
+	const workspaceRoot = findWorkspaceRoot(cwd) || (existsSync(heliDir) ? canonicalizePath(cwd) : null);
 	if (!workspaceRoot) {
 		return { installed: false };
 	}
 	const root = workspaceRoot;
-	const manifest = readJson(join(root, ".heli-harness", "manifest.json"));
-	const target = readJson(join(root, ".heli-harness", "workspace", "target.json"));
-	const index = readJson(join(root, ".heli-harness", "workspace", "index.json"));
+	const layout = pathsFor(root);
+	const binding = readProjectBinding(root);
+	const lock = readWorkspaceLock(root);
+	const execution = resolveExecutionIdentity(root);
+	const manifest = layout.linked ? null : readJson(join(root, ".heli-harness", "manifest.json"));
+	const target = readJson(layout.targetPath);
+	const index = readJson(layout.indexPath);
 	const schema = readWorkspaceSchema(root);
 	const concurrent = schema.mode === "concurrent";
-	const skills = skillPackagingStatus(root);
+	const skills = skillPackagingStatus(root, layout.linked);
 
 	const base = {
 		installed: true,
-		version: manifest?.version || "unknown",
+		version: layout.linked ? lock?.runtime?.version || "unknown" : manifest?.version || "unknown",
 		workspaceRoot: root,
+		layout: layout.layoutMode,
+		workspaceId: binding?.workspaceId || null,
+		executionId: execution?.executionId || null,
+		operationalRoot: layout.operationalRoot,
 		mode: concurrent ? "concurrent" : "legacy",
 		targetRepo: target?.targetRepo || "",
 		repoCount: Array.isArray(index?.repos) ? index.repos.length : 0,
@@ -243,7 +269,7 @@ export function status(cwd) {
 		};
 	}
 
-	const taskPath = join(root, ".heli-harness", "state", "current-task.md");
+	const taskPath = layout.legacyTaskPath;
 	const taskText = existsSync(taskPath) ? readFileSync(taskPath, "utf8") : "";
 	const taskStatus = taskText ? field(taskText, "Current status") : "";
 	const incomplete =
@@ -259,15 +285,24 @@ export function status(cwd) {
 }
 
 export function runStatus(args) {
-	const cwd = args[0] || process.cwd();
+	const json = wantsJson(args);
+	const positionalArgs = stripOutputFlags(args);
+	const cwd = positionalArgs[0] || process.cwd();
 	const result = status(cwd);
+	if (json) {
+		printProtocolResult(protocolOk("status", result));
+		return;
+	}
 	if (!result.installed) {
 		console.log(`No Heli-Harness install found at ${cwd}`);
 		return;
 	}
 	console.log(`Heli-Harness version: ${result.version}`);
 	console.log(`Workspace mode: ${result.mode}`);
+	console.log(`Workspace layout: ${result.layout || "embedded"}`);
 	console.log(`Workspace root: ${result.workspaceRoot}`);
+	if (result.workspaceId) console.log(`Workspace ID: ${result.workspaceId}`);
+	if (result.executionId) console.log(`Execution ID: ${result.executionId}`);
 	console.log(`Target repo: ${result.targetRepo || "not selected"}`);
 	console.log(
 		result.indexConfigured ? `Registered repos: ${result.repoCount}` : "Workspace index: not configured",
@@ -285,7 +320,9 @@ export function runStatus(args) {
 			`Skill packaging: workspace=${result.skills.workspaceSkillCount} codex-plugin=${result.skills.codexPluginSkillCount} claude-plugin=${result.skills.claudePluginSkillCount}`,
 		);
 		console.log(
-			`Host plugin files: ${result.skills.pluginFilesAvailable ? "available under .heli-harness/adapters/*-plugin" : "missing"}`,
+			result.skills.pluginFilesAvailable == null
+				? "Host plugin files: managed by global distribution"
+				: `Host plugin files: ${result.skills.pluginFilesAvailable ? "available under .heli-harness/adapters/*-plugin" : "missing"}`,
 		);
 		console.log(`Host skill activation: ${result.skills.hostActivation}`);
 	}

@@ -1,2 +1,3 @@
 #!/usr/bin/env node
-import "../shared/claude-style-pre-tool-use.mjs";
+process.env.HELI_ADAPTER_ID = "kimi";
+await import("../shared/claude-style-pre-tool-use.mjs");

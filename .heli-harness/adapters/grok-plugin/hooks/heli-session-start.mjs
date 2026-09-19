@@ -1,2 +1,3 @@
 #!/usr/bin/env node
-import "../shared/grok-style-session-start.mjs";
+process.env.HELI_ADAPTER_ID = "grok";
+await import("../shared/grok-style-session-start.mjs");

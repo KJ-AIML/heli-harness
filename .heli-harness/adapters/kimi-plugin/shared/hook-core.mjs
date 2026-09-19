@@ -18,7 +18,9 @@ import {
 } from "./concurrency/resolve.mjs";
 import { resolveYolo, allowGitPushScoped, allowEnvWriteScoped } from "./concurrency/yolo-scope.mjs";
 import { sessionHoldsWriteLease, refreshLease } from "./concurrency/lease.mjs";
-import { findWorkspaceRoot } from "./concurrency/paths.mjs";
+import { findWorkspaceRoot, pathsFor } from "./concurrency/paths.mjs";
+import { consumeApplicableGrant } from "./concurrency/grant.mjs";
+import { resourceIdForWorktree } from "./concurrency/resource-authority.mjs";
 import { evaluateDiagnosisWriteGate, readActionPolicy, readDiagnosis } from "./concurrency/diagnosis.mjs";
 
 export function field(text, label) {
@@ -242,6 +244,21 @@ export function isFileMutationTool(
 	return hasMutationVerb(normalizedToolNameTokens(name));
 }
 
+export function isLikelyShellMutation(toolName, commandText) {
+	const name = String(toolName ?? "").toLowerCase();
+	if (!/(^|[_\-.])(bash|shell|terminal|exec|run_command|run-command)($|[_\-.])/.test(name)) return false;
+	const command = String(commandText ?? "").toLowerCase();
+	if (!command.trim()) return false;
+	// Best-effort common mutation detection only; this is not a sandbox.
+	if (/(^|[^<])>>?\s*[^&|]/m.test(command)) return true;
+	if (/\b(tee|touch|mkdir|rmdir|rm|mv|cp|truncate)\b/.test(command)) return true;
+	if (/\bsed\s+[^\n;|&]*-i(?:\s|$)/.test(command)) return true;
+	if (/\bperl\s+[^\n;|&]*-p?i(?:\s|$)/.test(command)) return true;
+	if (/\bgit\s+(add|commit|checkout|switch|restore|reset|clean|rm|mv)\b/.test(command)) return true;
+	if (/\b(npm|pnpm|yarn|bun)\s+(install|add|remove|uninstall|update|upgrade)\b/.test(command)) return true;
+	return false;
+}
+
 export function readTaskGate(cwd) {
 	const ctx = resolveExecutionContext({ cwd, createIfMissing: false, host: "legacy-gate" });
 	if (!ctx.workspaceRoot && !existsSync(join(cwd, ".heli-harness", "HARNESS.md"))) return null;
@@ -267,9 +284,10 @@ export function withCliHint(reason) {
 }
 
 export function isTaskStateWrite(paths) {
-	// Control-plane paths (sessions/, locks/, bindings/, workspace/schema.json)
-	// are deliberately excluded — hand-writes there must face the ownership gate.
-	return paths.some(
+	// Exempt only when EVERY affected path is task/projection state. A mixed
+	// task-state + source patch must still face the ownership gate.
+	if (!Array.isArray(paths) || paths.length === 0) return false;
+	return paths.every(
 		(path) =>
 			path.endsWith(".heli-harness/state/current-task.md") ||
 			path.endsWith(".heli-harness/state/plan.md") ||
@@ -283,6 +301,24 @@ function taskRiskTier(ctx) {
 	const taskPath = ctx?.taskPaths?.currentTaskMd;
 	if (!taskPath || !existsSync(taskPath)) return "S1";
 	return field(readFileSync(taskPath, "utf8"), "Risk tier") || "S1";
+}
+
+function scopedGrantFor(ctx, action, env = process.env) {
+	if (!ctx?.workspaceRoot || !action) return null;
+	try {
+		return consumeApplicableGrant(ctx.workspaceRoot, {
+			action,
+			sessionId: ctx.sessionId || null,
+			resource: {
+				type: "worktree",
+				id: resourceIdForWorktree(ctx.worktreeRoot || ctx.workspaceRoot),
+			},
+			env,
+		});
+	} catch {
+		// Grant-store contention or malformed local state fails closed.
+		return null;
+	}
 }
 
 function structuredHeliAction(toolInput) {
@@ -359,27 +395,42 @@ export function evaluatePreToolUse({
 	);
 	const name = String(toolName);
 
-	const isWrite = isFileMutationTool(name, { paths, writeToolNames });
+	const shellMutation = isLikelyShellMutation(name, rawCommand);
+	const isWrite = isFileMutationTool(name, { paths, writeToolNames }) || shellMutation;
+	const taskStateOnly = isTaskStateWriteForContext(ctx, paths) || isTaskStateWrite(paths);
+	let ownershipDecision = null;
 
-	// Ownership gates — NEVER bypassed by YOLO
-	if (isWrite && !isTaskStateWriteForContext(ctx, paths) && !isTaskStateWrite(paths)) {
-		const ownership = evaluateOwnershipGate(ctx, { isWrite: true });
-		if (ownership.deny) {
-			return { deny: true, reason: withCliHint(ownership.reason), code: ownership.code, ctx };
+	// Ownership gates — NEVER bypassed by YOLO.
+	if (isWrite && !taskStateOnly) {
+		ownershipDecision = evaluateOwnershipGate(ctx, { isWrite: true });
+		if (ownershipDecision.deny) {
+			return {
+				deny: true,
+				reason: withCliHint(ownershipDecision.reason),
+				code: ownershipDecision.code,
+				ctx,
+				coverage: shellMutation ? "shell-mutation-best-effort" : "structured-write",
+			};
 		}
 	}
 
-	if (
-		isWrite &&
-		ctx.concurrentMode &&
-		ctx.taskId &&
-		ctx.sessionId &&
-		sessionHoldsWriteLease(ctx.workspaceRoot, ctx.taskId, ctx.sessionId)
-	) {
-		try {
-			refreshLease(ctx.workspaceRoot, ctx.taskId, { sessionId: ctx.sessionId });
-		} catch {
-			/* ignore */
+	if (isWrite && !taskStateOnly && ctx.concurrentMode && ctx.taskId && ctx.sessionId) {
+		const activeOwner = sessionHoldsWriteLease(ctx.workspaceRoot, ctx.taskId, ctx.sessionId);
+		if (activeOwner || ownershipDecision?.renewalRequired) {
+			try {
+				refreshLease(ctx.workspaceRoot, ctx.taskId, {
+					sessionId: ctx.sessionId,
+					allowExpiredOwn: Boolean(ownershipDecision?.renewalRequired),
+				});
+			} catch (error) {
+				return {
+					deny: true,
+					reason: withCliHint(`Heli-Harness could not establish current write authority before execution: ${error.message}`),
+					code: error.code || "LEASE_REFRESH_FAILED",
+					ctx,
+					coverage: shellMutation ? "shell-mutation-best-effort" : "structured-write",
+				};
+			}
 		}
 	}
 
@@ -414,6 +465,7 @@ export function evaluatePreToolUse({
 		return { deny: false, yolo: true, yoloSource: yolo.source, ctx };
 	}
 
+	const appliedGrants = [];
 	if (
 		/\bgit\s+push\b/.test(command) &&
 		!allowGitPushScoped({
@@ -425,12 +477,17 @@ export function evaluatePreToolUse({
 			legacyMode: ctx.legacyMode,
 		})
 	) {
-		return {
-			deny: true,
-			reason:
-				"Heli-Harness blocks git push in agent sessions — this is a blanket rule, not gated on release approval. Push manually outside the session if needed. Opt-in: HELI_YOLO=1, HELI_ALLOW_GIT_PUSH=1, or `heli yolo on`.",
-			ctx,
-		};
+		const grant = scopedGrantFor(ctx, "git.push", env);
+		if (!grant) {
+			return {
+				deny: true,
+				code: "REMOTE_PUSH_DENIED",
+				reason:
+					"Heli-Harness blocks git push without scoped authority. Preferred opt-in: `heli grant issue --action git.push --scope once`. Emergency/debug overrides remain HELI_ALLOW_GIT_PUSH or YOLO.",
+				ctx,
+			};
+		}
+		appliedGrants.push(grant);
 	}
 	if (
 		paths.some((path) => /(^|\/)\.env(\.|$)/.test(path)) &&
@@ -443,23 +500,46 @@ export function evaluatePreToolUse({
 			legacyMode: ctx.legacyMode,
 		})
 	) {
-		return {
-			deny: true,
-			reason:
-				"Heli-Harness blocks writes to .env-style secret files. Opt-in: HELI_YOLO=1, HELI_ALLOW_ENV_WRITE=1, or `heli yolo on`.",
-			ctx,
-		};
+		const grant = scopedGrantFor(ctx, "env.write", env);
+		if (!grant) {
+			return {
+				deny: true,
+				code: "ENV_WRITE_DENIED",
+				reason:
+					"Heli-Harness blocks .env-style writes without scoped authority. Preferred opt-in: `heli grant issue --action env.write --scope once`.",
+				ctx,
+			};
+		}
+		appliedGrants.push(grant);
 	}
 
 	const tierDenial = evaluateCommandTierRules(ctx.workspaceRoot || cwd, command, env);
-	if (tierDenial) return { ...tierDenial, ctx };
+	if (tierDenial) {
+		if (tierDenial.hardDeny) return { ...tierDenial, ctx };
+		const grant = scopedGrantFor(ctx, tierDenial.actionId, env);
+		if (!grant) return { ...tierDenial, ctx };
+		appliedGrants.push(grant);
+	}
 
 	if (isWrite && !isTaskStateWriteForContext(ctx, paths) && !isTaskStateWrite(paths)) {
 		const gateReason = readTaskGateForContext(ctx) || readPlanGateForContext(ctx);
 		if (gateReason) return { deny: true, reason: gateReason, ctx };
 	}
 
-	return { deny: false, ctx };
+	return {
+		deny: false,
+		ctx,
+		...(appliedGrants.length
+			? {
+					grants: appliedGrants.map((grant) => ({
+						grantId: grant.grantId,
+						action: grant.action,
+						scope: grant.scope,
+						resource: grant.resource,
+					})),
+				}
+			: {}),
+	};
 }
 
 /**
@@ -534,7 +614,7 @@ export function commandMatchesRuleTokens(commandTokens, ruleTokens) {
  */
 export function evaluateCommandTierRules(workspaceRoot, command, env = process.env) {
 	if (!command || !workspaceRoot) return null;
-	const rulesPath = join(workspaceRoot, ".heli-harness", "safety", "command-rules.json");
+	const rulesPath = join(pathsFor(workspaceRoot).safetyDir, "command-rules.json");
 	if (!existsSync(rulesPath)) return null;
 	let rules;
 	try {
@@ -559,9 +639,14 @@ export function evaluateCommandTierRules(workspaceRoot, command, env = process.e
 		return {
 			deny: true,
 			code: rule.tier === "T6" ? "TIER_BLOCKED" : "TIER_APPROVAL_REQUIRED",
+			hardDeny: rule.tier === "T6",
+			ruleId: rule.id,
+			actionId: `command.approval.${rule.id}`,
 			reason:
 				`Heli-Harness ${kind} "${rule.match}" (rule ${rule.id}, tier ${rule.tier}): ${rule.reason || "see safety/command-rules.json"}. ` +
-				`Opt-in: HELI_YOLO=1, HELI_ALLOW_COMMAND=${rule.id}, or \`heli yolo on\` — or run it manually outside the session.`,
+				(rule.tier === "T6"
+					? "This is a hard deny; scoped grants do not override it."
+					: `Preferred opt-in: \`heli grant issue --action command.approval.${rule.id} --scope once\`. Emergency/debug overrides remain HELI_ALLOW_COMMAND=${rule.id} or YOLO.`),
 		};
 	}
 	return null;
