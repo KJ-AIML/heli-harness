@@ -1,78 +1,74 @@
 ---
 name: heli-install
-description: Use when bootstrapping Heli-Harness into a folder — install workspace governance, AGENTS.md/CLAUDE.md pointers, or run /heli-install style setup without reimplementing install logic.
+description: Use when setting up Heli. For v0.10 prefer global/shared distribution plus heli setup and heli link; /heli-install remains an embedded compatibility/hermetic install path.
 ---
 
 # Heli Install
 
-Bootstrap `.heli-harness/` plus the `AGENTS.md`/`CLAUDE.md` pointer files into the current
-working directory, turning it into a Heli-Harness parent workspace. This mirrors Pi/AXGA's
-`/heli-install` (`extensions/pi-extension.js`), which shells out to `install.ps1`/`install.sh`.
-This plugin has no JS runtime, so you run those same scripts yourself with your own shell tool —
-this skill does not reimplement install logic, it just tells you how to drive the existing one
-safely.
+## Current v0.10 path
 
-**Preferred method:** if Node.js is available, run `npx github:KJ-AIML/heli-harness install <path>`
-instead of steps 3-4 below — one command, no local checkout to clone or clean up, works the same
-with or without any AI tool loaded. Pin to an exact release with
-`npx github:KJ-AIML/heli-harness#vX.Y.Z install <path>`. Steps 1-2 and 5-6 below still apply either
-way. Fall back to steps 3-4's manual checkout-and-run flow only when Node/npx isn't available.
-
-## 1. Check whether this folder is already a workspace
-
-Check whether `.heli-harness/HARNESS.md` already exists in the current directory.
-
-- If it exists: **stop**. Warn "Workspace harness already installed in this folder." Do not run
-  the installer — `install.ps1`/`install.sh` have no preserve-local-state logic (that only exists
-  in `update.ps1`/`update.sh`), so re-running the installer over an existing workspace would
-  silently overwrite `profiles/`, `workspace/`, `policies/`, `safety/`, and `state/`. If the goal
-  is to bring an existing workspace up to a newer release, that's an update, not an install — use
-  `update.ps1 -Parent <workspace>` / `update.sh <workspace>` from a checkout of the new version
-  instead, which preserves those directories by design.
-- If it does not exist: continue.
-
-## 2. Confirm before writing
-
-This creates real files (`.heli-harness/`, `AGENTS.md`, `CLAUDE.md`) in the current directory.
-Tell the user exactly what will be created and where, and get explicit confirmation before
-running the installer — do not run it silently.
-
-## 3. Get a source checkout of Heli-Harness
-
-You need a local checkout containing `install.ps1` (Windows) / `install.sh` (macOS/Linux) and the
-full `.heli-harness/` source tree to install from. Two cases:
-
-- **You already have one** (for example, this very plugin was loaded via `--plugin-dir` from a
-  local checkout — in that case the repo root containing `install.ps1` is the directory three
-  levels above this plugin's `skills/heli-install/` folder). If you can locate it, use it directly
-  — no need to clone again.
-- **You don't have one** (the common case when bootstrapping a brand-new workspace): clone a
-  fresh, disposable checkout:
-  ```bash
-  git clone https://github.com/KJ-AIML/heli-harness.git hh-source-tmp
-  cd hh-source-tmp
-  git checkout "$(git tag --sort=-creatordate | head -1)"
-  ```
-  Do not hardcode a version tag in this skill — always resolve "the latest tag" at run time so
-  this instruction doesn't go stale after future releases (see the `git tag --sort=-creatordate`
-  line above).
-
-## 4. Run the installer
-
-From inside the source checkout, targeting the original workspace directory:
+For normal projects, prefer:
 
 ```bash
-# macOS/Linux
-./install.sh /path/to/workspace
-
-# Windows
-.\install.ps1 -Parent "C:\path\to\workspace"
+npm install -g github:KJ-AIML/heli-harness#v0.10.0
+heli setup
+cd /path/to/project
+heli link
+heli doctor
 ```
 
-## 5. Verify
+This separates shared distribution from project binding and execution-local authority.
 
-Check that all of these now exist in the workspace directory — this is the same checklist Pi's
-`verifyInstall` uses:
+Expected linked project files:
+
+```text
+.heli/workspace.json
+.heli/heli.lock
+.heli/policies/
+.heli/profiles/
+.heli/safety/
+.heli/skills/
+```
+
+Live grants, sessions, resource authority, credentials, capability observations, YOLO state, and process handles must not be committed as project binding.
+
+## Existing embedded workspace
+
+If `.heli-harness/HARNESS.md` already exists, do not overwrite it with a fresh installer.
+
+To migrate:
+
+1. update the embedded runtime to v0.10.0;
+2. run `heli status`;
+3. quiesce active embedded writer authority;
+4. run `heli link <path>`.
+
+The first link fails closed while active embedded writer authority exists.
+
+## Embedded compatibility / hermetic install
+
+The `/heli-install` command and installer scripts remain supported when the user intentionally wants a self-contained `.heli-harness/` workspace.
+
+Preferred pinned command:
+
+```bash
+npx github:KJ-AIML/heli-harness#v0.10.0 install <path>
+```
+
+Manual source checkout is a fallback:
+
+```bash
+git clone https://github.com/KJ-AIML/heli-harness.git hh-source-tmp
+cd hh-source-tmp
+git checkout v0.10.0
+./install.sh /path/to/workspace
+# Windows:
+# .\install.ps1 -Parent "C:\path\to\workspace"
+```
+
+Before writing, tell the user that the compatibility install creates `.heli-harness/` and host pointer files and obtain the approval required by the host/workflow.
+
+Verify the embedded install with:
 
 - `.heli-harness/HARNESS.md`
 - `.heli-harness/manifest.json`
@@ -80,23 +76,8 @@ Check that all of these now exist in the workspace directory — this is the sam
 - `AGENTS.md`
 - `CLAUDE.md`
 
-If any are missing, report exactly which ones and stop — do not claim success.
+## Boundary
 
-## 6. Clean up and report
+Host plugin activation is separate from project linking/embedded installation. Files on disk do not prove runtime enforcement.
 
-- If you cloned a temporary checkout in step 3, remove it now (`hh-source-tmp`) — it was only
-  needed to run the installer from.
-- Report what was created: `.heli-harness/`, `AGENTS.md`, `CLAUDE.md`.
-- Suggest next steps (from `INSTALL.md`'s "What next after install?"):
-  1. Map repos in `.heli-harness/workspace/index.json`.
-  2. Select the active target repo with the `heli-target` skill (`set <repo>`) before write
-     workflows in a multi-repo workspace.
-  3. Add a repo profile under `.heli-harness/profiles/<repo>.md`.
-  4. Validate the repo profile's test commands in audit-only mode before relying on them.
-
-## General guidance
-
-- This skill only bootstraps the workspace files; it does not itself change which skills or hooks
-  are loaded in the current session.
-- Not a sandbox — running the installer performs real filesystem writes at the path you confirm
-  with the user; treat it like any other write outside the currently-loaded plugin's own files.
+Use `heli explain capabilities` and `docs/ADAPTER_SUPPORT_MATRIX.md` for current evidence.
