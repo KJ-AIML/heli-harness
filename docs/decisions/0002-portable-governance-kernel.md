@@ -10,7 +10,7 @@ Accepted — current architecture for `v0.10.0`
 
 ## Context
 
-The parent-workspace harness model established useful policy, safety, evidence, adapter, and coordination primitives, but it mixed project distribution, portable context, and live authority too closely. The v0.9 protocol work also exposed duplicated decision paths, task-scoped authority assumptions, and capability claims that could exceed proven host enforcement.
+The parent-workspace harness model established useful policy, safety, evidence, adapter, and coordination primitives, but it mixed project distribution, portable context, and live authority too closely. The historical v0.9 protocol work also exposed duplicated decision paths, task-scoped authority assumptions, and capability claims that could exceed proven host enforcement.
 
 The accepted convergence architecture requires Heli to remain smaller than an agent runtime while making governance semantics portable across heterogeneous coding hosts.
 
