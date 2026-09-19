@@ -1,6 +1,6 @@
 # Heli v0.9 Agent Governance Protocol Implementation Plan
 
-**Status:** Historical implementation precursor; superseded by the accepted convergence architecture and the `v0.10.0` baseline.  
+**Status:** Historical implementation precursor; superseded by the accepted convergence architecture and the `v0.10.0` baseline.
 **Current architecture:** [docs/architecture/README.md](../../architecture/README.md)
 
 > Retained for provenance only. Current installation, project binding, grants, and authority semantics come from v0.10.0 documentation, not this plan.
