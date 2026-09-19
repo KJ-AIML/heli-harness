@@ -5,11 +5,10 @@
  *
  * Generated layout (committed, shipped via DISTRIBUTION_ENTRIES):
  *   .heli-harness/heli.mjs       <- bin/heli.mjs   (imports ../lib/cli/ -> ./cli/)
- *   .heli-harness/project-binding.mjs <- lib/project-binding.mjs
  *   .heli-harness/cli/*.mjs      <- lib/cli/*.mjs  (imports ../concurrency/ -> ../adapters/shared/concurrency/)
  *   .heli-harness/protocol/*.mjs <- lib/protocol/*.mjs
  *
- * Canonical source of truth: bin/heli.mjs + lib/project-binding.mjs + lib/cli/ + lib/protocol/.
+ * Canonical source of truth: bin/heli.mjs + lib/cli/ + lib/protocol/.
  * Run: node scripts/sync-workspace-cli.mjs
  * Check mode: node scripts/sync-workspace-cli.mjs --check
  */
@@ -29,9 +28,7 @@ const lf = (text) => text.replaceAll("\r\n", "\n");
 
 function renderEntry() {
 	const src = lf(readFileSync(join(root, "bin", "heli.mjs"), "utf8"));
-	const body = src
-		.replaceAll('from "../lib/cli/', 'from "./cli/')
-		.replaceAll('from "../lib/project-binding.mjs"', 'from "./project-binding.mjs"');
+	const body = src.replaceAll('from "../lib/cli/', 'from "./cli/');
 	// Keep the shebang first line, insert the generated header after it.
 	return body.replace(/^(#![^\n]*\n)/, `$1${HEADER}`);
 }
@@ -53,10 +50,7 @@ const cliFiles = readdirSync(join(root, "lib", "cli")).filter((f) => f.endsWith(
 const protocolFiles = existsSync(join(root, "lib", "protocol"))
 	? readdirSync(join(root, "lib", "protocol")).filter((f) => f.endsWith(".mjs")).sort()
 	: [];
-const expected = new Map([
-	["heli.mjs", renderEntry()],
-	["project-binding.mjs", HEADER + lf(readFileSync(join(root, "lib", "project-binding.mjs"), "utf8"))],
-]);
+const expected = new Map([["heli.mjs", renderEntry()]]);
 for (const name of cliFiles) {
 	expected.set(join("cli", name).replaceAll("\\", "/"), renderCliModule(name));
 }
@@ -96,6 +90,6 @@ if (check) {
 		writeFileSync(target, content);
 	}
 	console.log(
-		`sync-workspace-cli: wrote heli.mjs + project-binding.mjs + ${cliFiles.length} cli modules + ${protocolFiles.length} protocol modules into .heli-harness`,
+		`sync-workspace-cli: wrote heli.mjs + ${cliFiles.length} cli modules + ${protocolFiles.length} protocol modules into .heli-harness`,
 	);
 }

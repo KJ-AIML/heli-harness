@@ -16,12 +16,25 @@ import {
 import { newLeaseId } from "./ids.mjs";
 import { LEASE_SCHEMA_VERSION } from "./schema.mjs";
 import { appendTaskEvent } from "./events.mjs";
+import { isLinkedWorkspace } from "./project-binding.mjs";
+import {
+	acquireResourceWriteAuthority,
+	findActiveResourceLeaseForWorktree,
+	readResourceLeaseForTask,
+	refreshResourceWriteAuthority,
+	releaseResourceWriteAuthority,
+	sessionHoldsResourceWriteAuthority,
+	takeoverResourceWriteAuthority,
+} from "./resource-authority.mjs";
 
 /**
  * Read and validate a lease. Malformed / partial leases return
  * { invalid: true, raw } rather than a usable active lease.
  */
 export function readLease(workspaceRoot, taskId) {
+	if (isLinkedWorkspace(workspaceRoot)) {
+		return readResourceLeaseForTask(workspaceRoot, taskId);
+	}
 	const path = leasePath(workspaceRoot, taskId);
 	if (!pathExists(path)) return null;
 	const raw = readJson(path, null);
@@ -93,6 +106,9 @@ function buildLease({ taskId, sessionId, worktreePath, ttlSeconds, revision }) {
  * (different session), even if the task id differs.
  */
 export function findActiveWriteLeaseForWorktree(workspaceRoot, worktreePath, { exceptSessionId = null } = {}) {
+	if (isLinkedWorkspace(workspaceRoot)) {
+		return findActiveResourceLeaseForWorktree(workspaceRoot, worktreePath, { exceptSessionId });
+	}
 	const canonical = canonicalizePath(worktreePath || "");
 	if (!canonical) return null;
 	const { locksDir } = pathsFor(workspaceRoot);
@@ -117,6 +133,14 @@ export function acquireWriteLease(workspaceRoot, {
 	worktreePath = "",
 	ttlSeconds = DEFAULT_LEASE_TTL_SECONDS,
 } = {}) {
+	if (isLinkedWorkspace(workspaceRoot)) {
+		return acquireResourceWriteAuthority(workspaceRoot, {
+			taskId,
+			sessionId,
+			worktreePath,
+			ttlSeconds,
+		});
+	}
 	if (!taskId || !sessionId) {
 		const err = new Error("taskId and sessionId required for write lease");
 		err.code = "INVALID_LEASE_ARGS";
@@ -216,6 +240,13 @@ export function acquireWriteLease(workspaceRoot, {
 }
 
 export function refreshLease(workspaceRoot, taskId, { sessionId, ttlSeconds, allowExpiredOwn = false } = {}) {
+	if (isLinkedWorkspace(workspaceRoot)) {
+		return refreshResourceWriteAuthority(workspaceRoot, taskId, {
+			sessionId,
+			ttlSeconds,
+			allowExpiredOwn,
+		});
+	}
 	const lease = readLease(workspaceRoot, taskId);
 	if (!lease) {
 		const err = new Error(`no lease to refresh for task ${taskId}`);
@@ -270,6 +301,9 @@ export function refreshLease(workspaceRoot, taskId, { sessionId, ttlSeconds, all
 }
 
 export function releaseWriteLease(workspaceRoot, taskId, { sessionId, force = false } = {}) {
+	if (isLinkedWorkspace(workspaceRoot)) {
+		return releaseResourceWriteAuthority(workspaceRoot, taskId, { sessionId, force });
+	}
 	const lease = readLease(workspaceRoot, taskId);
 	if (!lease) {
 		// Only clear orphan lock dir when force is explicit — never as anonymous release.
@@ -328,6 +362,15 @@ export function takeoverWriteLease(workspaceRoot, {
 	ttlSeconds = DEFAULT_LEASE_TTL_SECONDS,
 	confirm = false,
 } = {}) {
+	if (isLinkedWorkspace(workspaceRoot)) {
+		return takeoverResourceWriteAuthority(workspaceRoot, {
+			taskId,
+			sessionId,
+			worktreePath,
+			ttlSeconds,
+			confirm,
+		});
+	}
 	if (!confirm) {
 		const err = new Error("takeover requires --confirm");
 		err.code = "CONFIRM_REQUIRED";
@@ -348,6 +391,9 @@ export function takeoverWriteLease(workspaceRoot, {
 }
 
 export function sessionHoldsWriteLease(workspaceRoot, taskId, sessionId) {
+	if (isLinkedWorkspace(workspaceRoot)) {
+		return sessionHoldsResourceWriteAuthority(workspaceRoot, taskId, sessionId);
+	}
 	const lease = readLease(workspaceRoot, taskId);
 	if (!lease || lease.invalid || !sessionId) return false;
 	if (lease.sessionId !== sessionId) return false;
