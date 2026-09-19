@@ -1,5 +1,11 @@
 # Heli Cloud Sync — Design
 
+**Current baseline:** `v0.10.0`  
+**Architecture status:** shipped optional service with historical v0.7 phase notes retained  
+**Current architecture:** [Current Heli architecture](README.md)
+
+> **v0.10 portability amendment:** linked project identity/config lives under `.heli/`, while live sessions, resource authority, grants, credentials, YOLO state, and runtime capability observations remain execution-local and are never made portable merely by sync. Portable work/evidence may move; authorization does not. The v0.7 implementation history below is retained as historical detail.
+
 Status: **Phases 0–2 shipped** (owner-approved 2026-08-06; Phases 0–1 shipped in v0.7.0 with the service deployed; Phase 2 shipped in v0.7.1). Phase 3 remains unscheduled.
 Owner decision record: workspace task `cloud-sync-design`
 
