@@ -1,5 +1,11 @@
 # Ponytail Parity Audit
 
+**Status:** Historical comparative audit.  
+**Compared Heli baseline:** v0.5.10.  
+**Current baseline:** `v0.10.0` — use [Adapter Support Matrix](ADAPTER_SUPPORT_MATRIX.md) for current support claims and [Current Heli architecture](architecture/README.md) for current topology.
+
+> Keep the version-specific findings below as historical evidence only; do not use them as current adapter-status or installation guidance.
+
 Scope: Heli-Harness v0.5.10 compared with local reference repo `D:\KJ\heli-governance-lab\repos\ponytail` at `16f6cbf`.
 
 ## Official And Local Evidence
