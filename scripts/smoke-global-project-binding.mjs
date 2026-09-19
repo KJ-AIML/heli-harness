@@ -16,6 +16,10 @@ import {
 	canonicalizePath,
 	findWorkspaceRoot,
 	pathsFor,
+	readProjectBinding,
+	readWorkspaceLock,
+	validateHeliLock,
+	validateWorkspaceManifest,
 } from "../lib/concurrency/index.mjs";
 
 const root = mkdtempSync(join(tmpdir(), "heli-linked-"));
@@ -49,6 +53,26 @@ try {
 	assert.match(linkedJson.data.executionId, /^heli-exec-/);
 	assert.ok(existsSync(join(project, ".heli", "workspace.json")));
 	assert.ok(existsSync(join(project, ".heli", "heli.lock")));
+	const manifest = readProjectBinding(project);
+	const runtimeLock = readWorkspaceLock(project);
+	assert.equal(manifest.workspaceId, linkedJson.data.workspaceId);
+	assert.equal(runtimeLock.runtime.package, "heli-harness");
+	assert.throws(
+		() => validateWorkspaceManifest({ ...manifest, leases: {} }),
+		(error) => error.code === "MUTABLE_AUTHORITY_IN_PROJECT_BINDING",
+	);
+	assert.throws(
+		() =>
+			validateWorkspaceManifest({
+				...manifest,
+				resources: [{ id: "root", type: "worktree", path: "../escape" }],
+			}),
+		(error) => error.code === "PROJECT_RESOURCE_ESCAPE",
+	);
+	assert.throws(
+		() => validateHeliLock({ ...runtimeLock, grants: [] }),
+		(error) => error.code === "MUTABLE_AUTHORITY_IN_HELI_LOCK",
+	);
 	assert.ok(
 		existsSync(join(project, ".heli", "safety", "command-rules.json")),
 		"fresh linked project should receive built-in safety defaults without overwriting project-owned files",
