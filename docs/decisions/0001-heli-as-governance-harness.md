@@ -1,6 +1,6 @@
 # ADR 0001: Heli as Governance Harness
 
-**Historical baseline:** early workspace-harness architecture.  
+**Historical baseline:** early workspace-harness architecture.
 **Current baseline:** `v0.10.0` — see [ADR 0002](0002-portable-governance-kernel.md) and [Current Heli architecture](../architecture/README.md).
 
 ## Status
