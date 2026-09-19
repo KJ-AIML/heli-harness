@@ -5,7 +5,7 @@
 
 > Diagnosis/evidence concepts remain available where implemented, but this document's task-scoped framing is not the current authority model.
 
-Heli-Harness v0.8.0 adds a small control surface for engineering claims. It
+Historically, Heli-Harness v0.8.0 added a small control surface for engineering claims. It
 does not execute agents or workflows. Agents and hosts execute; Heli validates
 which claims and transitions have sufficient current evidence.
 
