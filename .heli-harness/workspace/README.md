@@ -1,13 +1,24 @@
-# Workspace Index
+# Workspace Metadata
 
-Use `index.json` to list known repos in the parent workspace and map each repo to its git root and profile.
+**Current release:** `v0.10.0`
 
-Use `target.json` to record the active target repo for current work.
+## Linked projects
 
-This directory is lightweight by design:
+Current project identity/config lives under the project-root `.heli/` directory:
 
-- `index.json` is reviewable workspace metadata.
-- `target.json` is current target state, not long-term memory.
-- Missing or incomplete files should produce warnings, not hard failures.
-- `target.lock.example.json` is an advisory lock template for multi-agent coordination.
-- Lock files are warnings, not distributed locks. Copy the `.example.json` template to create an active lock.
+- `.heli/workspace.json` — logical workspace/project identity and resource declarations;
+- `.heli/heli.lock` — runtime/protocol/schema pins.
+
+These committed files are not allowed to contain mutable live authority.
+
+Current target/resource/authority state should be resolved through Heli CLI/machine surfaces and execution-local state.
+
+## Embedded compatibility
+
+`.heli-harness/workspace/index.json` and `target.json` remain part of the embedded compatibility layout.
+
+- `index.json` lists known repos for the embedded parent workspace.
+- `target.json` records embedded current target state.
+- advisory lock examples remain compatibility hints, not distributed locks.
+
+When `.heli/workspace.json` exists, do not treat embedded workspace metadata as the current linked authority owner merely because compatibility files remain on disk.
