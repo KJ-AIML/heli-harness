@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.10.0 - Portable governance kernel and scoped authority
+
+### Added
+
+- Global distribution/project binding with `heli setup`, `heli link`, committed `.heli/workspace.json`, reproducibility lock `.heli/heli.lock`, stable machine identity, and execution-local operational state.
+- Resource-scoped cooperative write authority for linked workspaces: one canonical worktree resource owns one writer authority, with generation/revision tracking and task ids retained as provenance rather than the exclusivity key.
+- Scoped grants stored outside project-controlled files, bounded by action, resource, execution, optional session, expiry, and usage count; `allow once` is consumed atomically.
+- Trusted policy composition where built-in/user ceilings may be narrowed by project policy but not elevated by repository content.
+- Canonical governance decision receipts with decision ids, structured historical explanation, capability-observation freshness, and host/runtime/adapter/config identity.
+
+### Changed
+
+- Human and machine task lifecycle paths now share canonical claim/release/takeover/complete transitions.
+- Authority explanation uses the same ownership evaluator as runtime enforcement; trace output declares its completeness instead of implying a universal audit log.
+- External host-session identity is namespaced by host, and runtime capability observations distinguish documented/observed evidence from enforcement claims.
+- Linked cloud portability follows the active workspace layout and carries portable work/evidence while excluding live sessions, bindings, locks, grants, YOLO state, and runtime authority.
+- Project-binding validation rejects mutable authority in committed manifests/locks and rejects resource paths that escape the project root.
+
+### Safety and compatibility
+
+- Embedded v0.8.x workspaces remain supported as a compatibility path; first linked cutover fails closed while active embedded write authority exists.
+- Cloning a linked project preserves logical workspace identity but creates a new machine/execution identity with no inherited leases, grants, sessions, or capability observations.
+- T6 hard-deny rules remain non-grantable; scoped grants replace broad permission bypasses as the preferred temporary-approval path.
+- The v0.9 governance-semantic stabilization work is included in this release; no separate v0.9 stable release is required for these semantics.
+
 ## v0.8.3 - Cross-machine task target restore
 
 ### Fixed
