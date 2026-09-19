@@ -1,6 +1,6 @@
 # Experimental ACP v1 Governance Proxy
 
-**Status:** Experimental integration; not part of the stable v0.10.0 governance-kernel contract.  
+**Status:** Experimental integration; not part of the stable v0.10.0 governance-kernel contract.
 **Current architecture:** [Current Heli architecture](README.md)
 
 > This document describes an optional transport/proxy experiment. It must not be used to infer universal tool interception, sandboxing, or current core authority semantics.
