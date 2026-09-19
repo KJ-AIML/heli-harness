@@ -1,9 +1,12 @@
 # Heli v1 Architecture Convergence RFC
 
-**Status:** Proposed convergence contract  
-**Date:** 2026-09-18  
-**Scope:** Architecture only; no implementation plan in this document  
-**Applies to:** Heli v0.9 stabilization and the path to v1.0
+**Status:** Accepted architecture contract; implemented through the `v0.10.0` baseline  
+**Date:** 2026-09-18; baseline accepted/implemented 2026-09-19  
+**Scope:** Canonical architecture contract; historical planning sections are retained for provenance  
+**Applies to:** Heli `v0.10.0` and the path to v1.0  
+**Current architecture index:** `docs/architecture/README.md`
+
+> **Current-baseline note:** sections that describe v0.8/v0.9 branches or a proposed release sequence are historical rationale for how the v0.10.0 architecture was reached. They are not current install or authority instructions.
 
 ## 1. Decision summary
 
@@ -24,7 +27,7 @@ The convergence architecture makes the following decisions:
 9. **Capability claims are evidence-backed and surface-specific; observed callback activity is not equivalent to enforcement.**
 10. **Explain is a projection of canonical evaluation and historical decision receipts, never a separate policy engine.**
 
-This RFC intentionally does not define an implementation backlog. The next implementation plan must derive from this contract after its conformance scenarios are accepted.
+This RFC originally froze architecture before implementation planning. Its convergence decisions are now the accepted basis of the v0.10.0 implementation. Future implementation plans must continue to derive from this contract rather than reintroduce task-scoped/global-mutable authority semantics.
 
 ---
 
@@ -963,9 +966,9 @@ Keep a documented hermetic bundle mode.
 
 ---
 
-## 22. Proposed release sequence
+## 22. Historical release sequence and current baseline
 
-Version numbers are guidance; gates matter more than labels.
+This sequence is retained as architecture history. The repository has reached the `v0.10.0` baseline described below; earlier v0.8/v0.9 entries are precursor gates, not current release guidance.
 
 ### v0.8.4 — Stabilization
 
