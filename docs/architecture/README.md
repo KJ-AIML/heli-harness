@@ -1,7 +1,7 @@
 # Heli Architecture — Current Canonical Baseline
 
-**Current release:** `v0.10.0`  
-**Architecture baseline:** portable governance kernel + project binding + execution-local/resource-scoped authority  
+**Current release:** `v0.10.0`
+**Architecture baseline:** portable governance kernel + project binding + execution-local/resource-scoped authority
 **Canonical convergence RFC:** [Heli v1 Architecture Convergence RFC](../superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md)
 
 This page is the entry point for **current** Heli architecture. If another document conflicts with this page or the convergence RFC, the current `v0.10.0` implementation and the convergence RFC win.
