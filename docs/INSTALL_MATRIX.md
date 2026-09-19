@@ -1,7 +1,7 @@
 # Install Matrix — v0.10.0
 
-**Primary topology:** shared/global distribution + `heli setup` + project `heli link`  
-**Architecture:** [Current Heli architecture](architecture/README.md)  
+**Primary topology:** shared/global distribution + `heli setup` + project `heli link`
+**Architecture:** [Current Heli architecture](architecture/README.md)
 **Host evidence:** [Adapter Support Matrix](ADAPTER_SUPPORT_MATRIX.md)
 
 ## Current linked project setup
