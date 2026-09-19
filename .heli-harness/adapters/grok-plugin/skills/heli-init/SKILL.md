@@ -1,74 +1,85 @@
 ---
 name: heli-init
-description: Use when bootstrapping or creating a repo profile for a target repo in the current Heli parent workspace (/heli-init).
+description: Use when bootstrapping project facts/profile context for a Heli v0.10 linked project or an embedded compatibility workspace.
 ---
 
-# Heli-Harness Init
+# Heli Init
 
-Bootstrap a repo profile for a target repo in the current parent workspace.
+Bootstrap or refresh descriptive project/repository facts without changing product source.
 
-## Workflow
+## 1. Resolve layout first
 
-1. **Read harness context**
-   - Read `.heli-harness/HARNESS.md` as source of truth
-   - Read `.heli-harness/profiles/` to see existing profiles
-   - Read `.heli-harness/workspace/index.json` when present
-   - Identify target repo from context or ask user
+Run:
 
-2. **Inspect target repo**
-   - Read repo-local docs (README, AGENTS.md, CLAUDE.md, package files)
-   - Inspect repo structure (directories, scripts, config)
-   - Identify test commands, build commands, dependencies
-   - Do NOT edit target repo source code
+```bash
+heli status
+```
 
-3. **Create repo profile**
-   - Create or update `.heli-harness/profiles/<repo>.md`
-   - Map the profile to one repo entry from `.heli-harness/workspace/index.json` when the workspace index exists
-   - Include:
-     - Observed stack
-     - Existing patterns
-     - Recommended conventions
-     - Known tech debt
-     - Forbidden patterns
-     - Safer alternatives
-     - Command tiers
-     - Repo risks
-     - Exceptions
-     - Evidence paths
-     - Policy references when overlays exist
-   - Treat observed patterns as facts, not automatic recommendations
-   - Require evidence paths for meaningful claims
-   - If a risky existing pattern exists, classify it as possible tech debt and provide a safer alternative
-   - Do not use vague phrases like "follow existing patterns" without classification
+- **Linked v0.10 project:** project config/overlays live under `.heli/`; use Heli CLI state to resolve target/resource context.
+- **Embedded compatibility workspace:** use `.heli-harness/` profile/workspace paths.
 
-4. **Update task state**
-   - Update `.heli-harness/state/current-task.md`
-   - Record: target repo, task, mode, risk tier, files expected to change
+Do not infer linked authority from old embedded state files.
 
-## Command Classification
+## 2. Inspect the project/repository
 
-Classify repo commands into:
-- **Safe audit-only**: Non-mutating, no API keys, no side effects
-- **Broader non-mutating gate**: May auto-fix formatting but no logic changes
-- **Mutating/full local gate**: Requires dependencies, may modify files
-- **API-credit-consuming**: Requires API keys, consumes credits
-- **Release/publish/version**: Production operations, requires approval
+- Read repo-local docs, package/build/test configuration, and relevant source structure.
+- Identify build/test/package-manager facts from evidence.
+- Do **not** edit product source code as part of profile initialization.
+- Preserve dirty user work.
 
-## Safety Rules
+## 3. Create or update the profile
 
-- Do NOT edit target repo source code
-- Do NOT commit or push
-- Do NOT run mutating commands without approval
-- Do NOT run API-credit-consuming commands without approval
-- Preserve dirty user work
-- If multiple repos are configured, confirm the target repo before write workflows
-- If dependencies are missing, report before installing
+Linked mode:
 
-## Output
+```text
+.heli/profiles/<repo>.md
+```
 
-Create `.heli-harness/profiles/<repo>.md` with:
-- taxonomy sections from the repo profile template
-- evidence paths for meaningful claims
-- tech-debt framing for risky existing patterns
-- safer alternatives for future work
-- policy references when policy overlays exist
+Embedded compatibility:
+
+```text
+.heli-harness/profiles/<repo>.md
+```
+
+Record:
+
+- observed stack;
+- existing patterns;
+- recommended conventions;
+- known tech debt;
+- forbidden patterns;
+- safer alternatives;
+- command tiers/risk notes;
+- repo risks;
+- exceptions;
+- evidence paths;
+- policy references.
+
+Observed code is a fact, not automatically a recommendation.
+
+## 4. Durable work record only when needed
+
+Profile initialization does not require a named task merely to become authorized.
+
+Create/update a durable work record when the work spans sessions, needs handoff/coordination, or carries significant verification/diagnosis obligations. In embedded compatibility mode, the existing task-state workflow remains available.
+
+## Command classification
+
+Classify discovered commands by actual side effects/cost:
+
+- read/audit only;
+- non-mutating validation;
+- local mutation/build;
+- network/API/cost-bearing;
+- release/publish/deploy;
+- destructive/secret/outside-scope.
+
+Risk tiers summarize impact; they do not grant authority.
+
+## Safety
+
+- Do not edit target source during profile bootstrap.
+- Do not commit/push/release.
+- Do not install dependencies or spend API credits without the applicable policy/grant.
+- Confirm target/resource identity when ambiguous.
+- Do not copy credentials or secret values into profiles/evidence.

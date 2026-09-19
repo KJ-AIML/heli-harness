@@ -1,26 +1,32 @@
-# Heli-Harness
+# Heli-Harness Embedded Distribution
 
-Parent-workspace AI development harness for multi-repo, multi-agent engineering work.
+**Current release:** `v0.10.0`
+**Current architecture:** [../docs/architecture/README.md](../docs/architecture/README.md)
 
-## What is this?
+This directory is the shipped **embedded compatibility/hermetic distribution** for Heli. It contains portable skills, policies, safety defaults, adapter assets, the embedded CLI mirror, and compatibility state schemas.
 
-Heli-Harness gives local coding agents (Claude Code, Codex, Cursor, Pi, generic) a shared source of truth: protocols, repo profiles, state tracking, optional hooks, and adapter instructions.
+It is **not** the primary v0.10 project-binding topology.
 
-## Structure
+For a normal linked project:
 
-- `HARNESS.md` — source of truth for agent behavior
-- `manifest.json` — harness metadata
-- `skills/` — canonical skills for agent workflows (including the evidence-gates protocol)
-- `adapters/` — agent-specific instructions (Codex, Claude, Cursor, Pi, Generic)
-- `profiles/` — repo-specific profiles
-- `state/` — task tracking and decisions
-- `templates/` — profile templates
-- `hooks/` — optional lifecycle hooks
+- shared/global Heli distribution provides the CLI/runtime;
+- `heli setup` initializes trusted user/global state;
+- `heli link` creates committed project binding under `.heli/`;
+- live grants, sessions, resource authority, credentials, and capability observations remain execution-local.
 
-## Install
+When a project contains `.heli/workspace.json`, do not treat legacy `.heli-harness/state/`, `.heli-harness/workspace/`, task leases, or advisory locks as the current authority owner merely because those compatibility files exist.
 
-See the main [README](../README.md) or [INSTALL](../INSTALL.md).
+Use this directory directly when:
 
-## Usage
+- maintaining Heli itself;
+- testing generated/packaged embedded assets;
+- running a deliberate self-contained/offline install;
+- migrating an older embedded workspace.
 
-Agents should read `HARNESS.md` as the source of truth before any substantive work.
+Canonical docs:
+
+- root `README.md`
+- root `INSTALL.md`
+- `docs/architecture/README.md`
+- `docs/architecture/governance-model.md`
+- `docs/ADAPTER_SUPPORT_MATRIX.md`

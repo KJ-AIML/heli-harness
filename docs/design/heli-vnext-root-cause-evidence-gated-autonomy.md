@@ -1,6 +1,8 @@
 # Heli vNext — Root-Cause Convergence & Evidence-Gated Autonomy
 
-Status: implementation design for v0.8.0 candidate
+**Status:** Historical v0.8 implementation design; retained for provenance and test lineage.
+**Current baseline:** `v0.10.0` — see [Current Heli architecture](../architecture/README.md).
+**Superseded for authority topology:** task/lease framing below is not the current linked-project authority model.
 
 ## 1. Current behavior
 

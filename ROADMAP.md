@@ -4,65 +4,90 @@
 
 Latest stable release: `v0.10.0`
 
-Heli-Harness is an instructions-as-code governance harness for coding agents. It gives local coding agents a shared, inspectable operating layer for workspace protocols, repo facts, policies, safety expectations, task state, adapter instructions, observable hooks, and reviewable reports.
+Heli is a **portable governance and coordination layer for coding agents**, implemented around a small policy/authority kernel with evidence-backed host integrations.
 
-Release history and shipped details live in the [changelog](CHANGELOG.md). Current adapter support and evidence live in the [adapter support matrix](docs/ADAPTER_SUPPORT_MATRIX.md).
+Canonical current architecture: [docs/architecture/README.md](docs/architecture/README.md).
+Release history: [CHANGELOG.md](CHANGELOG.md).
+Current adapter evidence: [docs/ADAPTER_SUPPORT_MATRIX.md](docs/ADAPTER_SUPPORT_MATRIX.md).
 
-## Core Thesis
+## Core thesis
 
-Facts describe. Policies decide. Safety enforces. Reports prove.
+- Facts describe.
+- Trusted policy constrains.
+- Resource authority scopes conflicting mutation.
+- Scoped grants approve bounded exceptions.
+- Evidence and receipts explain what happened.
+- Adapters translate host semantics without pretending every host has identical enforcement.
 
-- Facts describe: repo profiles record what exists, where it lives, and how the repo currently behaves.
-- Policies decide: policy overlays state what teams require, recommend, forbid, or allow only with approval.
-- Safety enforces: hooks, guards, command tiers, and approval rules block or surface risky actions where the host tool supports enforcement.
-- Reports prove: run reports, validation notes, and audit artifacts show what changed, what commands ran, what risks remain, and where the agent deviated.
+Heli does not become an agent runtime, planner, scheduler, sandbox implementation, process supervisor, model router, general memory platform, or transcript store.
 
-## Design Principles
+## Shipped in v0.10.0
 
-- Keep Heli lightweight, local, markdown-first, and inspectable.
-- Separate repo facts from engineering policy.
-- Prefer explicit files over hidden state.
-- Prefer adapter-friendly conventions over one host-specific runtime.
-- Treat instruction files as context, not enforcement.
-- Put enforcement into hooks, guards, approvals, and validation where available.
-- Make hook behavior observable.
-- Require evidence for claims of safety, validation, and completion.
-- Avoid turning existing weak patterns into recommended conventions.
-- Use machine-readable sidecars only where markdown cannot carry the contract safely.
-- Keep release milestones version-based, not calendar-based.
+- Global/shared distribution with `heli setup`.
+- Explicit project binding with `heli link`.
+- `.heli/workspace.json` + `.heli/heli.lock` as committed identity/reproducibility state.
+- Execution-local machine/runtime authority state.
+- Clone-safe machine/execution identity.
+- Resource-scoped cooperative write authority.
+- Scoped grants with action/resource/execution/time/use boundaries.
+- Trusted built-in/user/project policy composition.
+- Canonical human/machine transition semantics.
+- Structured governance decisions and historical explanation.
+- Runtime capability freshness/identity.
+- Linked portability that carries evidence/work records without carrying live authorization.
+- Fail-closed migration from embedded v0.8.x-compatible workspaces (historical).
+- Cross-platform CI on Ubuntu/Windows with Node 20/22.
 
 ## Now
 
-- Maintain the `v0.10.0` Root-Cause Convergence and Evidence-Gated Autonomy release; keep release claims aligned with the changelog and adapter support matrix.
-- Dogfood multi-task leases, worktree bindings, and task-scoped YOLO/target isolation in real parent workspaces.
-- Stabilize local governance contracts: profiles, policies, safety rules, workspace targeting, task state, and reports.
-- Preserve evidence-backed adapter status; runtime enforcement is only claimed where host behavior has been tested.
-- Keep `npm run check` (including `smoke-concurrency-foundation`) as the normal repository validation path.
+- Keep `v0.10.0` documentation, package metadata, adapter claims, and architecture references synchronized.
+- Dogfood linked projects across supported hosts.
+- Measure friction and correctness of automatic binding/resource-authority behavior before widening defaults.
+- Keep support claims tied to reproducible smoke/live evidence.
+- Preserve embedded `.heli-harness/` only as a compatibility/hermetic path, not as the primary topology.
 
-## Next
+## Next — v0.11 only when evidence warrants it
 
-- Close evidence gaps in existing adapters before expanding support; in particular, promote a status only with matching smoke or live verification evidence.
-- Refine schemas and validation only where the markdown-first contract is insufficient.
-- Use benchmark results to guide changes to governance workflows, safety behavior, and reporting.
+- Measured auto-binding for ordinary sessions.
+- Measured automatic resource-authority acquisition where conflict semantics are reliable.
+- Broader adapter coverage only with equivalent evidence.
+- Better host-native approval/grant receipt integration.
+- Stronger executor fencing where the executor can actually enforce loss of authority.
+- Reduce compatibility artifacts only after linked installs no longer depend on them.
 
-## Milestone: Cloud Sync (Phases 0–2 shipped, v0.7.0–v0.7.1)
+## Path to v1.0
 
-Design: [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md). Goal: a gcloud-style device story — install the CLI globally, authenticate once, select a workspace, and receive its portable context (profiles, policies, safety overlays, task history) on any machine. The workspace stays local-first: sync is an optional transport layer, never a requirement for governance, hooks, tasks, or leases.
+v1.0 is a compatibility and truthfulness gate, not a feature-count milestone.
 
-| Phase | Ships | Status |
-| --- | --- | --- |
-| 0 | npm registry publish: `npm i -g heli-harness` → global `heli` command | shipped in v0.7.0 |
-| 1 | Cloudflare sync service (Workers + Durable Object storage + R2), OAuth device-flow auth, `heli auth` / `heli ws` / `heli push` / `heli pull`, blocking pre-push secret scan | shipped in v0.7.0 |
-| 2 | `heli init` full device restore, `heli sync` + auto-push on task complete, optional client-side (E2E) encryption, version time machine | shipped in v0.7.1 |
-| 3 | Team workspaces and live cross-device state (Durable Object seam) | unscheduled; needs its own design and demonstrated demand |
+Required properties include:
 
-Boundary rules carried from the design: the server stores opaque snapshots only (it never parses profile/policy/task schemas), machine-local state (`sessions/`, `locks/`, `bindings/`, YOLO) never syncs, and product repos under `repos/` remain out of scope — each keeps its own git remote.
+- authority correctness and recovery;
+- deterministic policy/grant/resource semantics;
+- current/historical explanation parity;
+- declared enforcement coverage that matches tested host behavior;
+- safe clone/move/upgrade behavior;
+- explicit remote authority ownership;
+- usable linked defaults without reintroducing hidden global mutable authority.
 
-## Not Doing
+See the accepted [Heli v1 Architecture Convergence RFC](docs/superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md).
 
-- No full agent runtime, planner, task execution engine, or multi-agent orchestrator.
-- No schema-coupled central database, vector memory platform, hosted telemetry product, or plugin marketplace before schemas are stable. The shipped cloud sync service stores opaque workspace snapshots only and must never become required for local operation (see [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md)).
-- No replacement for linters, tests, code owners, branch protection, host-specific sandboxing, approval systems, or human review.
-- No treating auto-generated descriptive profiles as authoritative policy.
-- No memory source for required policy.
-- No dependency unless a small local file format cannot satisfy the requirement.
+## Historical shipped milestone — Cloud Sync
+
+Cloud Sync Phases 0–2 shipped in the v0.7.x line. Those version references are historical release facts, not the current architecture baseline.
+
+Current v0.10 rule: portable evidence/context may move; authorization does not.
+
+Design and current amendment: [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md).
+
+Phase 3 team/live cross-device authority remains unscheduled and would require its own authority-domain design.
+
+## Not doing
+
+- No full agent runtime or multi-agent scheduler.
+- No general-purpose process execution/recovery plane.
+- No hidden central authority database for local projects.
+- No vector/general-memory platform as part of the governance kernel.
+- No claim that Markdown/pointer files equal enforcement.
+- No claim that callback observation equals containment.
+- No broad temporary bypass as the preferred permission model.
+- No portability of credentials, live grants, live writer authority, or host-session authority.

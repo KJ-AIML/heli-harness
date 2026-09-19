@@ -1,5 +1,10 @@
 # Heli v0.9 Agent Governance Protocol Implementation Plan
 
+**Status:** Historical implementation precursor; superseded by the accepted convergence architecture and the `v0.10.0` baseline.
+**Current architecture:** [docs/architecture/README.md](../../architecture/README.md)
+
+> Retained for provenance only. Current installation, project binding, grants, and authority semantics come from v0.10.0 documentation, not this plan.
+
 > **For agentic workers:** implement task-by-task with isolated review gates. Do not merge phases merely because adjacent tasks touch similar files.
 
 **Goal:** Introduce a stable machine-readable governance protocol, structured capability/decision semantics, hierarchical sessions, local explainability, and measurable workflow efficiency without turning Heli into an agent runtime.

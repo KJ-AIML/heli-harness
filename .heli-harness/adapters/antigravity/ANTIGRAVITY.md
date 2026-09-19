@@ -2,18 +2,18 @@
 
 ## Heli-Harness identity
 
-Heli-Harness is the workspace governance source of truth. Antigravity CLI (`agy`) must treat `.heli-harness/HARNESS.md` as authoritative for harness protocol, and this file only translates that protocol into Antigravity-facing startup behavior.
+Heli v0.10.0 uses canonical governance semantics shared by CLI/machine/hooks/explain. In linked mode, project identity/config is under `.heli/` and live authority is execution-local; `.heli-harness/HARNESS.md` is authoritative only for the embedded compatibility protocol. This adapter translates those semantics into host-facing startup behavior.
 
 ## Read first
 
-1. Start from the parent workspace.
-2. Read `.heli-harness/HARNESS.md`.
-3. Read `.heli-harness/workspace/target.json` and `.heli-harness/workspace/index.json` when present.
-4. Identify the target repo before editing.
-5. Read the matching `.heli-harness/profiles/<repo>.md` if it exists.
+1. Start from the linked project root; for embedded compatibility, start from the workspace root.
+2. Run `heli status` (and `heli doctor` when needed) to resolve linked vs embedded layout and current target/authority context.
+3. In linked mode, use `.heli/` plus CLI/explain surfaces; do not treat embedded `.heli-harness/workspace/*` or shared `current-task.md` as current authority.
+4. Identify the target resource/repo before editing.
+5. Read the matching project profile from `.heli/profiles/` when linked, or `.heli-harness/profiles/` when embedded.
 6. Read repo-local `AGENTS.md`, `CLAUDE.md`, `README*`, package/build/test files, and relevant docs.
-7. For non-trivial edits, update `.heli-harness/state/current-task.md`.
-8. Load only relevant skill docs from `.heli-harness/skills/`.
+7. Use a durable task/work record when work spans sessions, needs handoff/coordination, or carries significant verification/diagnosis obligations; ordinary reversible linked work does not require a task.
+8. Load only relevant project/Heli skills.
 
 ## Enforcement self-check
 

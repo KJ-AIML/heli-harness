@@ -1,56 +1,29 @@
-# OpenCode Install
+# OpenCode Install — Heli v0.10.0
 
-## 1. Workspace harness
+## Project setup
 
-Install `.heli-harness/` into the parent workspace (see root INSTALL.md).
+Use current Heli project binding:
 
-## 2. Plugin (required for blocking)
+```bash
+npm install -g github:KJ-AIML/heli-harness#v0.10.0
+heli setup
+cd /path/to/project
+heli link
+```
 
-Copy the plugin **directory contents** into the project plugin directory. OpenCode loads `.js` and `.ts` files from `.opencode/plugins/` automatically at startup:
+## Plugin activation
+
+From a package/source/embedded adapter tree, copy the plugin tree into the project plugin directory:
 
 ```bash
 mkdir -p .opencode/plugins
 cp -R .heli-harness/adapters/opencode-plugin/. .opencode/plugins/
 ```
 
-Load requirements (verified against OpenCode 1.18.21):
+OpenCode auto-discovers `.js`/`.ts` entries. Keep `heli-harness.js` plus its relative `shared/` imports together.
 
-- The entry file must keep the `.js` extension (`heli-harness.js`). OpenCode does **not** auto-discover `.mjs` files — a single-file `heli-harness.mjs` copy silently never loads.
-- Copy the tree, not just the entry file: `heli-harness.js` imports `./shared/hook-core.mjs` relative to itself.
+A global host plugin copy may live under `~/.config/opencode/plugins/`. Global plugin installation is host integration; it does not make one project globally authoritative.
 
-For a global install, copy the same tree to `~/.config/opencode/plugins/` instead. Do not add the copied project plugin to `opencode.json`; automatic discovery is the preferred path.
+Use `opencode debug config` plus Heli capability evidence to confirm activation.
 
-For older/custom configurations, explicit registration remains supported in `opencode.json` (this also works for a `.mjs` entry, which discovery ignores):
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["./.opencode/plugins/heli-harness.mjs"]
-}
-```
-
-On Windows, absolute `file:///` URLs also work. Confirm load:
-
-```bash
-opencode debug config
-# Confirm the plugin is discovered from the project or global plugin directory.
-```
-
-Live check:
-
-```bash
-opencode run "Use the bash tool to run: git push origin main"
-# Expect tool failure text containing "Heli-Harness blocks git push"
-```
-
-## 3. Pointer instructions
-
-Optional: point agents at `.heli-harness/adapters/opencode/OPENCODE.md`.
-
-## Verify
-
-```bash
-node scripts/smoke-opencode-adapter.mjs
-node scripts/smoke-opencode-plugin.mjs
-node scripts/live-verify-opencode-plugin.mjs
-```
+Current support/evidence: `docs/ADAPTER_SUPPORT_MATRIX.md`.

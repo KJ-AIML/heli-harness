@@ -1,25 +1,28 @@
-# Claude Code Install
+# Claude Code Install — Heli v0.10.0
 
-Use the workspace installer from the repo checkout:
+## Current project setup
 
-```powershell
-.\install.ps1 -Parent "C:\your\workspace"
-```
-
-or:
+Use shared/global Heli distribution and link the project:
 
 ```bash
-./install.sh /path/to/workspace
+npm install -g github:KJ-AIML/heli-harness#v0.10.0
+heli setup
+cd /path/to/project
+heli link
 ```
 
-The installer creates `CLAUDE.md` in the parent workspace only when that file does not already exist:
+## Claude plugin
 
-```text
-Read .heli-harness/adapters/claude/CLAUDE.md first.
+For the packaged/local plugin tree:
+
+```bash
+claude plugin install .heli-harness/adapters/claude-plugin
 ```
 
-Updates do not modify the parent workspace `CLAUDE.md`; keep local Claude notes there if needed.
+Project binding does not by itself prove plugin activation. Use `heli explain capabilities` and the current support matrix to distinguish documented/loaded/observed/tested enforcement.
 
-Do not copy Heli-Harness into `%USERPROFILE%\.claude\skills` by default. This harness is intended to live with the parent workspace.
+## Embedded compatibility
 
-Optional settings examples are packaged for review. v0.5.11 live-verifies the native plugin against a real Claude Code session (`node scripts/live-verify-claude-plugin.mjs`); see the native plugin path in the root README for details.
+A self-contained `.heli-harness/` install remains supported for hermetic/offline use. In that layout, `CLAUDE.md` may point at the embedded adapter and `.heli-harness/HARNESS.md` is the compatibility protocol.
+
+Current support status and exact evidence: `docs/ADAPTER_SUPPORT_MATRIX.md`.

@@ -1,5 +1,8 @@
 # Adapter Support Matrix
 
+**Current release:** `v0.10.0`
+**Architecture:** [Current Heli architecture](architecture/README.md)
+
 This is the authoritative, evidence-based adapter-status reference. Statuses describe tested host behavior, not a security boundary; every hook remains a guardrail rather than a sandbox.
 
 For end-user installation instructions, see the [INSTALL.md end-user installation guide](../INSTALL.md).
@@ -33,7 +36,7 @@ For end-user installation instructions, see the [INSTALL.md end-user installatio
 
 ## Hook scope
 
-Live checks for supported native hooks exercise remote-push denial and environment-file-write denial in isolated workspaces. They also cover stuck or target-mismatched task-state write gates where listed in the adapter artifacts. The shared vNext smoke additionally proves structured diagnosis reroute, subsystem-checkpoint, root-cause, and expensive-retry gates; it does not prove arbitrary host log parsing or a portable PostToolUse contract. This is deliberately limited coverage, not host permission enforcement or sandboxing.
+Live checks for supported native hooks exercise remote-push denial and environment-file-write denial in isolated workspaces. They also cover stuck or target-mismatched task-state write gates where listed in the adapter artifacts. The shared evidence-gate smoke additionally proves structured diagnosis reroute, subsystem-checkpoint, root-cause, and expensive-retry gates; it does not prove arbitrary host log parsing or a portable PostToolUse contract. This is deliberately limited coverage, not host permission enforcement or sandboxing.
 
 ## Maintainer verification
 

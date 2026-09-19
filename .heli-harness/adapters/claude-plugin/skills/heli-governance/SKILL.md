@@ -1,26 +1,45 @@
 ---
 name: heli-governance
-description: Use when working in a Heli-Harness parent workspace — load harness protocol, target discipline, concurrent session rules, and evidence-backed completion standards.
+description: Use when working in a Heli v0.10 linked project or embedded compatibility workspace to resolve layout, target/resource authority, policy, grants, host coverage, and evidence-backed completion.
 ---
 
 # Heli Governance
 
-Read `.heli-harness/HARNESS.md`, identify the target repo, preserve dirty user work, and run evidence-backed validation before claiming completion. If the repo the user describes differs from `.heli-harness/workspace/target.json`'s `targetRepo`, warn about the mismatch and confirm before proceeding — see the `heli-target` skill for the set/confirm workflow — rather than silently overriding or silently proceeding against the wrong repo.
+Run `heli status` first and determine the active layout.
 
-Do not claim enforcement unless a runtime hook or local smoke proves it. Pointer adapters are context. Plugin hooks are guardrails, not a sandbox.
+## Linked v0.10 project
 
-## Concurrent sessions (v0.5.24+)
+When `.heli/workspace.json` exists:
 
-When workspace schema mode is `concurrent` (or multiple tasks exist under `.heli-harness/tasks/`):
+- project identity/config lives under `.heli/`;
+- live grants, sessions, resource authority, capability observations, credentials, and runtime identity are execution-local;
+- use `heli explain authority` / `heli explain capabilities` rather than inferring authority from committed state;
+- resource/worktree authority is the conflicting-write boundary;
+- a task is optional durable work/provenance, not the root authorization key;
+- use scoped grants for temporary approval;
+- T6 hard-deny behavior remains non-grantable by normal temporary approval;
+- preserve dirty user work and keep changes within the resolved target/resource scope;
+- use a durable work record when work spans sessions, needs handoff/coordination, or carries significant verification/diagnosis obligations.
 
-- Use durable **task** ids (`heli task create|list|show|claim|release`).
-- Bind this agent run with a **Heli session** (`heli session start|attach|status`); export `HELI_SESSION_ID` so hooks resolve the same session.
-- Write mode requires an active **write lease** on that task. A second writer is denied; use review/observe or explicit `heli task takeover --confirm`.
-- Prefer a **separate git worktree** per parallel task. Do not invent lease ownership in prose.
-- Task-local YOLO/target apply only to the bound task. Global `yolo.json` does not authorize cross-task bleed in concurrent mode.
-- If the user says "continue the work" and multiple tasks are active without a binding, ask which task id — do not silently attach to an arbitrary task.
-- Duplicate work-item keys are rejected unless explicitly confirmed.
+Do not treat an old embedded `.heli-harness/state/current-task.md`, task lease, or advisory lock as linked authority merely because compatibility files remain after migration.
 
-Legacy singular `state/current-task.md` remains valid when concurrent mode is not initialized.
+## Embedded compatibility workspace
 
-After marking a task `complete` at risk tier S2/S3 in the bound task's `current-task.md` (or legacy state file), append a dated entry to the appropriate `decisions.md` if the task involved a durable architectural call (not for routine fixes).
+When no linked project binding exists and the workspace intentionally uses `.heli-harness/`:
+
+- read `.heli-harness/HARNESS.md`;
+- use `heli target` / embedded workspace metadata for target discipline;
+- concurrent task/session/lease commands remain available;
+- write mode requires the compatibility writer claim/lease where that mode is active;
+- prefer a separate git worktree per parallel task;
+- do not invent lease ownership in prose.
+
+The `concurrent-upgrade` skill applies only to embedded workspaces that still use legacy shared task state.
+
+## Evidence and enforcement
+
+Do not claim enforcement unless a runtime hook or local/live proof supports the exact host surface.
+
+Pointer files are context. Plugin hooks are guardrails. Neither is a sandbox.
+
+After significant S2/S3 work, retain decision/verifier evidence in the appropriate durable work record when one exists.

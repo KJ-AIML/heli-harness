@@ -1,21 +1,17 @@
-# Cursor Install
+# Cursor Install — Heli v0.10.0
 
-From the parent workspace:
+## Project setup
 
-```powershell
-Set-Content -Path .\.cursorrules -Value "Read .heli-harness/adapters/cursor/CURSOR.md first."
-```
+Use `heli setup` + `heli link` for current project binding.
 
-Or for scoped rules, create `.cursor/rules/harness.mdc`:
+Cursor integration may use the packaged local marketplace under `.heli-harness/adapters/cursor-plugin/` or the nested plugin copied into Cursor's local plugin directory.
 
-```markdown
----
-description: Heli-Harness operating protocol
-globs:
-alwaysApply: true
----
+For an embedded compatibility workspace, pointer rules may direct Cursor to:
 
+```text
 Read .heli-harness/adapters/cursor/CURSOR.md first.
 ```
 
-Do not copy Heli-Harness into Cursor's global settings by default. This harness is intended to live with the parent workspace.
+Pointer/rule presence is context, not runtime enforcement proof.
+
+Current support/evidence: `docs/ADAPTER_SUPPORT_MATRIX.md`.

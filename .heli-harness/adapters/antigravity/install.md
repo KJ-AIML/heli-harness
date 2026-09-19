@@ -1,38 +1,22 @@
-# Antigravity CLI Install
+# Antigravity CLI Install — Heli v0.10.0
 
-Use the workspace installer from the repo checkout:
-
-```powershell
-.\install.ps1 -Parent "C:\your\workspace"
-```
-
-or:
+## Project setup
 
 ```bash
-./install.sh /path/to/workspace
+npm install -g github:KJ-AIML/heli-harness#v0.10.0
+heli setup
+cd /path/to/project
+heli link
 ```
 
 ## Plugin
 
-Stage the Heli plugin into Antigravity's plugin directory (exact CLI command may vary by version):
+Stage the packaged Heli Antigravity plugin in the host plugin directory appropriate to the installed Antigravity version. The packaged source tree is under:
 
 ```text
-~/.gemini/antigravity-cli/plugins/heli-harness/
+.heli-harness/adapters/antigravity-plugin/
 ```
 
-Copy contents of `.heli-harness/adapters/antigravity-plugin/` into that folder so `plugin.json` and `hooks.json` are present.
+Project-level host hooks may reference the same scripts.
 
-Project-level hooks can also be linked via `.agents/hooks.json` pointing at the same command scripts.
-
-Optional pointer:
-
-```text
-Read .heli-harness/adapters/antigravity/ANTIGRAVITY.md first.
-```
-
-## Verify
-
-```bash
-node scripts/smoke-antigravity-adapter.mjs
-node scripts/smoke-antigravity-plugin.mjs
-```
+Plugin presence/wiring is not equivalent to tested enforcement. Current evidence is authoritative in `docs/ADAPTER_SUPPORT_MATRIX.md`.

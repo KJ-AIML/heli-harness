@@ -1,50 +1,40 @@
 # Harness State
 
-This directory holds shared parent-workspace state.
+**Current release:** `v0.10.0`
 
-## Concurrent mode (default on new installs, v0.5.27+)
+## Linked projects
 
-New `heli install` seeds `.heli-harness/workspace/schema.json` with `"mode": "concurrent"`.
+For a linked project, live operational state is execution-local and resolved by Heli from the project binding. It is not committed as project authority.
 
-- **Zero tasks:** single-agent bootstrap — writes are allowed; prefer creating a task before a second agent joins.
-- **One or more tasks:** write tools require bound session + write lease (`heli task claim` / `HELI_SESSION_ID`).
+Current linked semantics:
 
-When concurrent mode is active:
+- resource/worktree authority is the conflicting-write boundary;
+- a task is an optional durable work record/provenance object;
+- grants, sessions, live authority, capability observations, credentials, YOLO, and process/runtime identity are machine/execution local;
+- cloning a project does not clone authorization.
 
-## Concurrent mode details (v0.5.24+)
+Use `heli status`, `heli explain authority`, and machine-readable Heli surfaces instead of assuming a committed state file is authoritative.
 
-When `.heli-harness/workspace/schema.json` has `"mode": "concurrent"` (default install seed, or enabled by `heli task create` / `heli task migrate-legacy`):
+## Embedded compatibility mode
 
-- **Authoritative** task state lives under `.heli-harness/tasks/<task-id>/`.
-- Sessions: `.heli-harness/sessions/`
-- Bindings: `.heli-harness/bindings/worktrees/`
-- Write leases: `.heli-harness/locks/tasks/`
-- `state/current-task.md` may hold a **non-authoritative projection** (neutral multi-task notice, or a single-task summary). Do not treat it as the source of truth in concurrent mode.
-- Workspace-level architectural decisions may still use `state/decisions.md`; per-task decisions use `tasks/<id>/decisions.md`.
-- Active diagnosis uses `tasks/<id>/diagnosis.json` plus the append-only `events.jsonl` history. It is lazy: simple successful S0/S1 work does not need a diagnosis record.
+A deliberately embedded `.heli-harness/` workspace still supports the older state layout:
 
-### CLI
+- `tasks/<task-id>/`
+- `sessions/`
+- `bindings/`
+- `locks/`
+- `state/current-task.md`
+- `workspace/index.json`
+- `workspace/target.json`
 
-```bash
-heli task create <id> --work-item <key> --repo <name>
-heli task claim <id> --mode write
-heli session status
-heli conflicts
-heli task migrate-legacy --id <id>
-```
+Embedded compatibility installs default to concurrent state. Older embedded workspaces may still be legacy until explicitly migrated.
 
-Set `HELI_SESSION_ID` in the agent process after claim/start so hooks resolve the same session.
+In embedded concurrent mode, task-local state is authoritative for the compatibility task/session workflow; shared `state/current-task.md` may be only a projection.
 
-## Legacy mode (older workspaces)
+The `concurrent-upgrade` skill applies to this embedded compatibility path. It is not the authority model for linked v0.10 projects.
 
-Workspaces installed before v0.5.27 (or never migrated) may still have `"mode": "legacy"`. Then these files remain authoritative:
+## Durable records
 
-- `current-task.md`: active task state (shared — multi-agent races).
-- `plan.md`, `decisions.md`, `yolo.json` (workspace-global YOLO in legacy only).
-- `runs/` / `reports/`: generated artifacts (prefer unique names).
+Use durable work/task records when work spans sessions, needs handoff, coordinates multiple actors, or carries significant verification/diagnosis obligations.
 
-### Upgrade note
-
-`heli update` does **not** flip legacy → concurrent (preserves in-flight state). New installs default concurrent. Old workspaces: `heli task migrate-legacy --id <id>` or `heli task create` (skill: `concurrent-upgrade`).
-
-Do not fill `runs/` or `reports/` with fake data.
+Do not create fake runs/reports/evidence merely to satisfy ceremony.

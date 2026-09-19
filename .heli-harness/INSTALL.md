@@ -1,30 +1,36 @@
-# Install (Internal)
+# Embedded / Hermetic Install — v0.10.0
 
-This directory contains the Heli-Harness runtime.
+The primary v0.10 model is **global/shared distribution + `heli setup` + `heli link`**. See the root [INSTALL.md](../INSTALL.md).
 
-## Install to workspace
+This document covers the self-contained `.heli-harness/` compatibility path.
 
-From the repo root:
+## Current primary path
 
 ```bash
-# macOS/Linux
-./install.sh /path/to/workspace
-
-# Windows
-.\install.ps1 -Parent "C:\your\workspace"
+npm install -g github:KJ-AIML/heli-harness#v0.10.0
+heli setup
+cd /path/to/project
+heli link
 ```
 
-This copies `.heli-harness/` to the target workspace and creates adapter pointer files.
+## Deliberate embedded compatibility install
 
-## What gets installed
+```bash
+npx github:KJ-AIML/heli-harness#v0.10.0 install /path/to/workspace
+```
 
-- `.heli-harness/HARNESS.md` — source of truth
-- `.heli-harness/manifest.json` — harness metadata
-- `.heli-harness/skills/` — canonical skills (including `evidence-gates`; the manifest is authoritative)
-- `.heli-harness/adapters/` — agent-specific instructions
-- `.heli-harness/profiles/` — repo profiles (empty, user adds)
-- `.heli-harness/state/` — task tracking
-- `.heli-harness/templates/` — profile templates
-- `.heli-harness/hooks/` — optional hooks
-- `AGENTS.md` — Codex pointer
-- `CLAUDE.md` — Claude Code pointer
+The embedded install copies distribution assets and seeds idle local state. It must not copy package-dogfood sessions, tasks, bindings, locks, grants, capability observations, or YOLO state into the destination.
+
+## Existing embedded workspace → linked project
+
+Update the embedded runtime to v0.10.0, ensure no active embedded writer authority remains, then run:
+
+```bash
+heli link /path/to/workspace
+```
+
+The cutover fails closed while active embedded write authority exists. Portable work/evidence may migrate; authorization does not.
+
+## Host adapters
+
+Host activation is separate from project binding. See [Adapter Support Matrix](../docs/ADAPTER_SUPPORT_MATRIX.md) and the root install guide for current host-specific commands.

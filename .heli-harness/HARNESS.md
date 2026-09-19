@@ -1,10 +1,20 @@
 # Heli-Harness
 
-Heli-Harness is the source of truth for this parent workspace. It is tool-neutral: Codex, Claude Code, and any other local coding agent must use the same harness protocols, repo profiles, state files, hooks, and templates.
+Heli-Harness provides the embedded governance protocol and compatibility assets for Heli v0.10.0. The current architecture is a portable governance kernel with explicit project binding and execution-local/resource-scoped authority. In a linked project, `.heli/workspace.json`, `.heli/heli.lock`, trusted user/global config, and CLI-resolved execution state take precedence over legacy embedded workspace state. In a deliberately embedded/hermetic install, this file remains the local protocol entry point.
+
+## v0.10 layout and authority
+
+- First run `heli status` (and `heli doctor` when needed) to determine whether the project is **linked** or **embedded compatibility**.
+- In linked mode, start from the linked project root. Project identity/config lives under `.heli/`; live grants, sessions, resource authority, credentials, capability observations, and process state are execution-local and must not be inferred from committed project files.
+- In embedded compatibility mode, `.heli-harness/` contains the self-contained distribution and operational state.
+- Resource/worktree authority is the conflicting-write boundary in linked mode. A task name is optional work-record/provenance, not the root authorization key.
+- S0-S3 are workflow/risk summaries, not permission levels.
+- Temporary approval should use scoped grants; T6 hard-deny behavior remains non-grantable by normal temporary approval.
+- Evidence may be portable. Authorization does not become portable because a repo, bundle, or workspace ID is copied.
 
 ## Operating Model
 
-- The agent starts from the parent workspace that contains multiple repos and `.heli-harness/`.
+- The agent starts from the linked project root. For embedded compatibility installs, start from the workspace root that contains `.heli-harness/`.
 - The agent must identify the target repo before editing.
 - In multi-repo workspaces, the agent should read `.heli-harness/workspace/index.json` and select a target repo before write workflows begin.
 - The agent should treat `.heli-harness/workspace/target.json` as the active target record when it exists.
@@ -14,20 +24,20 @@ Heli-Harness is the source of truth for this parent workspace. It is tool-neutra
 - **Plan/task freshness (mandatory):** same-turn Evidence after verify; never leave `Next smallest action` or plan Status lagging after a blocking discovery (e.g. "await auth" after auth was granted, or "rebind pin" after the action is proven unsupported). When strategy shifts, update plan `Active strategy` / `Supersedes` so old eras do not look current.
 - **Evidence purity:** plan/task Evidence holds measured results only. Do not record product-defect hypotheses until `verify-premise` confirms them.
 - **Resume card + gate packet:** keep the Resume card in `current-task.md` current after every verify or blocker. For multi-gate S2/S3 ops (smoke, launch, staging), use `.heli-harness/templates/ops-gate-packet.md` and fail closed on typed blockers.
-- **Legacy vs concurrent:** **New installs (v0.5.27+) default to concurrent** (`workspace/schema.json` mode `concurrent`). With zero tasks, single-agent bootstrap writes are allowed; once any task exists, writes need claim + `HELI_SESSION_ID`. Older workspaces may remain legacy (shared `state/current-task.md` — multi-agent races) until `heli task create` or `heli task migrate-legacy`. `heli update` does **not** auto-migrate mode (skill: `concurrent-upgrade`).
+- **Linked vs embedded compatibility:** linked v0.10 projects use execution-local resource authority and do not require a named task for ordinary reversible work. Embedded compatibility installs use the older concurrent/legacy task/session layout; the `concurrent-upgrade` skill applies only to that compatibility path.
 - `current-task.md`'s `Step count` field is a self-reported number of discrete steps in the current task (0 if the task isn't naturally step-shaped). Set it honestly before starting, not as a formality — it is what lets session-start context warn when `Step count` is 3+ but `Plan` is still `n/a`, catching the exact case where a task obviously needed a plan.md and didn't get one. This is a warning, not a blocking gate: it surfaces the gap instead of leaving it silent, but it does not stop you from proceeding.
 - The agent must read policy overlays in `.heli-harness/policies/` when they exist.
 - The agent must read safety overlays in `.heli-harness/safety/` when they exist.
 - The agent must also read repo-local `AGENTS.md`, `CLAUDE.md`, `README*`, package files, build files, and test configuration where relevant.
-- The agent must create or update task state before non-trivial edits: in **legacy** mode, `.heli-harness/state/current-task.md`; in **concurrent** mode, the bound `tasks/<task-id>/current-task.md` after claim/attach (do not treat shared `state/current-task.md` as authoritative when mode is concurrent).
+- Create or update a durable task/work record when work spans sessions, needs handoff, coordinates multiple actors, carries significant verification obligations, or requires durable diagnosis/evidence. Ordinary reversible linked-mode edits do not require a named task merely to become authorized. Embedded compatibility mode keeps its existing task-state paths.
 - The agent must preserve dirty user work. Never revert, overwrite, move, or delete user changes unless explicitly asked.
 - The agent must not assume branch policy, test commands, generated-file policy, release process, deployment policy, or ownership unless a repo profile or repo docs say so.
 - Repo profiles remain descriptive. Team rules belong in policy overlays, and command-risk guidance belongs in safety overlays.
 - Repo profiles should classify weak existing patterns as tech debt when appropriate, include evidence paths for meaningful claims, and record safer alternatives for future work.
 - Write workflows in multi-repo workspaces should not proceed silently when target identity is ambiguous.
-- The agent should check for advisory lock files (session.lock.json, target.lock.json) before write workflows when multiple agents may be active.
+- In linked mode, inspect current resource authority through Heli rather than relying on advisory lock templates. In embedded compatibility mode, advisory lock files may still provide coordination hints.
 - On Claude Code and Codex native plugin installs, `PreToolUse` blocks `Edit`/`Write`/`apply_patch` calls when `.heli-harness/state/current-task.md` shows 2+ failed attempts on an incomplete task, or a target repo that doesn't match `.heli-harness/workspace/target.json` — update the state file (or target.json) to resolve it before continuing. This closes the gap where a session in one CLI carries over stale or mismatched task state to a session in a different CLI without either agent noticing.
-- Locks are advisory warnings, not distributed locks. An expired or missing lock should warn, not block.
+- Embedded advisory lock templates are warnings, not distributed locks. Linked resource authority is a separate modeled governance state and must be evaluated through the canonical authority engine.
 - The agent must not run expensive loops repeatedly. Use the smallest useful check first, then widen only when evidence requires it.
 - After two failed **implementation/fix** attempts, stop coding and write a diagnosis with evidence, likely causes, and the next smallest action. Shell quoting, path, host-syntax, or module-resolution failures are **command friction** — track them separately and do not burn the two-strike engineering stop on them.
 
