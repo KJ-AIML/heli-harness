@@ -1,5 +1,10 @@
 # Heli v0.9 Agent Governance Protocol Design
 
+**Status:** Historical precursor, superseded for current authority/distribution semantics by the accepted v1 convergence RFC and `v0.10.0` architecture.  
+**Current architecture:** [docs/architecture/README.md](../../architecture/README.md)
+
+> Protocol-envelope, structured-decision, capability-observation, and explain concepts from this design were carried forward where they conform to the current canonical evaluator. Task-scoped authority and other v0.9-specific topology descriptions below are historical.
+
 ## Goal
 
 Evolve Heli from a file-oriented cross-agent governance harness into a small, versioned, machine-readable governance protocol while preserving Markdown as the human-authoring format and preserving Heli's task, target, evidence, lease, diagnosis, and adapter model.
