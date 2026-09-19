@@ -14,48 +14,51 @@ function minMode(a, b) {
 
 export function effectiveSessionAuthority(workspaceRoot, sessionId, { visited = new Set() } = {}) {
 	const session = readSession(workspaceRoot, sessionId);
-	if (!session) return { sessionId, exists: false, mode: "observe", writeAllowed: false, reason: "SESSION_NOT_FOUND" };
+	if (!session) {
+		return { sessionId, exists: false, status: "missing", mode: "observe", delegationActive: false, writeAllowed: false, reason: "SESSION_NOT_FOUND", chain: [sessionId] };
+	}
+	const status = String(session.status || "active");
+	if (status !== "active") {
+		return { sessionId, exists: true, status, mode: "observe", taskId: session.taskId || null, parentSessionId: session.parentSessionId || null, role: session.role, delegationActive: false, writeAllowed: false, reason: "SESSION_INACTIVE", chain: [sessionId] };
+	}
 	if (visited.has(sessionId)) {
-		return { sessionId, exists: true, mode: "observe", writeAllowed: false, reason: "SESSION_PARENT_CYCLE" };
+		return { sessionId, exists: true, status, mode: "observe", taskId: session.taskId || null, delegationActive: false, writeAllowed: false, reason: "SESSION_PARENT_CYCLE", chain: [sessionId] };
 	}
 	visited.add(sessionId);
 	let mode = normalizeSessionMode(session.mode);
 	const chain = [sessionId];
+	let delegationActive = true;
 	if (session.parentSessionId) {
 		const parent = readSession(workspaceRoot, session.parentSessionId);
 		if (!parent) {
-			return { sessionId, exists: true, mode: "observe", taskId: session.taskId || null, chain, writeAllowed: false, reason: "PARENT_SESSION_NOT_FOUND" };
+			return { sessionId, exists: true, status, mode: "observe", taskId: session.taskId || null, parentSessionId: session.parentSessionId, role: session.role, delegationActive: false, writeAllowed: false, reason: "PARENT_SESSION_NOT_FOUND", chain };
+		}
+		if (String(parent.status || "active") !== "active") {
+			return { sessionId, exists: true, status, mode: "observe", taskId: session.taskId || null, parentSessionId: session.parentSessionId, role: session.role, delegationActive: false, writeAllowed: false, reason: "PARENT_SESSION_INACTIVE", chain: [sessionId, parent.sessionId] };
 		}
 		const parentAuthority = effectiveSessionAuthority(workspaceRoot, parent.sessionId, { visited });
 		chain.push(...(parentAuthority.chain || [parent.sessionId]));
+		if (!parentAuthority.delegationActive) {
+			return { sessionId, exists: true, status, mode: "observe", taskId: session.taskId || null, parentSessionId: session.parentSessionId, role: session.role, delegationActive: false, writeAllowed: false, reason: "ANCESTOR_DELEGATION_INACTIVE", parentReason: parentAuthority.reason, chain };
+		}
 		mode = minMode(mode, session.delegation?.mode || "observe");
 		if (parent.taskId && session.taskId && parent.taskId !== session.taskId) {
-			return {
-				sessionId,
-				exists: true,
-				mode: "observe",
-				taskId: session.taskId || null,
-				chain,
-				writeAllowed: false,
-				reason: "CHILD_TASK_MISMATCH",
-			};
+			return { sessionId, exists: true, status, mode: "observe", taskId: session.taskId || null, parentSessionId: session.parentSessionId, role: session.role, delegationActive: false, writeAllowed: false, reason: "CHILD_TASK_MISMATCH", chain };
 		}
 	}
 	const lease = session.taskId ? readLease(workspaceRoot, session.taskId) : null;
 	const leaseActive = Boolean(lease && !lease.invalid && !isLeaseExpired(lease));
-	const writeAllowed =
-		mode === "write" &&
-		Boolean(session.taskId) &&
-		leaseActive &&
-		sessionHoldsWriteLease(workspaceRoot, session.taskId, sessionId);
+	const writeAllowed = delegationActive && mode === "write" && Boolean(session.taskId) && leaseActive && sessionHoldsWriteLease(workspaceRoot, session.taskId, sessionId);
 	return {
 		sessionId,
 		exists: true,
+		status,
 		mode,
 		taskId: session.taskId || null,
 		parentSessionId: session.parentSessionId || null,
 		role: session.role,
 		chain,
+		delegationActive,
 		lease: lease ? { sessionId: lease.sessionId || null, expiresAt: lease.expiresAt || null, active: leaseActive } : null,
 		writeAllowed,
 		reason: writeAllowed ? "WRITE_AUTHORITY_ACTIVE" : mode !== "write" ? "EFFECTIVE_MODE_READ_ONLY" : "WRITE_LEASE_REQUIRED",

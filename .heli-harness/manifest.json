@@ -87,5 +87,8 @@
   "workspace": {
     "index": "workspace/index.json",
     "target": "workspace/target.json"
-  }
+  },
+  "supportsLinkedWorkspace": true,
+  "project_binding": ".heli/workspace.json",
+  "runtime_lock": ".heli/heli.lock"
 }

@@ -221,14 +221,20 @@ export function closeSession(workspaceRoot, sessionId) {
 	return written;
 }
 
-export function findSessionByExternalId(workspaceRoot, externalHostSessionId) {
+export function findSessionByExternalId(
+	workspaceRoot,
+	externalHostSessionId,
+	{ host = null } = {},
+) {
 	if (!externalHostSessionId) return null;
+	const expectedHost = host ? String(host) : null;
 	return (
 		listSessions(workspaceRoot).find(
 			(s) =>
 				s.status === "active" &&
 				s.externalHostSessionId &&
-				String(s.externalHostSessionId) === String(externalHostSessionId),
+				String(s.externalHostSessionId) === String(externalHostSessionId) &&
+				(!expectedHost || String(s.host || "unknown") === expectedHost),
 		) || null
 	);
 }

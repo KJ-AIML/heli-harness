@@ -676,7 +676,7 @@ export function routeDiagnosis(workspaceRoot, taskId, payload = {}, options = {}
 }
 
 function actionPolicy(workspaceRoot) {
-	const path = join(workspaceRoot, ".heli-harness", "safety", "expensive-actions.json");
+	const path = join(pathsFor(workspaceRoot).safetyDir, "expensive-actions.json");
 	const data = readJson(path, null);
 	return data && typeof data === "object" ? data : { schemaVersion: 1, actions: [] };
 }

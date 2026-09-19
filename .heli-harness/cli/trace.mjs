@@ -47,7 +47,20 @@ export function runTrace(args = []) {
 	}
 	const path = taskPaths(workspaceRoot, taskId).eventsJsonl;
 	const parsed = existsSync(path) ? parseEventJsonl(readFileSync(path, "utf8")) : { events: [], warnings: [] };
-	const data = { workspaceRoot, taskId, eventPath: path, events: parsed.events };
+	const data = {
+		workspaceRoot,
+		taskId,
+		eventPath: path,
+		events: parsed.events,
+		completeness: {
+			scope: "task-event-stream",
+			guardDecisionPersistence: "denials-only",
+			allowsPersisted: false,
+			historicalDecisionReplay: "recorded-receipts-only",
+			transactionalWithTaskSnapshot: false,
+			note: "This is a governance trace, not a complete host/executor audit log.",
+		},
+	};
 	const result = protocolOk("trace.show", data, { warnings: parsed.warnings });
 	if (json) printProtocolResult(result);
 	else if (!parsed.events.length) console.log(`No events for task ${taskId}.`);

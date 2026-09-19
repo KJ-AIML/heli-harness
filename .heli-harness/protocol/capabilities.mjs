@@ -81,3 +81,29 @@ export function validateCapabilityMap(capabilities) {
 
 	return { valid: errors.length === 0, errors };
 }
+
+
+export function composeCapabilityClaims({
+	declared = {},
+	observed = {},
+	names = HELI_CAPABILITY_NAMES,
+} = {}) {
+	const claims = {};
+	for (const name of names) {
+		const declaredClaim = declared?.[name];
+		const declaredFlag = typeof declaredClaim === "boolean"
+			? declaredClaim
+			: declaredClaim && typeof declaredClaim === "object"
+				? declaredClaim.declared === true
+				: false;
+		const observation = observed?.[name] || null;
+		claims[name] = {
+			declared: declaredFlag,
+			observed: Boolean(observation),
+			effective: observation ? "observed" : declaredFlag ? "documented" : "unsupported",
+			observation,
+			note: observation ? "live callback observation only; does not by itself prove equivalent-surface enforcement" : null,
+		};
+	}
+	return claims;
+}

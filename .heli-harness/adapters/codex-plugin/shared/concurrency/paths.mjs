@@ -6,6 +6,17 @@ import { dirname, join, normalize, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 import { safeRealpath } from "./fs-atomic.mjs";
 import { hashCanonicalPath } from "./ids.mjs";
+import {
+	hasProjectBindingFile,
+	readProjectBinding,
+	resolveWorkspaceLayout,
+	workspaceManifestPath,
+	workspaceLockPath,
+	projectPolicyDir,
+	projectSafetyDir,
+	projectProfilesDir,
+	projectSkillsDir,
+} from "./project-binding.mjs";
 
 export const DEFAULT_LEASE_TTL_SECONDS = 14400;
 
@@ -92,8 +103,9 @@ export function findWorkspaceRoot(startCwd) {
 	const seen = new Set();
 	while (dir && !seen.has(dir)) {
 		seen.add(dir);
+		const projectBinding = workspaceManifestPath(dir);
 		const harness = join(dir, ".heli-harness", "HARNESS.md");
-		if (existsSync(harness)) return canonicalizePath(dir);
+		if (existsSync(projectBinding) || existsSync(harness)) return canonicalizePath(dir);
 		const parent = dirname(dir);
 		if (parent === dir) break;
 		dir = parent;
@@ -102,13 +114,26 @@ export function findWorkspaceRoot(startCwd) {
 }
 
 export function heliDir(workspaceRoot) {
-	return join(workspaceRoot, ".heli-harness");
+	const layout = resolveWorkspaceLayout(workspaceRoot);
+	return layout.operationalRoot;
 }
 
 export function pathsFor(workspaceRoot) {
-	const root = heliDir(workspaceRoot);
+	const layout = resolveWorkspaceLayout(workspaceRoot);
+	const root = layout.operationalRoot;
+	const linked = layout.mode === "linked";
 	return {
 		heliDir: root,
+		operationalRoot: root,
+		layoutMode: layout.mode,
+		linked,
+		projectDir: linked ? join(workspaceRoot, ".heli") : join(workspaceRoot, ".heli-harness"),
+		workspaceManifestPath: linked ? workspaceManifestPath(workspaceRoot) : null,
+		workspaceLockPath: linked ? workspaceLockPath(workspaceRoot) : null,
+		policiesDir: linked ? projectPolicyDir(workspaceRoot) : join(root, "policies"),
+		safetyDir: linked ? projectSafetyDir(workspaceRoot) : join(root, "safety"),
+		profilesDir: linked ? projectProfilesDir(workspaceRoot) : join(root, "profiles"),
+		skillsDir: linked ? projectSkillsDir(workspaceRoot) : join(root, "skills"),
 		workspaceDir: join(root, "workspace"),
 		schemaPath: join(root, "workspace", "schema.json"),
 		indexPath: join(root, "workspace", "index.json"),
@@ -124,6 +149,7 @@ export function pathsFor(workspaceRoot) {
 		sessionsDir: join(root, "sessions"),
 		bindingsDir: join(root, "bindings", "worktrees"),
 		locksDir: join(root, "locks", "tasks"),
+		resourceLocksDir: join(root, "locks", "resources"),
 	};
 }
 
