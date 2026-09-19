@@ -1,36 +1,52 @@
-# Install Matrix
+# Install Matrix — v0.10.0
 
-Use the workspace harness for a parent workspace. Host-specific support status and proof live in [Adapter Support Matrix](ADAPTER_SUPPORT_MATRIX.md).
+**Primary topology:** shared/global distribution + `heli setup` + project `heli link`  
+**Architecture:** [Current Heli architecture](architecture/README.md)  
+**Host evidence:** [Adapter Support Matrix](ADAPTER_SUPPORT_MATRIX.md)
 
-For copy-paste setup, manual installation, updates, removal, and adapter details, see [INSTALL.md](../INSTALL.md).
+## Current linked project setup
 
-## Workspace harness
-
-| Method | Command | What it installs |
+| Step | Command | Result |
 | --- | --- | --- |
-| Windows PowerShell | `.\install.ps1 -Parent "C:\your\workspace"` | Full harness and adapter pointers |
-| macOS/Linux bash | `./install.sh /path/to/workspace` | Full harness and adapter pointers |
-| CLI | `npx github:KJ-AIML/heli-harness install <path>` | Full harness and adapter pointers |
-| Agent prompt | Ask an agent to install the repository into the current parent workspace | Full harness and adapter pointers |
+| Install pinned release | `npm install -g github:KJ-AIML/heli-harness#v0.10.0` | Shared/global Heli CLI/runtime |
+| Initialize trusted user state | `heli setup` | machine identity, user policy, locator |
+| Link project | `cd <project> && heli link` | `.heli/workspace.json`, `.heli/heli.lock`, fresh execution identity |
+| Verify | `heli doctor && heli status` | layout, target/resource, runtime and host evidence |
 
-## Host setup from an installed workspace
+The global registry is a locator only. Live grants/sessions/resource authority/capability observations are not committed project state.
+
+## Host activation
 
 | Host | Command or path | Notes |
 | --- | --- | --- |
-| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.10.0` or `axga install git:github.com/KJ-AIML/heli-harness@v0.10.0` | Package install; run `/heli-install` for a workspace harness |
-| Codex | **Git (upgradeable):** `codex plugin marketplace add KJ-AIML/heli-harness`; `codex plugin add heli-harness@heli-harness`; upgrade with `codex plugin marketplace upgrade heli-harness`. **Local dogfood:** `codex plugin marketplace add ./.heli-harness/adapters/codex-plugin` (must use `./` or absolute — bare `.heli-harness/…` is rejected) | Root marketplace: `.agents/plugins/marketplace.json`; nested plugin remains under `.heli-harness/adapters/codex-plugin/`; `AGENTS.md` remains the workspace pointer |
-| Claude Code | `claude plugin install .heli-harness/adapters/claude-plugin` | `CLAUDE.md` remains the workspace pointer |
-| Cursor | Add `.heli-harness/adapters/cursor-plugin/` as a local marketplace, or copy its `plugins/heli-harness/` child to `~/.cursor/plugins/local/heli-harness/` | Marketplace manifest indexes the plugin; pointer adapter remains the workspace fallback |
-| Grok Build | `node .heli-harness/adapters/grok-plugin/install-user-hooks.mjs` | Optional skills: `grok plugin install .heli-harness/adapters/grok-plugin --trust` |
-| OpenCode | `cp -R .heli-harness/adapters/opencode-plugin/. .opencode/plugins/` | Auto-loads `.js`/`.ts` from `.opencode/plugins/`; `.mjs` is not auto-discovered; see `.heli-harness/adapters/opencode/install.md` |
-| Kimi Code CLI | `node .heli-harness/adapters/kimi-plugin/install-user-hooks.mjs` | Then run `kimi doctor config` |
-| Antigravity CLI | Stage `.heli-harness/adapters/antigravity-plugin/` in the host plugin directory | See `.heli-harness/adapters/antigravity/install.md` |
-| Generic agents | `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md` | Requires workspace install first |
+| Pi / AXGA | `pi install git:github.com/KJ-AIML/heli-harness@v0.10.0` or `axga install git:github.com/KJ-AIML/heli-harness@v0.10.0` | Package install is separate from project linking; embedded `/heli-install` is compatibility-only |
+| Codex | `codex plugin marketplace add KJ-AIML/heli-harness`; `codex plugin add heli-harness@heli-harness` | Upgrade with `codex plugin marketplace upgrade heli-harness` |
+| Claude Code | `claude plugin install .heli-harness/adapters/claude-plugin` | Local/packaged plugin path; use capability evidence for live status |
+| Cursor | Use `.heli-harness/adapters/cursor-plugin/` as local marketplace or copy its nested plugin | Plugin wiring is not equivalent to runtime enforcement |
+| Grok Build | `node .heli-harness/adapters/grok-plugin/install-user-hooks.mjs` | User-hook activation required |
+| OpenCode | Use packaged OpenCode plugin tree | See adapter docs/support matrix |
+| Kimi Code CLI | `node .heli-harness/adapters/kimi-plugin/install-user-hooks.mjs` | Verify host config after install |
+| Antigravity CLI | Stage packaged plugin in host plugin location | Current status is evidence-limited |
+| Generic | Follow `.heli-harness/adapters/generic/AGENT_INSTRUCTIONS.md` | Advisory unless host integration proves more |
+
+## Embedded compatibility / hermetic install
+
+Use only when a self-contained workspace is intentional:
+
+```bash
+npx github:KJ-AIML/heli-harness#v0.10.0 install <path>
+```
+
+Existing embedded workspaces can migrate with `heli link <path>` after active embedded writer authority is quiesced.
 
 ## Lifecycle
 
-| Action | CLI | Local checkout |
-| --- | --- | --- |
-| Update workspace | `npx github:KJ-AIML/heli-harness update <path>` | `./update.sh /path/to/workspace` or `.\update.ps1 -Parent "C:\your\workspace"` |
-| Update Codex plugin | `codex plugin marketplace upgrade heli-harness` (Git marketplace only) | Switch from local marketplace first: remove local, then `codex plugin marketplace add KJ-AIML/heli-harness` |
-| Uninstall | `npx github:KJ-AIML/heli-harness uninstall <path>` | `./uninstall.sh /path/to/workspace` or `.\uninstall.ps1 -Parent "C:\your\workspace"` |
+| Action | Current command |
+| --- | --- |
+| Inspect current layout | `heli status` |
+| Validate install/binding | `heli doctor` |
+| Create project binding | `heli link` |
+| Temporary scoped approval | `heli grant issue ...` |
+| Explain authority | `heli explain authority` |
+| Update embedded compatibility install | `npx github:KJ-AIML/heli-harness#v0.10.0 update <path>` |
+| Remove embedded compatibility install | `npx github:KJ-AIML/heli-harness#v0.10.0 uninstall <path>` |

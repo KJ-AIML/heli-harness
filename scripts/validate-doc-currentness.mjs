@@ -64,6 +64,11 @@ const stalePhrases = [
 
 const historicalLineMarker = /(historical|history|superseded|precursor|compatib|older|retained|provenance|shipped|introduced|before|since|baseline comparison)/i;
 const oldVersion = /\bv0\.(?:[0-9])(?:\.\d+|\.x)?\b/g;
+const versionHistoryAllowedPaths = new Set([
+	canonicalRfc,
+	"ROADMAP.md",
+	"docs/architecture/cloud-sync.md",
+]);
 
 for (const abs of walk(root)) {
 	const path = rel(abs);
@@ -74,6 +79,8 @@ for (const abs of walk(root)) {
 	for (const pattern of stalePhrases) {
 		if (pattern.test(text)) fail(path, `stale current-facing phrase matches ${pattern}`);
 	}
+
+	if (versionHistoryAllowedPaths.has(path)) continue;
 
 	const lines = text.replace(/\r\n/g, "\n").split("\n");
 	for (let index = 0; index < lines.length; index += 1) {
