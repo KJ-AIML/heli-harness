@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - package.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    name: Release package version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          tag="v${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Full release gate
+        if: steps.meta.outputs.exists != 'true'
+        run: npm run check
+
+      - name: Pack release artifact
+        if: steps.meta.outputs.exists != 'true'
+        id: pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --json > pack.json
+          file="$(node -e "const fs=require('fs'); const v=JSON.parse(fs.readFileSync('pack.json','utf8')); process.stdout.write(v[0].filename)")"
+          test -f "$file"
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to npm when credentials are configured
+        if: steps.meta.outputs.exists != 'true'
+        id: npm_publish
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          PACKAGE_FILE: ${{ steps.pack.outputs.file }}
+        run: |
+          set -euo pipefail
+          if npm view "heli-harness@${VERSION}" version >/dev/null 2>&1; then
+            echo "status=already-published" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::warning::NPM_TOKEN is not configured; skipping npm registry publication."
+            echo "status=skipped-no-token" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          npm publish "$PACKAGE_FILE" --access public --provenance
+          echo "status=published" >> "$GITHUB_OUTPUT"
+
+      - name: Build release notes
+        if: steps.meta.outputs.exists != 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          NPM_STATUS: ${{ steps.npm_publish.outputs.status }}
+        run: |
+          set -euo pipefail
+          node <<'NODE' > release-notes.md
+          const fs = require('fs');
+          const version = process.env.VERSION;
+          const text = fs.readFileSync('CHANGELOG.md', 'utf8').replace(/\r\n/g, '\n');
+          const marker = `## v${version}`;
+          const start = text.indexOf(marker);
+          if (start < 0) throw new Error(`CHANGELOG entry not found for ${marker}`);
+          const rest = text.slice(start);
+          const next = rest.indexOf('\n## ', marker.length);
+          const section = (next >= 0 ? rest.slice(0, next) : rest)
+            .replace(/^##[^\n]*\n/, '')
+            .trim();
+          process.stdout.write(section + '\n');
+          NODE
+          if [ "$NPM_STATUS" = "published" ] || [ "$NPM_STATUS" = "already-published" ]; then
+            printf '\n**npm:** heli-harness@%s\n' "$VERSION" >> release-notes.md
+          else
+            printf '\n**npm:** registry publication not performed by this workflow (NPM_TOKEN unavailable).\n' >> release-notes.md
+          fi
+
+      - name: Create annotated tag and GitHub release
+        if: steps.meta.outputs.exists != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          PACKAGE_FILE: ${{ steps.pack.outputs.file }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" "$PACKAGE_FILE" \
+            --verify-tag \
+            --title "$TAG" \
+            --notes-file release-notes.md
