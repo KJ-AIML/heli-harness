@@ -6,8 +6,8 @@ Latest stable release: `v0.10.0`
 
 Heli is a **portable governance and coordination layer for coding agents**, implemented around a small policy/authority kernel with evidence-backed host integrations.
 
-Canonical current architecture: [docs/architecture/README.md](docs/architecture/README.md).  
-Release history: [CHANGELOG.md](CHANGELOG.md).  
+Canonical current architecture: [docs/architecture/README.md](docs/architecture/README.md).
+Release history: [CHANGELOG.md](CHANGELOG.md).
 Current adapter evidence: [docs/ADAPTER_SUPPORT_MATRIX.md](docs/ADAPTER_SUPPORT_MATRIX.md).
 
 ## Core thesis
