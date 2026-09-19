@@ -1,5 +1,10 @@
 # Evidence-Governed Autonomy
 
+**Status:** Historical v0.8 subsystem design retained for provenance.  
+**Current baseline:** `v0.10.0` — see [Current Heli architecture](README.md) and [Governance Model](governance-model.md).
+
+> Diagnosis/evidence concepts remain available where implemented, but this document's task-scoped framing is not the current authority model.
+
 Heli-Harness v0.8.0 adds a small control surface for engineering claims. It
 does not execute agents or workflows. Agents and hosts execute; Heli validates
 which claims and transitions have sufficient current evidence.
