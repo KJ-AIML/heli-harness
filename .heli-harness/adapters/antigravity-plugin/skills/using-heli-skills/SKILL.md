@@ -1,6 +1,6 @@
 ---
 name: using-heli-skills
-description: Use at the start of substantive Heli work to select the smallest workflow, resolve linked vs embedded layout, and load specialized skills only when triggers require them.
+description: Use when starting substantive Heli work to select the smallest workflow, resolve linked vs embedded layout, and load specialized skills only when triggers require them.
 ---
 
 # Using Heli skills

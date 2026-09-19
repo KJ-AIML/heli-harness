@@ -1,6 +1,6 @@
 ---
 name: concurrent-upgrade
-description: Use only for an embedded compatibility workspace that still has shared legacy task state and needs migration to the embedded concurrent task/session/lease layout. Linked v0.10 projects use resource-scoped authority instead.
+description: Use when an embedded compatibility workspace still has shared legacy task state and needs migration to the embedded concurrent task/session/lease layout; linked v0.10 projects use resource-scoped authority instead.
 ---
 
 # concurrent-upgrade
