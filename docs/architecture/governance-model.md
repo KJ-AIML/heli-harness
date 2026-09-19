@@ -1,366 +1,256 @@
-# Heli-Harness Governance Model
+# Heli-Harness Governance Model — v0.10.0
+
+**Status:** Current canonical governance model  
+**Current release:** `v0.10.0`  
+**Architecture index:** [README.md](README.md)  
+**Convergence contract:** [Heli v1 Architecture Convergence RFC](../superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md)
 
 ## Summary
 
-Heli-Harness is a lightweight governance layer for coding agents. It stores durable workspace instructions, repo facts, policies, safety rules, task state, adapter guidance, observable hooks, and reviewable reports in local files.
+Heli is a portable governance and coordination layer for coding agents. It owns policy resolution, normalized governance decisions, scoped approvals, modeled resource authority, capability-evidence interpretation, optional durable work/evidence records, decision receipts, and deterministic explanation of its own decisions.
 
-The model is deliberately split into layers. Repo facts should not become policy. Policy should not depend on memory. Safety should be enforced by hooks and host permissions where possible. Reports should make the work reviewable after the agent finishes.
+Heli deliberately does not own the host's model loop, conversation transcript, task scheduler, sandbox implementation, long-running process supervisor, or general memory.
 
-## Core Model
+## Core rule
 
-Facts describe. Policies decide. Safety enforces. Reports prove. Adapters translate.
+> Facts describe. Trusted policy constrains. Resource authority scopes. Grants approve. Evidence explains. Adapters translate.
 
-- Facts describe: profiles record observed repo structure, stack, commands, risks, and existing patterns.
-- Policies decide: policy overlays state required, recommended, forbidden, approval-gated, and exception-based behavior.
-- Safety enforces: safety overlays, hooks, command tiers, and approval rules block or surface risky behavior where supported.
-- Reports prove: run reports show what happened, which checks ran, which deviations occurred, and what risk remains.
-- Adapters translate: tool-specific adapters map the same harness model into Codex, Claude Code, Cursor, Pi, AXGA, or generic agent contexts.
-
-For the v0.8.0 evidence transition model, see
-[Evidence-Governed Autonomy](evidence-governed-autonomy.md). It adds only a
-lazy task-local diagnosis sidecar and shared evaluators; it does not turn Heli
-into an agent runtime or graph executor.
-
-## Separation of Concerns
-
-Heli should split:
-
-- Repo facts
-- Policy overlays
-- Safety overlays
-- Task state
-- Tool adapters
-- Hook observability
-- Review reports
-
-This split prevents common failure modes:
-
-- Existing weak code does not automatically become a recommended convention.
-- Memory cannot silently override required policy.
-- A user prompt cannot silently bypass a safety hard block.
-- Hook status can be inspected instead of inferred.
-- Reports remain durable review artifacts instead of chat-only summaries.
-
-## File and Layer Map
-
-| Layer | Current or proposed path | Role | Authority |
-| --- | --- | --- | --- |
-| Harness core | `.heli-harness/HARNESS.md` | Workspace protocol and source of truth | High protocol authority |
-| Repo profiles | `.heli-harness/profiles/` | Descriptive repo facts and risks | Descriptive, not prescriptive |
-| Policy overlays | `.heli-harness/policies/` | Required and recommended engineering rules | Prescriptive |
-| Safety overlays | `.heli-harness/safety/` | Command tiers, risky paths, secrets handling | Enforced where hooks allow |
-| Task state | `.heli-harness/state/` | Current task, decisions, runs, reports | Task-scoped evidence |
-| Workspace index | `.heli-harness/workspace/` | Known repos, git roots, target state | Target identity |
-| Advisory locks | `.heli-harness/state/`, `.heli-harness/workspace/` | Session and target lock signals | Advisory coordination |
-| Benchmarks | `benchmarks/` | Repeatable evaluation artifacts | Evidence/evaluation support |
-| Adapters | `.heli-harness/adapters/` | Tool-specific loading instructions | Translation layer |
-| Templates | `.heli-harness/templates/` | Reusable profile, report, and task formats | Authoring support |
-| Schemas | `.heli-harness/schemas/` | Machine-checkable contracts | Validation support |
-
-## Proposed Directory Model
+A permitted action is bounded by:
 
 ```text
-.heli-harness/
-  HARNESS.md
-  profiles/
-  policies/
-    engineering.md
-    security.md
-    release.md
-    testing.md
-  safety/
-    command-tiers.md
-    command-rules.json
-    secrets.md
-  state/
-    current-task.md
-    decisions.md
-    session.lock.example.json
-    reports/
-    runs/
-  workspace/
-    index.json
-    target.json
-    target.lock.example.json
-  adapters/
-  templates/
-  schemas/
+trusted policy ceiling
+  ∩ applicable scoped grant
+  ∩ current resource authority
+  ∩ required enforcement/evidence coverage
 ```
 
-## Load Order vs Authority Order
+Project-controlled files may narrow the trusted ceiling. They cannot elevate it.
 
-Load order is the order in which context becomes available to an agent.
+## Topology
 
-Authority order is the order used to resolve conflicts.
+```text
+Host agent / IDE
+      |
+      v
+Host adapter / hook
+      |
+      v
+Canonical evaluator + transition layer
+  |        |         |         |
+policy   grants   authority  receipts
+      |
+      +--> project binding (.heli/)
+      +--> trusted user/global config (~/.heli/)
+      +--> execution-local operational state
+```
 
-These are not the same. A late-loaded prompt can provide useful task detail, but it should not silently override a safety hard block or required policy.
+### Shared/global distribution
 
-## Suggested Load Order
+Global Heli means distribution and trusted user configuration.
 
-1. Tool adapter defaults
-2. User or global Heli preferences if any
-3. Workspace harness core
-4. Repo profile facts
-5. Policy overlays
-6. Task-specific state
-7. Explicit user prompt
-8. Hook-added one-shot context
+It may contain:
 
-## Suggested Authority Order
+- installed package/runtime;
+- user policy/preferences;
+- machine identity;
+- trusted grant store;
+- rebuildable workspace locator;
+- execution-local data roots.
 
-1. Safety hard blocks
-2. Explicit user approval for risky actions
-3. Policy overlays
-4. Workspace harness protocol
-5. Repo profile facts
-6. Task state
-7. User task prompt
-8. Tool adapter defaults
+It must not become one global mutable active-project/task/lease singleton.
 
-## Conflict Rules
+### Project binding
 
-- User prompts can override repo facts when the user supplies newer or more specific information.
-- User prompts should not silently override safety or policy.
-- Safety enforcement belongs in hooks, guards, command tiers, host permissions, and approval flows where available.
-- Instruction files alone are context, not enforcement.
-- If a policy and a repo profile conflict, the policy wins and the report should record the deviation or conflict.
-- If a safety hard block and user request conflict, the agent should stop unless explicit approval is part of the defined safety flow.
+A linked project contains a small committed `.heli/` surface:
 
-## Repo Profiles
+- `workspace.json` — logical project/workspace identity and resource declarations;
+- `heli.lock` — behavior-relevant runtime/protocol/schema pins;
+- optional project `profiles/`, `policies/`, `safety/`, and `skills/`.
 
-Repo profiles are descriptive. They answer:
+Committed project binding must not contain live grants, sessions, authority leases, capability observations, credentials, process handles, or other machine-local authorization.
 
-- What stack exists?
-- Which commands are known?
-- Which files and directories matter?
-- Which risks are known?
-- Which patterns exist?
-- Which patterns are known tech debt?
-- Which commands are safe, risky, or expensive?
+Paths identify resources; they are not trust anchors.
 
-Profiles should include evidence paths. They should avoid vague claims like "use existing patterns" unless those patterns are classified.
+### Execution-local operational state
 
-Recommended profile taxonomy:
+Live coordination is bound to the machine/execution namespace.
 
-- Policy references
-- Observed stack
-- Existing patterns
-- Recommended conventions
-- Known tech debt
-- Forbidden patterns
-- Safer alternatives
-- Command tiers
-- Repo risks
-- Exceptions
-- Evidence paths
+Cloning or moving a repository does not copy authorization. A clone may preserve logical workspace identity while receiving a fresh machine/execution identity.
 
-## Policy Overlays
+## Resource-scoped authority
 
-Policy overlays are prescriptive. They answer:
+The v0.10 authority boundary is the modeled **resource**, not a task name.
 
-- What is required?
-- What is recommended?
-- What is forbidden?
-- What requires approval?
-- What exception is allowed, and why?
+For a conflicting local worktree resource, Heli conservatively models one active writer authority unless an executor provides stronger isolation/fencing semantics.
 
-Policy files should be small enough for review and stable enough for repeated use. They should not describe every repo detail. They should express team rules that apply across work.
+Authority transitions include conflict-checked acquire/reacquire, renew, transfer, revoke, release, and inspect behavior with generation/revision tracking.
 
-Suggested files:
+A stale owner cannot regain authority merely by renewing an expired record after another actor acquired the resource.
 
-- `.heli-harness/policies/engineering.md`
-- `.heli-harness/policies/security.md`
-- `.heli-harness/policies/release.md`
-- `.heli-harness/policies/testing.md`
+A cooperative Heli lease is not a claim that arbitrary already-running processes are physically fenced. Stronger containment must come from the executor/host and be reported as such.
 
-Statement classes:
+## Work records
 
-- Required
-- Recommended
-- Forbidden
-- Requires approval
-- Exception
+A task is an optional durable work record/provenance object.
 
-## Safety Overlays
+Use one when:
 
-Safety overlays define actions that need blocking, confirmation, or special reporting.
+- work spans sessions;
+- handoff matters;
+- multiple actors coordinate;
+- verification obligations are significant;
+- investigation/diagnosis must persist;
+- evidence/reporting is required.
 
-Suggested files:
+Ordinary reversible work does not need a named task merely to be authorized.
 
-- `.heli-harness/safety/command-tiers.md`
-- `.heli-harness/safety/command-rules.json`
-- `.heli-harness/safety/secrets.md`
+The CLI may retain task vocabulary for compatibility, but task identity is not the root authority boundary.
 
-Safety overlays should cover:
+## Policy composition
 
-- destructive commands
-- release and publish commands
-- remote write commands
-- API-credit-consuming commands
-- secret-bearing files
-- out-of-target writes
-- old runtime paths and identity drift
+Policy sources have different trust roles:
 
-Safety rules should be enforced by hooks or host permissions where possible. Markdown can explain the rule, but enforcement needs an executable guard or host setting.
+- built-in Heli safety ceiling;
+- trusted user/global policy;
+- project policy;
+- explicit bounded grants.
 
-In v0.5.6, Pi/AXGA command guards consume `.heli-harness/safety/command-rules.json` as the runtime policy source of truth where compatible `tool_call` hooks are available. A local classifier normalizes common command bypass forms before matching those rules and adds guard facts for destructive commands, shell redirection writes outside `writesAllowedUnder`, sensitive paths, obvious secret-like write content, and sensitive reads. Invalid or missing command-rule configuration does not silently disable the guard; the adapter falls back to built-in conservative defaults. This is still not a sandbox.
+Project policy may narrow the trusted ceiling. A repository cannot grant itself more power by editing its own policy or manifest.
 
-## Task State
+Hard-deny classes remain hard denies unless an explicitly different trusted policy contract says otherwise. Normal temporary grants do not bypass T6 hard-deny rules.
 
-Task state records the current task and its governance context.
+## Scoped grants
 
-It should include:
+A grant carries governance-relevant scope such as:
 
-- target repo
-- target git root
-- task summary
-- mode
-- risk tier
-- files expected to change
-- dirty files observed
-- planned verification
-- current status
-- failed attempts count
-- next smallest action
+- grant ID;
+- issuer/approval provenance;
+- actor/subject;
+- action selector;
+- resource selector;
+- execution scope;
+- optional host-session binding;
+- created/expiry time;
+- use count/end condition;
+- revocation state;
+- delegation ceiling where applicable.
 
-Task state is not long-term memory. It is a current-run coordination artifact.
+Typical UX:
 
-## Workspace Index
+- allow once;
+- allow for this host session;
+- allow this workspace/resource;
+- allow for N minutes.
 
-Workspace index files make target identity explicit in parent workspaces with many repos.
+Time by itself is not sufficient scope.
 
-They should record:
+## Canonical evaluator and transitions
 
-- known repo names
-- repo paths
-- git roots
-- profile mappings
-- default target when appropriate
+Human CLI, machine-readable surfaces, hooks, and explain must not invent separate authority semantics.
 
-Target state should record:
+Conceptually they share:
 
-- target repo
-- target git root
-- writes allowed under
-- active profile
-- selection metadata
+1. context resolution;
+2. policy resolution;
+3. evaluation;
+4. authority transition;
+5. decision/evidence recording;
+6. current explanation;
+7. historical-decision explanation.
 
-This is coordination state, not orchestration.
+Machine protocol is a transport over those semantics, not a second governance engine.
 
-## Advisory Locks
+## Decision receipts and explain
 
-Advisory lock templates make parallel-agent intent visible without introducing distributed locking.
+A governance receipt records or references:
 
-They should record:
+- decision ID;
+- evaluator/protocol/schema identity;
+- normalized action/resources;
+- execution/host identity;
+- policy/profile provenance;
+- matched/rejected rules;
+- grant IDs;
+- authority resource/generation/revision;
+- relevant capability evidence;
+- evaluation time;
+- decision/reason codes/obligations;
+- approval/execution/verifier correlations.
 
-- lock owner
-- agent identity
-- target repo
-- start and expiration timestamps
-- purpose or reason
+Historical explanation is fixed to historical inputs. Later policy changes do not rewrite why an older decision occurred.
 
-Locks are warnings, not enforcement. They help agents and humans see when multiple agents may be touching the same workspace or target state. Heli does not create active lock files by default.
+## Capability evidence
 
-## Benchmarks
+Capability evidence is surface-specific. Distinguish at least:
 
-Benchmark artifacts provide repeatable evaluation support for governance behavior.
+1. declared;
+2. loaded;
+3. observed;
+4. tested enforcement;
+5. execution containment.
 
-They should include:
+An installed plugin file does not prove that the host loaded it. An observed callback does not prove every equivalent write/effect surface is enforced.
 
-- scenario templates
-- scoring rubrics
-- experiment plans
-- run logs
-- scorecards
-- comparison reports
+Evidence should bind to host/version, adapter/runtime identity, host session/execution namespace, configuration hash, observation time, and invalidation/freshness information where relevant.
 
-Benchmarks are evidence/evaluation support, not runtime authority. They help humans measure whether Heli improves governance outcomes. They do not enforce behavior. They are local, manual, and markdown-first.
+## S0–S3
 
-## Reports
+S0–S3 are workflow/risk summaries, not authorization levels.
 
-Reports are durable review artifacts. They should make the run inspectable without replaying the chat.
+- **S0** — read/query.
+- **S1** — ordinary reversible local change.
+- **S2** — additional evidence/coordination.
+- **S3** — high-impact/sensitive action.
 
-Reports should include:
+Authorization still derives from concrete action/resource/policy/grant/coverage facts.
 
-- target repo and git root
-- files changed
-- commands run
-- validations run
-- policy deviations
-- safety events
-- assumptions
-- unresolved risks
-- next steps
+## Evidence and trace
 
-Reports prove process discipline. They should be lintable before a task is considered complete.
+Heli keeps a governance trace, not a universal event-sourced copy of the agent runtime.
 
-Heli report lint records workspace root, target repo, target git root, writes allowed under, workspace index usage, target selection method, and out-of-target warnings. The linter still warns by default rather than acting as a hard rule engine.
+High-value records include:
 
-## Adapter Responsibilities
+- authority transitions;
+- grant issuance/revocation/consumption;
+- governance decisions;
+- capability observations;
+- required verifier results;
+- work-record transitions.
 
-Adapters translate the harness into each tool's loading model.
+Host transcripts and executor logs remain owned by those systems and may be correlated by ID.
 
-Adapters should:
+Portable evidence may move. **Authorization does not move with evidence.**
 
-- point the tool to `.heli-harness/HARNESS.md`
-- explain how to find repo profiles
-- load only relevant skills or workflows
-- expose status where possible
-- expose hook observability where possible
-- avoid placing tool-specific behavior in the tool-neutral core
+## Adapters
 
-Adapters should not:
+Adapters translate actual host semantics.
 
-- define core policy
-- invent separate runtime paths
-- hide behavior in unreadable configuration
-- require a hosted service
+An adapter should truthfully declare/test the surfaces it can observe or enforce, such as:
 
-Adapter status is evidence-based and maintained in the [Adapter Support Matrix](../ADAPTER_SUPPORT_MATRIX.md). Use that matrix for current statuses, verification evidence, and host-specific limitations; no adapter is `enforced` without runtime hook or tool-call proof.
+- session start;
+- pre-tool interception;
+- post-tool/result visibility;
+- approval request integration;
+- subagent lifecycle identity;
+- structured tool input;
+- sandbox/executor evidence;
+- worktree isolation;
+- completion/stop lifecycle.
 
-## Machine-Readable Sidecars
+Unknown or unsupported surfaces stay unknown/unsupported.
 
-Markdown should remain the primary authoring format. Sidecars should exist only where validation or enforcement needs structure.
+Current host claims live in the [Adapter Support Matrix](../ADAPTER_SUPPORT_MATRIX.md).
 
-Good sidecar candidates:
+## Embedded compatibility
 
-- workspace index
-- target state
-- command rules
-- schema definitions
-- package manifests
+The historical `.heli-harness/` workspace layout remains supported for compatibility and hermetic/offline use.
 
-Poor sidecar candidates:
+It includes embedded task/session/lease/index/target concepts from earlier releases. Those compatibility records must not override the current linked v0.10 rules when a project has `.heli/workspace.json`.
 
-- long-form policy rationale
-- architecture decisions
-- research synthesis
-- human review reports
+First linked cutover fails closed while active embedded writer authority exists.
 
-## What Remains Markdown-First
+## Historical documents
 
-- Harness protocol
-- Repo profiles
-- Engineering policies
-- Safety rationale
-- Task reports
-- Architecture decisions
-- Roadmap
-- Research synthesis
-- Templates
+Older v0.5–v0.9 architecture/design records are preserved for provenance. They are not current authority.
 
-Markdown keeps the harness inspectable in pull requests and usable by agents that can read files but cannot load a custom database.
-
-## What Should Not Be Centralized Yet
-
-Heli should not centralize:
-
-- user memory
-- vector search
-- telemetry
-- task execution
-- multi-agent orchestration
-- cross-repo build planning
-- plugin marketplace state
-
-Those capabilities can be useful in agent systems, but they are not required for Heli's governance role. Adding them before schemas stabilize would make the harness harder to inspect and harder to trust.
+Use the [architecture index](README.md) to distinguish current from historical/experimental documents.
