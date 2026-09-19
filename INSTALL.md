@@ -1,7 +1,7 @@
 # Install — Heli-Harness v0.10.0
 
-**Current release:** `v0.10.0`  
-**Primary model:** shared/global distribution + explicit project binding  
+**Current release:** `v0.10.0`
+**Primary model:** shared/global distribution + explicit project binding
 **Architecture:** [docs/architecture/README.md](docs/architecture/README.md)
 
 ## Recommended v0.10 setup
