@@ -35,7 +35,7 @@ Heli does not become an agent runtime, planner, scheduler, sandbox implementatio
 - Structured governance decisions and historical explanation.
 - Runtime capability freshness/identity.
 - Linked portability that carries evidence/work records without carrying live authorization.
-- Fail-closed migration from embedded v0.8.x-compatible workspaces.
+- Fail-closed migration from embedded v0.8.x-compatible workspaces (historical).
 - Cross-platform CI on Ubuntu/Windows with Node 20/22.
 
 ## Now
