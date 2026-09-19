@@ -1,7 +1,7 @@
 # Heli v0.10.0 Enforcement Matrix
 
-**Status:** Current  
-**Architecture:** [docs/architecture/README.md](architecture/README.md)  
+**Status:** Current
+**Architecture:** [docs/architecture/README.md](architecture/README.md)
 **Adapter evidence authority:** [ADAPTER_SUPPORT_MATRIX.md](ADAPTER_SUPPORT_MATRIX.md)
 
 This matrix maps current governance behavior to its documented contract and reproducible evidence. It does **not** claim that Heli is a sandbox or that all hosts expose equivalent enforcement surfaces.
