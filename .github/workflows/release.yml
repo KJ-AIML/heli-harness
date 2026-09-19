@@ -37,17 +37,30 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve npm publication state
+        id: npm_meta
+        shell: bash
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          if npm view "heli-harness@${VERSION}" version >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Full release gate
-        if: steps.meta.outputs.exists != 'true'
+        if: steps.meta.outputs.tag_exists != 'true' || steps.npm_meta.outputs.exists != 'true'
         run: npm run check
 
       - name: Pack release artifact
-        if: steps.meta.outputs.exists != 'true'
+        if: steps.meta.outputs.tag_exists != 'true' || steps.npm_meta.outputs.exists != 'true'
         id: pack
         shell: bash
         run: |
@@ -58,7 +71,7 @@ jobs:
           echo "file=$file" >> "$GITHUB_OUTPUT"
 
       - name: Publish to npm when credentials are configured
-        if: steps.meta.outputs.exists != 'true'
+        if: steps.npm_meta.outputs.exists != 'true'
         id: npm_publish
         shell: bash
         env:
@@ -67,10 +80,6 @@ jobs:
           PACKAGE_FILE: ${{ steps.pack.outputs.file }}
         run: |
           set -euo pipefail
-          if npm view "heli-harness@${VERSION}" version >/dev/null 2>&1; then
-            echo "status=already-published" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
             echo "::warning::NPM_TOKEN is not configured; skipping npm registry publication."
             echo "status=skipped-no-token" >> "$GITHUB_OUTPUT"
@@ -80,11 +89,12 @@ jobs:
           echo "status=published" >> "$GITHUB_OUTPUT"
 
       - name: Build release notes
-        if: steps.meta.outputs.exists != 'true'
+        if: steps.meta.outputs.tag_exists != 'true'
         shell: bash
         env:
           VERSION: ${{ steps.meta.outputs.version }}
           NPM_STATUS: ${{ steps.npm_publish.outputs.status }}
+          NPM_EXISTS: ${{ steps.npm_meta.outputs.exists }}
         run: |
           set -euo pipefail
           node <<'NODE' > release-notes.md
@@ -101,14 +111,14 @@ jobs:
             .trim();
           process.stdout.write(section + '\n');
           NODE
-          if [ "$NPM_STATUS" = "published" ] || [ "$NPM_STATUS" = "already-published" ]; then
+          if [ "$NPM_EXISTS" = "true" ] || [ "$NPM_STATUS" = "published" ]; then
             printf '\n**npm:** heli-harness@%s\n' "$VERSION" >> release-notes.md
           else
             printf '\n**npm:** registry publication not performed by this workflow (NPM_TOKEN unavailable).\n' >> release-notes.md
           fi
 
       - name: Create annotated tag and GitHub release
-        if: steps.meta.outputs.exists != 'true'
+        if: steps.meta.outputs.tag_exists != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
