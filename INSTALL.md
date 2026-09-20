@@ -12,6 +12,8 @@ The npm registry publication for `0.10.0` may lag the GitHub release. The pinned
 npm install -g github:KJ-AIML/heli-harness#v0.10.0
 heli --version
 heli setup
+heli host install all
+heli host status
 ```
 
 `heli setup` initializes the trusted user/global environment, including machine identity, user policy, and the rebuildable workspace registry. The registry is a locator only; it does not own live project authority.
@@ -101,6 +103,15 @@ The embedded installer copies distribution assets and seeds idle operational sta
 ## Host activation
 
 Project binding and host activation are separate. A linked or embedded project does not prove that a host hook/plugin is active.
+
+For the normal linked topology, install host integrations from the global Heli package rather than from a project-local `.heli-harness/` tree:
+
+```bash
+heli host install all
+heli host status
+```
+
+`install all` installs integrations for detected/automatically supported hosts and reports unavailable/manual hosts. Installation state is still distinct from live callback evidence.
 
 Use the [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) for current evidence and limitations.
 

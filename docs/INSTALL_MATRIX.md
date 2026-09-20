@@ -10,6 +10,8 @@
 | --- | --- | --- |
 | Install pinned release | `npm install -g github:KJ-AIML/heli-harness#v0.10.0` | Shared/global Heli CLI/runtime |
 | Initialize trusted user state | `heli setup` | machine identity, user policy, locator |
+| Install detected host integrations | `heli host install all` | host-native plugins/hooks/skills from the global package; unavailable/manual hosts are reported |
+| Inspect host installation | `heli host status` | separates CLI presence/plugin installation from live runtime evidence |
 | Link project | `cd <project> && heli link` | `.heli/workspace.json`, `.heli/heli.lock`, fresh execution identity |
 | Verify | `heli doctor && heli status` | layout, target/resource, runtime and host evidence |
 

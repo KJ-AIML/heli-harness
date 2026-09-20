@@ -52,9 +52,11 @@ The current GitHub release is `v0.10.0`. Until the npm registry has `heli-harnes
 npm install -g github:KJ-AIML/heli-harness#v0.10.0
 heli --version
 heli setup
+heli host install all
+heli host status
 ```
 
-Then link a project:
+Then link a project. Host integrations are machine-level and do not need to be copied into every linked workspace:
 
 ```bash
 cd /path/to/project
