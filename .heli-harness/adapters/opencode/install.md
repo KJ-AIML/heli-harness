@@ -1,11 +1,11 @@
-# OpenCode Install — Heli v0.10.0
+# OpenCode Install — Heli v0.10.1
 
 ## Project setup
 
 Use current Heli project binding:
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.0
+npm install -g github:KJ-AIML/heli-harness#v0.10.1
 heli setup
 cd /path/to/project
 heli link
@@ -13,7 +13,14 @@ heli link
 
 ## Plugin activation
 
-From a package/source/embedded adapter tree, copy the plugin tree into the project plugin directory:
+Recommended linked/global activation:
+
+```bash
+heli host install opencode
+heli host status
+```
+
+For embedded/project-local compatibility, copy the plugin tree into the project plugin directory:
 
 ```bash
 mkdir -p .opencode/plugins

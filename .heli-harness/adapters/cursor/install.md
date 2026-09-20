@@ -1,10 +1,17 @@
-# Cursor Install — Heli v0.10.0
+# Cursor Install — Heli v0.10.1
 
 ## Project setup
 
 Use `heli setup` + `heli link` for current project binding.
 
-Cursor integration may use the packaged local marketplace under `.heli-harness/adapters/cursor-plugin/` or the nested plugin copied into Cursor's local plugin directory.
+Recommended linked/global activation:
+
+```bash
+heli host install cursor
+heli host status
+```
+
+Cursor integration may also use the packaged local marketplace under `.heli-harness/adapters/cursor-plugin/` in embedded/source layouts.
 
 For an embedded compatibility workspace, pointer rules may direct Cursor to:
 
