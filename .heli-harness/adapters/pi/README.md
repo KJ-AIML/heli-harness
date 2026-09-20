@@ -4,6 +4,15 @@
 
 ## Package install
 
+Recommended machine-level activation:
+
+```bash
+heli host install pi
+heli host status
+```
+
+Equivalent direct Pi package install:
+
 ```bash
 pi install git:github.com/KJ-AIML/heli-harness@v0.10.1
 axga install git:github.com/KJ-AIML/heli-harness@v0.10.1

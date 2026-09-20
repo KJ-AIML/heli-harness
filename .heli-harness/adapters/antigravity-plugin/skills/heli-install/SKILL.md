@@ -10,8 +10,10 @@ description: Use when setting up Heli. For v0.10 prefer global/shared distributi
 For normal projects, prefer:
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.0
+npm install -g github:KJ-AIML/heli-harness#v0.10.1
 heli setup
+heli host install all
+heli host status
 cd /path/to/project
 heli link
 heli doctor
@@ -38,7 +40,7 @@ If `.heli-harness/HARNESS.md` already exists, do not overwrite it with a fresh i
 
 To migrate:
 
-1. update the embedded runtime to v0.10.0;
+1. update the embedded runtime to v0.10.1;
 2. run `heli status`;
 3. quiesce active embedded writer authority;
 4. run `heli link <path>`.
@@ -52,7 +54,7 @@ The `/heli-install` command and installer scripts remain supported when the user
 Preferred pinned command:
 
 ```bash
-npx github:KJ-AIML/heli-harness#v0.10.0 install <path>
+npx github:KJ-AIML/heli-harness#v0.10.1 install <path>
 ```
 
 Manual source checkout is a fallback:
@@ -60,7 +62,7 @@ Manual source checkout is a fallback:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source-tmp
 cd hh-source-tmp
-git checkout v0.10.0
+git checkout v0.10.1
 ./install.sh /path/to/workspace
 # Windows:
 # .\install.ps1 -Parent "C:\path\to\workspace"
