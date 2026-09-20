@@ -57,11 +57,11 @@ function parseResourceLease(path, expected = {}) {
 	if (!raw || typeof raw !== "object") {
 		return { invalid: true, path, reason: "unreadable or non-object resource lease" };
 	}
-	if (!raw.sessionId || !raw.leaseId || !raw.taskId || !raw.expiresAt || !raw.resource?.id) {
+	if (!raw.sessionId || !raw.leaseId || !raw.expiresAt || !raw.resource?.id) {
 		return {
 			invalid: true,
 			path,
-			reason: "resource lease missing required fields",
+			reason: "resource lease missing required fields (sessionId, leaseId, expiresAt, resource.id)",
 			raw,
 		};
 	}
@@ -147,7 +147,7 @@ function buildLease({
 		authorityClass: "cooperative-local",
 		leaseId: newLeaseId(),
 		previousLeaseId,
-		taskId,
+		taskId: taskId || null,
 		sessionId,
 		mode: "write",
 		resource: {
@@ -188,8 +188,8 @@ export function acquireResourceWriteAuthority(workspaceRoot, {
 	worktreePath,
 	ttlSeconds = 14400,
 } = {}) {
-	if (!taskId || !sessionId || !worktreePath) {
-		throw error("INVALID_LEASE_ARGS", "taskId, sessionId, and worktreePath required for resource authority");
+	if (!sessionId || !worktreePath) {
+		throw error("INVALID_LEASE_ARGS", "sessionId and worktreePath required for resource authority; taskId is optional provenance");
 	}
 	const paths = resourceAuthorityPaths(workspaceRoot, worktreePath);
 	return withResourceMutex(paths, () => {
@@ -198,7 +198,7 @@ export function acquireResourceWriteAuthority(workspaceRoot, {
 			throw error("MALFORMED_LEASE", existing.reason, { lease: existing });
 		}
 		if (existing && !isResourceLeaseExpired(existing)) {
-			if (existing.sessionId === sessionId && existing.taskId === taskId) {
+			if (existing.sessionId === sessionId) {
 				const now = new Date();
 				const ttl = ttlValue(ttlSeconds, existing.ttlSeconds || 14400);
 				const refreshed = {
@@ -209,7 +209,7 @@ export function acquireResourceWriteAuthority(workspaceRoot, {
 					revision: (existing.revision || 0) + 1,
 				};
 				writeJsonAtomic(paths.leasePath, refreshed);
-				appendTaskEvent(workspaceRoot, taskId, "resource_authority_refreshed", {
+				if (taskId) appendTaskEvent(workspaceRoot, taskId, "resource_authority_refreshed", {
 					sessionId,
 					resource: refreshed.resource,
 					generation: refreshed.generation,
@@ -219,15 +219,15 @@ export function acquireResourceWriteAuthority(workspaceRoot, {
 			}
 			throw error(
 				"WORKTREE_WRITER_HELD",
-				`worktree resource already held by task ${existing.taskId}, session ${existing.sessionId}`,
+				`worktree resource already held by ${existing.taskId ? `task ${existing.taskId}, ` : ""}session ${existing.sessionId}`,
 				{ lease: existing, taskId: existing.taskId },
 			);
 		}
 		if (existing && isResourceLeaseExpired(existing)) {
-			if (!(existing.sessionId === sessionId && existing.taskId === taskId)) {
+			if (existing.sessionId !== sessionId) {
 				throw error(
 					"STALE_LEASE",
-					`stale resource authority from task ${existing.taskId}, session ${existing.sessionId}; explicit takeover required`,
+					`stale resource authority from ${existing.taskId ? `task ${existing.taskId}, ` : ""}session ${existing.sessionId}; explicit takeover required`,
 					{ lease: existing },
 				);
 			}
@@ -241,7 +241,7 @@ export function acquireResourceWriteAuthority(workspaceRoot, {
 				previousLeaseId: existing.leaseId,
 			});
 			writeLease(paths, next);
-			appendTaskEvent(workspaceRoot, taskId, "resource_authority_reacquired", {
+			if (taskId) appendTaskEvent(workspaceRoot, taskId, "resource_authority_reacquired", {
 				sessionId,
 				resource: next.resource,
 				generation: next.generation,
@@ -262,7 +262,7 @@ export function acquireResourceWriteAuthority(workspaceRoot, {
 			releaseDir(paths.lockDir);
 			throw cause;
 		}
-		appendTaskEvent(workspaceRoot, taskId, "resource_authority_acquired", {
+		if (taskId) appendTaskEvent(workspaceRoot, taskId, "resource_authority_acquired", {
 			sessionId,
 			resource: lease.resource,
 			generation: lease.generation,
