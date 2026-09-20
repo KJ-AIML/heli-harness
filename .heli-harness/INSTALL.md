@@ -1,4 +1,4 @@
-# Embedded / Hermetic Install — v0.10.0
+# Embedded / Hermetic Install — v0.10.1
 
 The primary v0.10 model is **global/shared distribution + `heli setup` + `heli link`**. See the root [INSTALL.md](../INSTALL.md).
 
@@ -7,7 +7,7 @@ This document covers the self-contained `.heli-harness/` compatibility path.
 ## Current primary path
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.0
+npm install -g github:KJ-AIML/heli-harness#v0.10.1
 heli setup
 cd /path/to/project
 heli link
@@ -16,14 +16,14 @@ heli link
 ## Deliberate embedded compatibility install
 
 ```bash
-npx github:KJ-AIML/heli-harness#v0.10.0 install /path/to/workspace
+npx github:KJ-AIML/heli-harness#v0.10.1 install /path/to/workspace
 ```
 
 The embedded install copies distribution assets and seeds idle local state. It must not copy package-dogfood sessions, tasks, bindings, locks, grants, capability observations, or YOLO state into the destination.
 
 ## Existing embedded workspace → linked project
 
-Update the embedded runtime to v0.10.0, ensure no active embedded writer authority remains, then run:
+Update the embedded runtime to v0.10.1, ensure no active embedded writer authority remains, then run:
 
 ```bash
 heli link /path/to/workspace

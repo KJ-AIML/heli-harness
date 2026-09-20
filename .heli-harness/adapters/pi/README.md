@@ -1,12 +1,12 @@
-# Pi / AXGA Adapter — v0.10.0
+# Pi / AXGA Adapter — v0.10.1
 
 **Current support evidence:** [docs/ADAPTER_SUPPORT_MATRIX.md](../../../docs/ADAPTER_SUPPORT_MATRIX.md)
 
 ## Package install
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.10.0
-axga install git:github.com/KJ-AIML/heli-harness@v0.10.0
+pi install git:github.com/KJ-AIML/heli-harness@v0.10.1
+axga install git:github.com/KJ-AIML/heli-harness@v0.10.1
 ```
 
 The package exposes the Heli skill library and Pi extension. Host package installation does not automatically make a project linked or prove that every hook surface is enforced.
@@ -16,7 +16,7 @@ The package exposes the Heli skill library and Pi extension. Host package instal
 Use the current linked model:
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.0
+npm install -g github:KJ-AIML/heli-harness#v0.10.1
 heli setup
 cd /path/to/project
 heli link
