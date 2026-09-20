@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.10.1 - Linked authority and host onboarding correction
+
+### Fixed
+
+- Fresh linked workspaces no longer use the embedded `CONCURRENT_BOOTSTRAP` exception when no named task exists; guarded writes now establish execution-local, resource-scoped authority for the resolved worktree.
+- Resource authority now treats `taskId` as optional provenance, so ordinary reversible linked work can be governed without manufacturing a durable task record.
+- `heli explain authority`, `heli status`, and `heli doctor` now project the linked resource-authority model instead of presenting task/lease compatibility terminology as the primary authority source.
+
+### Added
+
+- `heli host status|list|install` and `heli host install all` for machine-level host integration onboarding from the installed Heli distribution.
+- Host installation/status coverage for Codex, Pi, Claude Code, Grok Build, OpenCode, Kimi Code CLI, Cursor, AXGA, and Antigravity, with installation state kept distinct from live runtime callback evidence.
+- Post-`heli setup` and post-`heli link` next-step guidance for installing host integrations, launching a supported host from the linked project root, and verifying live capabilities.
+- Regression coverage for taskless linked resource authority and host installation plans.
+
+### Compatibility
+
+- Embedded `.heli-harness/` installs retain their existing compatibility bootstrap/task-session behavior.
+- Host plugin/hook installation remains machine-level; linked projects do not need a copied `.heli-harness/` tree merely to activate Codex/Pi/Claude/etc.
+
 ## v0.10.0 - Portable governance kernel and scoped authority
 
 ### Added
