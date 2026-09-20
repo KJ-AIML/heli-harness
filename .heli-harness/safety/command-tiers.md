@@ -1,6 +1,6 @@
 # Command Tiers
 
-**Current release:** `v0.10.0`
+**Current release:** `v0.10.1`
 
 `command-rules.json` is a runtime guard policy source where compatible host hooks expose sufficient structured input. The current classifier normalizes common command forms, destructive variants, shell redirection writes, sensitive paths, and obvious secret-like write content before matching rules. This is not a sandbox and does not replace host permissions or executor containment.
 

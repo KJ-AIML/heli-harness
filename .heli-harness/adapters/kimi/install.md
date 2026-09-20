@@ -1,9 +1,9 @@
-# Kimi Code CLI Install — Heli v0.10.0
+# Kimi Code CLI Install — Heli v0.10.1
 
 ## Project setup
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.0
+npm install -g github:KJ-AIML/heli-harness#v0.10.1
 heli setup
 cd /path/to/project
 heli link
@@ -11,7 +11,14 @@ heli link
 
 ## Hooks
 
-From a package/source/embedded adapter tree:
+Recommended linked/global activation:
+
+```bash
+heli host install kimi
+heli host status
+```
+
+For source/embedded compatibility, the underlying hook installer remains:
 
 ```bash
 node .heli-harness/adapters/kimi-plugin/install-user-hooks.mjs

@@ -29,6 +29,12 @@ import {
 import { effectiveSessionAuthority } from "./authority.mjs";
 import { resolveYolo } from "./yolo-scope.mjs";
 import { readDiagnosis } from "./diagnosis.mjs";
+import { isLinkedWorkspace } from "./project-binding.mjs";
+import {
+	acquireResourceWriteAuthority,
+	readResourceLeaseForWorktree,
+	isResourceLeaseExpired,
+} from "./resource-authority.mjs";
 
 /**
  * Extract optional external host session id from known documented-ish fields.
@@ -289,6 +295,28 @@ export function evaluateOwnershipGate(ctx, { isWrite = false } = {}) {
 	if (!ctx.workspaceRoot) {
 		return { deny: false };
 	}
+	if (isLinkedWorkspace(ctx.workspaceRoot)) {
+		if (!isWrite) return { deny: false, linked: true };
+		if (!ctx.sessionId || !ctx.session || ctx.session.status !== "active") {
+			return { deny: true, code: "NO_SESSION", reason: "Heli linked mode: no active host/session identity is bound to this worktree. Start the coding host with the Heli plugin loaded, or run `heli session start --mode write` before mutation." };
+		}
+		if (!ctx.worktreeRoot) return { deny: true, code: "RESOURCE_UNRESOLVED", reason: "Heli linked mode: current worktree resource could not be resolved." };
+		const existing = readResourceLeaseForWorktree(ctx.workspaceRoot, ctx.worktreeRoot);
+		if (existing?.invalid) return { deny: true, code: "MALFORMED_LEASE", reason: `Heli linked mode: malformed resource authority (${existing.reason}).`, authority: existing };
+		if (existing && !isResourceLeaseExpired(existing) && existing.sessionId !== ctx.sessionId) {
+			return { deny: true, code: "RESOURCE_WRITER_HELD", reason: `Heli linked mode: worktree authority is held by session ${existing.sessionId}${existing.taskId ? ` (work record ${existing.taskId})` : ""} until ${existing.expiresAt}.`, authority: existing };
+		}
+		if (existing && isResourceLeaseExpired(existing) && existing.sessionId !== ctx.sessionId) {
+			return { deny: true, code: "STALE_RESOURCE_AUTHORITY", reason: `Heli linked mode: stale resource authority from session ${existing.sessionId} requires an explicit takeover before a different actor may write.`, authority: existing };
+		}
+		try {
+			const authority = acquireResourceWriteAuthority(ctx.workspaceRoot, { taskId: ctx.taskId || null, sessionId: ctx.sessionId, worktreePath: ctx.worktreeRoot });
+			return { deny: false, ok: true, linked: true, code: existing ? "RESOURCE_AUTHORITY_REFRESHED" : "RESOURCE_AUTHORITY_ACQUIRED", authority };
+		} catch (error) {
+			return { deny: true, code: error.code || "RESOURCE_AUTHORITY_FAILED", reason: `Heli linked mode: could not establish resource authority: ${error.message}`, authority: error.lease || null };
+		}
+	}
+
 	if (!ctx.concurrentMode) {
 		return { deny: false, legacy: true };
 	}
@@ -406,6 +434,20 @@ export function buildConcurrentSessionContext(ctx) {
 	if (!ctx.concurrentMode) {
 		// legacy injection handled by caller; provide marker
 		lines.push("", "Workspace mode: legacy (singular current-task.md).");
+		return lines.join("\n");
+	}
+
+	if (isLinkedWorkspace(ctx.workspaceRoot)) {
+		const authority = ctx.worktreeRoot ? readResourceLeaseForWorktree(ctx.workspaceRoot, ctx.worktreeRoot) : null;
+		const active = authority && !authority.invalid && !isResourceLeaseExpired(authority) ? authority : null;
+		lines.push("", "Heli Linked Session");
+		lines.push("Governance enforcement: plugin hooks are active for this session (not a sandbox). Linked writes use execution-local, resource-scoped authority; named tasks are optional work records.");
+		lines.push(`- Session: ${ctx.sessionId || "none"}`);
+		lines.push(`- Work record: ${ctx.taskId || "none"}`);
+		lines.push(`- Target: ${ctx.target?.targetRepo || "n/a"}`);
+		lines.push(`- Resource: ${ctx.worktreeRoot || "n/a"}`);
+		lines.push(`- Resource authority: ${active ? (active.sessionId === ctx.sessionId ? `held by this session (generation ${active.generation || 1}, revision ${active.revision || 1})` : `held by session ${active.sessionId}`) : authority?.invalid ? "malformed (writes fail closed)" : "available; first guarded mutation acquires it conflict-safely"}`);
+		lines.push("- Project binding lives under .heli/; grants, sessions, live authority, and capability observations remain execution-local.");
 		return lines.join("\n");
 	}
 

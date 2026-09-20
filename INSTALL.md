@@ -1,17 +1,19 @@
-# Install — Heli-Harness v0.10.0
+# Install — Heli-Harness v0.10.1
 
-**Current release:** `v0.10.0`
+**Current release:** `v0.10.1`
 **Primary model:** shared/global distribution + explicit project binding
 **Architecture:** [docs/architecture/README.md](docs/architecture/README.md)
 
 ## Recommended v0.10 setup
 
-The npm registry publication for `0.10.0` may lag the GitHub release. The pinned GitHub package is the authoritative install path until `npm view heli-harness@0.10.0` succeeds.
+The npm registry publication for `0.10.1` may lag the GitHub release. The pinned GitHub package is the authoritative install path until `npm view heli-harness@0.10.1` succeeds.
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.0
+npm install -g github:KJ-AIML/heli-harness#v0.10.1
 heli --version
 heli setup
+heli host install all
+heli host status
 ```
 
 `heli setup` initializes the trusted user/global environment, including machine identity, user policy, and the rebuildable workspace registry. The registry is a locator only; it does not own live project authority.
@@ -80,7 +82,7 @@ During migration:
 Use this only when you intentionally need a self-contained workspace bundle:
 
 ```bash
-npx github:KJ-AIML/heli-harness#v0.10.0 install /path/to/workspace
+npx github:KJ-AIML/heli-harness#v0.10.1 install /path/to/workspace
 ```
 
 or from a source checkout:
@@ -88,7 +90,7 @@ or from a source checkout:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.10.0
+git checkout v0.10.1
 ./install.sh /path/to/workspace
 # Windows:
 # .\install.ps1 -Parent "C:\your\workspace"
@@ -101,6 +103,15 @@ The embedded installer copies distribution assets and seeds idle operational sta
 ## Host activation
 
 Project binding and host activation are separate. A linked or embedded project does not prove that a host hook/plugin is active.
+
+For the normal linked topology, install host integrations from the global Heli package rather than from a project-local `.heli-harness/` tree:
+
+```bash
+heli host install all
+heli host status
+```
+
+`install all` installs integrations for detected/automatically supported hosts and reports unavailable/manual hosts. Installation state is still distinct from live callback evidence.
 
 Use the [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) for current evidence and limitations.
 
@@ -191,7 +202,7 @@ See [Cloud Sync](docs/architecture/cloud-sync.md).
 
 ## Maintainer release
 
-Release validation is automated in CI. `v0.10.0` has a GitHub Release and annotated tag.
+Release validation is automated in CI. `v0.10.1` has a GitHub Release and annotated tag.
 
 The repository Release workflow:
 
@@ -213,4 +224,4 @@ heli explain authority
 heli explain capabilities
 ```
 
-Expected package version for this documentation: **0.10.0**.
+Expected package version for this documentation: **0.10.1**.

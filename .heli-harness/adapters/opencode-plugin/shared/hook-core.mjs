@@ -400,6 +400,13 @@ export function evaluatePreToolUse({
 	const taskStateOnly = isTaskStateWriteForContext(ctx, paths) || isTaskStateWrite(paths);
 	let ownershipDecision = null;
 
+	// T6 hard denies dominate every normal authority/grant path. Evaluate them
+	// before actor/resource authority so a missing session can never mask a
+	// destructive-command denial. T5 approvals continue through the normal
+	// authority + scoped-grant flow below.
+	const preAuthorityTier = evaluateCommandTierRules(ctx.workspaceRoot || cwd, command, env);
+	if (preAuthorityTier?.hardDeny) return { ...preAuthorityTier, ctx };
+
 	// Ownership gates — NEVER bypassed by YOLO.
 	if (isWrite && !taskStateOnly) {
 		ownershipDecision = evaluateOwnershipGate(ctx, { isWrite: true });

@@ -1,10 +1,10 @@
 # Heli Architecture — Current Canonical Baseline
 
-**Current release:** `v0.10.0`
+**Current release:** `v0.10.1`
 **Architecture baseline:** portable governance kernel + project binding + execution-local/resource-scoped authority
 **Canonical convergence RFC:** [Heli v1 Architecture Convergence RFC](../superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md)
 
-This page is the entry point for **current** Heli architecture. If another document conflicts with this page or the convergence RFC, the current `v0.10.0` implementation and the convergence RFC win.
+This page is the entry point for **current** Heli architecture. If another document conflicts with this page or the convergence RFC, the current `v0.10.1` implementation and the convergence RFC win.
 
 ## Current architecture
 
@@ -32,7 +32,7 @@ Heli does **not** own the model loop, agent scheduler, sandbox implementation, l
 
 ## Current distribution and project binding
 
-Normal `v0.10.0` use separates distribution from authority:
+Normal `v0.10.1` use separates distribution from authority:
 
 - global/shared distribution supplies the `heli` CLI and immutable package code;
 - `heli setup` initializes trusted user/global state;
@@ -78,7 +78,7 @@ Evidence/work records may be portable. **Authorization never becomes portable me
 
 ## Current documents
 
-These are current-facing references for `v0.10.0`:
+These are current-facing references for `v0.10.1`:
 
 - [Governance model](governance-model.md)
 - [Adapter support matrix](../ADAPTER_SUPPORT_MATRIX.md)
@@ -107,7 +107,7 @@ Historical version references inside changelog, reports, plans, ADR history, and
 
 Any current-facing documentation that explains installation, authority, project layout, policy, grants, adapters, or architecture must either:
 
-1. describe the `v0.10.0` model directly, or
+1. describe the `v0.10.1` model directly, or
 2. explicitly identify itself as historical/experimental and link back to this current architecture index.
 
 CI enforces this distinction with the documentation-currentness validation.

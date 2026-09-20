@@ -1,6 +1,6 @@
 {
   "name": "heli-harness",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Heli-Harness workspace governance for OpenCode (local JS plugin).",
   "main": "heli-harness.js",
   "type": "module",

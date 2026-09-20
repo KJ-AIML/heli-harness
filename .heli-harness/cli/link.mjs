@@ -266,5 +266,11 @@ export function runLink(packageRoot, args = []) {
 	console.log(`  local authority state: ${result.operationalRoot}`);
 	console.log("  registry: locator-only; deleting it does not change authority");
 	console.log("  committed .heli/ identity never carries leases, sessions, grants, or capability observations");
+	console.log("");
+	console.log("Next:");
+	console.log("  heli host status");
+	console.log("  heli host install all   # if coding-host integrations are not installed yet");
+	console.log("  Start Codex / Pi / Claude / another supported host from this project root.");
+	console.log("  After SessionStart, verify live hooks with: heli explain capabilities");
 	return result;
 }
