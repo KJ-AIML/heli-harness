@@ -20,15 +20,18 @@ import {
 	resourceIdForWorktree,
 } from "../lib/concurrency/resource-authority.mjs";
 import { pathsFor } from "../lib/concurrency/paths.mjs";
+import { buildSessionContext, evaluatePreToolUse } from "../.heli-harness/adapters/shared/hook-core.mjs";
 
 const root = mkdtempSync(join(tmpdir(), "heli-resource-authority-"));
 const project = join(root, "project");
+const tasklessProject = join(root, "taskless-project");
 const wt2 = join(root, "worktree-2");
 const config = join(root, "config");
 const data = join(root, "data");
 const env = { ...process.env, HELI_CONFIG_DIR: config, HELI_DATA_DIR: data };
 const packageRoot = process.cwd();
 mkdirSync(project, { recursive: true });
+mkdirSync(tasklessProject, { recursive: true });
 mkdirSync(wt2, { recursive: true });
 
 const oldConfig = process.env.HELI_CONFIG_DIR;
@@ -39,6 +42,23 @@ process.env.HELI_DATA_DIR = data;
 try {
 	setupHeli({ env });
 	linkProject(packageRoot, project, { env });
+	linkProject(packageRoot, tasklessProject, { env });
+
+	// Fresh linked work with no named task must use resource authority, never
+	// the embedded CONCURRENT_BOOTSTRAP exception.
+	buildSessionContext(tasklessProject, { host: "test-host", env });
+	const freshWrite = evaluatePreToolUse({
+		cwd: tasklessProject,
+		host: "test-host",
+		env,
+		toolName: "Write",
+		toolInput: { file_path: join(tasklessProject, "fresh.txt") },
+	});
+	assert.equal(freshWrite.deny, false, freshWrite.reason || "fresh linked write should acquire resource authority");
+	assert.notEqual(freshWrite.code, "CONCURRENT_BOOTSTRAP");
+	const freshAuthorities = listResourceLeases(tasklessProject);
+	assert.equal(freshAuthorities.length, 1);
+	assert.equal(freshAuthorities[0].taskId, null);
 	const paths = pathsFor(project);
 	assert.equal(paths.linked, true);
 
