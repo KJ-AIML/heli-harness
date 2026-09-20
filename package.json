@@ -1,6 +1,6 @@
 {
   "name": "heli-harness",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Portable governance and coordination kernel for coding agents with project binding, resource-scoped authority, scoped grants, and evidence-backed host integrations.",
   "keywords": [
     "pi-package",
