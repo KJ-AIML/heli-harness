@@ -21,6 +21,7 @@ import { runTrace } from "./cli/trace.mjs";
 import { runSetup } from "./cli/setup.mjs";
 import { runLink } from "./cli/link.mjs";
 import { runGrant } from "./cli/grant.mjs";
+import { runHost } from "./cli/host.mjs";
 import { runTargetMachine, runTaskMachine, runDiagnosisMachine, runConflictsMachine } from "./cli/machine.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -56,6 +57,7 @@ function usage() {
 Commands:
   --version | -v  print the Heli-Harness version
   setup | link
+  host status|list|install [all|host...]
   grant issue|list|revoke
   install | update | uninstall
   target | status | yolo
@@ -94,6 +96,7 @@ try {
 	switch (command) {
 		case "setup": runSetup(args); break;
 		case "link": runLink(packageRoot, args); break;
+		case "host": runHost(packageRoot, args); break;
 		case "grant": runGrant(args); break;
 		case "install": runInstall(packageRoot, args); break;
 		case "update": runUpdate(packageRoot, args); break;
