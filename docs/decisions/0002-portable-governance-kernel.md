@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — current architecture for `v0.10.0`
+Accepted — current architecture for `v0.10.1`
 
 ## Date
 
@@ -18,7 +18,7 @@ The accepted convergence architecture requires Heli to remain smaller than an ag
 
 Heli is a **portable governance and coordination layer for coding agents**, implemented around a small policy/authority kernel with evidence-backed host integrations.
 
-For `v0.10.0`:
+For `v0.10.1`:
 
 - global Heli means shared distribution and trusted user configuration, not a global mutable active-workspace singleton;
 - projects bind explicitly through `.heli/workspace.json` and `.heli/heli.lock`;
