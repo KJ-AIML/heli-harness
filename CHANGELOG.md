@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — global host integration convergence
+
+### Changed
+
+- Canonical onboarding is global Heli → `heli host install <host>` → project `heli link`; normal linked projects no longer depend on a copied `.heli-harness/` tree.
+- Pi `/heli-install` now links the current project through lightweight `.heli/` state. Embedded workspace installation/update is explicitly named `/heli-legacy-install` and `/heli-legacy-update`.
+- Host management now exposes version-aware `status`, idempotent `install`, `update`, `repair`, and scoped `remove` lifecycle operations.
+- OpenCode, Cursor, Grok, Kimi, and conditional Antigravity installation/removal own only Heli-specific files or directories and preserve unrelated host configuration.
+- Root metadata now declares `global-linked` as the default topology; the shipped `.heli-harness/manifest.json` is explicitly `embedded-compatibility`.
+- Adapter support reporting now separates runtime, fresh install, global discovery, linked projects, update/repair, removal, automated E2E, live-host proof, and distribution currency.
+
+### Added
+
+- Fresh linked-project integration migration smoke covering no-local-harness setup, repeat install, stale upgrade, uninstall preservation, explicit compatibility mode, Pi regression behavior, and Heli-scoped host artifacts.
+- CI architecture/version-convergence gate preventing legacy default onboarding, contradictory install metadata, Pi local-install regression, and release-train manifest skew.
+
+### Release
+
+- This migration is intended for the next patch release after CI and merge. External package/catalog publication is not inferred from source HEAD.
+
 ## v0.10.1 - Linked authority and host onboarding correction
 
 ### Fixed
