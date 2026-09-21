@@ -1,5 +1,5 @@
 {
-  "_note": "This is the root pointer manifest. The authoritative harness manifest with skills, adapters, hooks, and state is at .heli-harness/manifest.json. Tools reading the repo root find this file; the harness runtime reads the inner manifest.",
+  "_note": "Root manifest describes the canonical global-linked topology. The .heli-harness/ tree is shipped only as an explicit embedded/hermetic compatibility distribution.",
   "name": "Heli-Harness",
   "version": "0.10.1",
   "description": "Portable governance and coordination kernel for coding agents with explicit project binding, resource-scoped authority, scoped grants, and evidence-backed host integrations.",
@@ -13,9 +13,12 @@
     "coding-agents",
     "developer-tools"
   ],
-  "purpose": "Parent-level, tool-neutral AI development harness.",
-  "install_mode": "parent-workspace",
-  "source_of_truth": ".heli-harness/HARNESS.md",
-  "harness": ".heli-harness/",
-  "manifest": ".heli-harness/manifest.json"
+  "purpose": "Portable, tool-neutral governance kernel installed globally and bound to projects through lightweight .heli/ state.",
+  "install_mode": "global-linked",
+  "source_of_truth": "docs/architecture/README.md",
+  "project_binding": ".heli/",
+  "runtime_lock": ".heli/heli.lock",
+  "compatibility_mode": "embedded-hermetic",
+  "compatibility_harness": ".heli-harness/",
+  "embedded_manifest": ".heli-harness/manifest.json"
 }
