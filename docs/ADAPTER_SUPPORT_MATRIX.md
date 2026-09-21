@@ -1,7 +1,7 @@
 # Adapter Support Matrix
 
-**Current released baseline:** `v0.10.2`  
-**Architecture:** [Current Heli architecture](architecture/README.md)  
+**Current released baseline:** `v0.10.2`
+**Architecture:** [Current Heli architecture](architecture/README.md)
 **Install lifecycle:** [Install Matrix](INSTALL_MATRIX.md)
 
 This matrix separates runtime evidence from installation lifecycle guarantees. An adapter is not considered fully supported merely because plugin files exist or one hook smoke test passes.
