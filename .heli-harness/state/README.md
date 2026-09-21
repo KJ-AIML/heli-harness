@@ -1,6 +1,6 @@
 # Harness State
 
-**Current release:** `v0.10.1`
+**Current release:** `v0.10.2`
 
 ## Linked projects
 
