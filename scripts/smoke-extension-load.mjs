@@ -396,6 +396,8 @@ assert.deepEqual(commands.map((command) => command.name), [
 	"hh-install",
 	"heli-update",
 	"hh-update",
+	"heli-legacy-install",
+	"heli-legacy-update",
 	"hh-status",
 	"heli-help",
 	"heli-init",
