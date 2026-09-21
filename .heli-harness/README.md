@@ -1,6 +1,6 @@
 # Heli-Harness Embedded Distribution
 
-**Current release:** `v0.10.1`
+**Current release:** `v0.10.2`
 **Current architecture:** [../docs/architecture/README.md](../docs/architecture/README.md)
 
 This directory is the shipped **embedded compatibility/hermetic distribution** for Heli. It contains portable skills, policies, safety defaults, adapter assets, the embedded CLI mirror, and compatibility state schemas.
