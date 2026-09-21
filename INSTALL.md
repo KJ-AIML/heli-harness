@@ -100,65 +100,57 @@ The embedded installer copies distribution assets and seeds idle operational sta
 
 `heli update` preserves user operational state and local overlays while refreshing shipped distribution assets.
 
-## Host activation
+## Host activation and lifecycle
 
-Project binding and host activation are separate. A linked or embedded project does not prove that a host hook/plugin is active.
-
-For the normal linked topology, install host integrations from the global Heli package rather than from a project-local `.heli-harness/` tree:
+Project binding and host integration are separate concerns. In the normal topology, host integrations are managed from the globally installed Heli package and projects contain only lightweight `.heli/` binding/state.
 
 ```bash
 heli host install all
 heli host status
 ```
 
-`install all` installs integrations for detected/automatically supported hosts and reports unavailable/manual hosts. Installation state is still distinct from live callback evidence.
-
-Use the [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) for current evidence and limitations.
-
-### Codex
-
-Recommended Git marketplace:
+The managed lifecycle is consistent across supported hosts:
 
 ```bash
-codex plugin marketplace add KJ-AIML/heli-harness
-codex plugin add heli-harness@heli-harness
-codex plugin marketplace upgrade heli-harness
+heli host install <host>
+heli host status
+heli host update <host>
+heli host repair <host>
+heli host remove <host>
 ```
 
-For workspace-local dogfood of an embedded copy:
+`install` and `update` are idempotent. `status` reports absent/current/stale/unknown-version/manual state separately from runtime evidence. `remove` deletes only Heli-owned host artifacts and never removes project `.heli/` binding.
+
+| Host | Default global-linked activation | Lifecycle notes |
+| --- | --- | --- |
+| Pi | `heli host install pi` | Installs the pinned Heli package for Pi. Inside Pi, `/heli-install` links the current project; it does not create `.heli-harness/`. |
+| Claude Code | `heli host install claude` | Installs the packaged global Heli plugin from the global distribution. |
+| Codex | `heli host install codex` | Uses the Git marketplace and upgradeable `heli-harness@heli-harness` plugin. |
+| Grok Build | `heli host install grok` | Installs Heli-owned user hooks plus the packaged skill plugin. |
+| OpenCode | `heli host install opencode` | Installs a namespaced Heli bundle and thin auto-discovered wrapper; unrelated global plugins are preserved. |
+| Kimi Code CLI | `heli host install kimi` | Adds a delimited Heli hook block that can be upgraded or removed without replacing unrelated config. |
+| Cursor | `heli host install cursor` | Manages only the Heli local-user plugin directory. Runtime enforcement remains evidence-limited. |
+| AXGA | `heli host install axga` | Pi-compatible package path; dedicated live-host proof remains separate from install support. |
+| Antigravity | set `HELI_ANTIGRAVITY_PLUGIN_DIR` to the host plugin parent, then `heli host install antigravity` | The host plugin location is version-specific; Heli owns only the `heli-harness/` child. |
+| Generic | manual/instruction adapter | No host-native package lifecycle exists; use the generic adapter instructions only when no native host is available. |
+
+After opening a linked project in a host, verify observed runtime callbacks separately:
 
 ```bash
-codex plugin marketplace add ./.heli-harness/adapters/codex-plugin
-codex plugin add heli-harness@heli-harness
+heli explain capabilities
 ```
 
-### Claude Code
+Installed files are not treated as proof that a host actually invoked Heli hooks.
 
-For an embedded/local plugin tree:
+### Embedded / hermetic compatibility
 
-```bash
-claude plugin install .heli-harness/adapters/claude-plugin
-```
+A deliberately self-contained workspace may still use `heli install <path>` and the adapter assets under its local `.heli-harness/` tree. This is an explicit compatibility/dogfood mode, not the default onboarding path.
 
-Use the support matrix for the currently proven load/enforcement surface.
+Pi exposes this distinction directly:
 
-### Cursor
-
-Use `.heli-harness/adapters/cursor-plugin/` as a local marketplace or copy its nested `plugins/heli-harness/` directory to Cursor's local plugin directory.
-
-### Grok Build
-
-```bash
-node .heli-harness/adapters/grok-plugin/install-user-hooks.mjs
-```
-
-### OpenCode
-
-Use the packaged OpenCode plugin tree as documented under `.heli-harness/adapters/opencode-plugin/`.
-
-### Kimi / Antigravity / Pi / AXGA / Generic
-
-Use the corresponding adapter directory and the [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md). Adapter documentation must not be treated as enforcement proof by itself.
+- `/heli-install` — link the current project to global Heli.
+- `/heli-legacy-install` — explicitly create a local `.heli-harness/` compatibility tree.
+- `/heli-legacy-update` — update that compatibility tree.
 
 ## Scoped grants
 
