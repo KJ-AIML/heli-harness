@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — global host integration convergence
+## v0.10.2 - Global host integration convergence
 
 ### Changed
 
