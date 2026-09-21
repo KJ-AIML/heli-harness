@@ -3,6 +3,7 @@ import { join, dirname, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { install } from "../lib/cli/install.mjs";
 import { update } from "../lib/cli/update.mjs";
+import { linkProject } from "../lib/cli/link.mjs";
 import { buildSessionContext, isFileMutationTool, pathsFrom } from "../.heli-harness/adapters/shared/hook-core.mjs";
 import {
 	resolveExecutionContext,
@@ -18,6 +19,23 @@ const __dirname = dirname(__filename);
 function detectWorkspaceHarness(cwd) {
 	const harnessPath = join(cwd, ".heli-harness", "HARNESS.md");
 	return existsSync(harnessPath);
+}
+
+function detectLinkedProject(cwd) {
+	return existsSync(join(cwd, ".heli", "workspace.json")) && existsSync(join(cwd, ".heli", "heli.lock"));
+}
+
+function detectHeliProject(cwd) {
+	return detectLinkedProject(cwd) || detectWorkspaceHarness(cwd);
+}
+
+function verifyLinkedProject(cwd) {
+	const checks = [
+		join(cwd, ".heli", "workspace.json"),
+		join(cwd, ".heli", "heli.lock"),
+	];
+	const missing = checks.filter((path) => !existsSync(path));
+	return { success: missing.length === 0, missing };
 }
 
 function getPackageRoot() {
@@ -156,6 +174,15 @@ function isDirectory(path) {
 		return statSync(path).isDirectory();
 	} catch (_error) {
 		return false;
+	}
+}
+
+function runLinker(cwd) {
+	try {
+		const result = linkProject(getPackageRoot(), cwd);
+		return { success: true, result };
+	} catch (error) {
+		return { success: false, error: String(error && error.message ? error.message : error), code: error && error.code ? error.code : null };
 	}
 }
 
@@ -1101,60 +1128,114 @@ export default function heliHarnessExtension(pi) {
 
 	const installHandler = async (_args, ctx) => {
 		const cwd = process.cwd();
-		if (detectWorkspaceHarness(cwd)) {
-			notify(ctx, "Workspace harness already installed in this folder", "warning");
+		if (detectLinkedProject(cwd)) {
+			notify(ctx, "This project is already linked to global Heli", "success");
+			notify(ctx, "Project binding: .heli/workspace.json", "info");
+			notify(ctx, "Use /hh-status or heli status to inspect the current binding.", "info");
 			return;
 		}
-		let confirmed = false;
+		let confirmed = !canConfirm(ctx);
 		if (canConfirm(ctx)) {
-			confirmed = await getUi(ctx).confirm("Install Heli-Harness workspace harness into current folder?", "This will create .heli-harness/ and adapter pointer files (AGENTS.md, CLAUDE.md) in the current directory.");
+			confirmed = await getUi(ctx).confirm(
+				"Link this project to global Heli?",
+				"This creates lightweight .heli/ project binding/state. It does not install a local .heli-harness/ tree.",
+			);
 		}
 		if (!confirmed) {
-			notify(ctx, "Install cancelled", "info");
+			notify(ctx, "Project link cancelled", "info");
 			return;
 		}
-		notify(ctx, "Installing workspace harness...", "info");
-		const result = runInstaller(cwd);
-		if (result.success) {
-			const verification = verifyInstall(cwd);
-			if (verification.success) {
-				notify(ctx, "Workspace harness installed successfully", "success");
-				notify(ctx, "Created: .heli-harness/, AGENTS.md, CLAUDE.md", "info");
-				notify(ctx, "Next: Create a repo profile under .heli-harness/profiles/", "info");
-				workspaceDetected = true;
-				syncStatus(ctx);
-			} else {
-				notify(ctx, "Install completed but verification failed", "warning");
-				notify(ctx, `Missing: ${verification.missing.join(", ")}`, "warning");
-			}
-		} else {
-			notify(ctx, "Install failed", "error");
+		notify(ctx, "Linking project to global Heli...", "info");
+		const result = runLinker(cwd);
+		if (!result.success) {
+			notify(ctx, "Project link failed", "error");
 			notify(ctx, result.error || "Unknown error", "error");
+			if (result.code) notify(ctx, `Code: ${result.code}`, "warning");
+			return;
 		}
+		const verification = verifyLinkedProject(cwd);
+		if (!verification.success) {
+			notify(ctx, "Link completed but verification failed", "warning");
+			notify(ctx, `Missing: ${verification.missing.join(", ")}`, "warning");
+			return;
+		}
+		workspaceDetected = true;
+		notify(ctx, "Project linked successfully", "success");
+		notify(ctx, "Created: .heli/workspace.json and .heli/heli.lock", "info");
+		notify(ctx, "No project-local .heli-harness/ is required for normal linked mode.", "info");
+		notify(ctx, "Next: heli host status; then verify this session with heli explain capabilities", "info");
+		syncStatus(ctx);
+	};
+
+	const legacyInstallHandler = async (_args, ctx) => {
+		const cwd = process.cwd();
+		if (detectWorkspaceHarness(cwd)) {
+			notify(ctx, "Embedded compatibility harness already exists in this folder", "warning");
+			return;
+		}
+		let confirmed = !canConfirm(ctx);
+		if (canConfirm(ctx)) {
+			confirmed = await getUi(ctx).confirm(
+				"Install embedded Heli compatibility harness?",
+				"Legacy/hermetic mode only: this creates .heli-harness/ plus adapter pointer files. Normal projects should use /heli-install instead.",
+			);
+		}
+		if (!confirmed) {
+			notify(ctx, "Legacy install cancelled", "info");
+			return;
+		}
+		notify(ctx, "Installing embedded compatibility harness...", "info");
+		const result = runInstaller(cwd);
+		if (!result.success) {
+			notify(ctx, "Legacy install failed", "error");
+			notify(ctx, result.error || "Unknown error", "error");
+			return;
+		}
+		const verification = verifyInstall(cwd);
+		if (!verification.success) {
+			notify(ctx, "Legacy install completed but verification failed", "warning");
+			notify(ctx, `Missing: ${verification.missing.join(", ")}`, "warning");
+			return;
+		}
+		workspaceDetected = true;
+		notify(ctx, "Embedded compatibility harness installed", "success");
+		notify(ctx, "Created: .heli-harness/, AGENTS.md, CLAUDE.md", "info");
+		notify(ctx, "Compatibility mode is explicit; migrate with /heli-install when ready.", "info");
+		syncStatus(ctx);
 	};
 
 	const updateHandler = async (_args, ctx) => {
+		notify(ctx, "Linked/global Heli updates are machine-level.", "info");
+		notify(ctx, "Run: heli host update pi", "info");
+		notify(ctx, "Update the global heli-harness package through the same package source used to install it.", "info");
+		if (detectWorkspaceHarness(process.cwd())) {
+			notify(ctx, "This project also has an embedded compatibility tree; use /heli-legacy-update only when you intentionally want to refresh it.", "warning");
+		}
+	};
+
+	const legacyUpdateHandler = async (_args, ctx) => {
 		const cwd = process.cwd();
 		if (!detectWorkspaceHarness(cwd)) {
-			notify(ctx, "No workspace harness installed in this folder — run /heli-install first", "warning");
+			notify(ctx, "No embedded compatibility harness found; /heli-install links the project instead.", "warning");
 			return;
 		}
-		let confirmed = false;
+		let confirmed = !canConfirm(ctx);
 		if (canConfirm(ctx)) {
-			confirmed = await getUi(ctx).confirm("Update Heli-Harness workspace harness in current folder?", "This overwrites shipped defaults under .heli-harness/ while preserving profiles/, workspace/, policies/, safety/, and state/.");
+			confirmed = await getUi(ctx).confirm(
+				"Update embedded Heli compatibility harness?",
+				"This refreshes shipped defaults under .heli-harness/ while preserving local compatibility state.",
+			);
 		}
 		if (!confirmed) {
-			notify(ctx, "Update cancelled", "info");
+			notify(ctx, "Legacy update cancelled", "info");
 			return;
 		}
-		notify(ctx, "Updating workspace harness...", "info");
 		const result = runUpdater(cwd);
 		if (result.success) {
-			notify(ctx, "Workspace harness updated successfully", "success");
-			notify(ctx, "Preserved: profiles/, workspace/, policies/, safety/, state/", "info");
+			notify(ctx, "Embedded compatibility harness updated", "success");
 			syncStatus(ctx);
 		} else {
-			notify(ctx, "Update failed", "error");
+			notify(ctx, "Legacy update failed", "error");
 			notify(ctx, result.error || "Unknown error", "error");
 		}
 	};
@@ -1163,7 +1244,20 @@ export default function heliHarnessExtension(pi) {
 		const cwd = process.cwd();
 		const harnessPath = join(cwd, ".heli-harness");
 		const harnessMd = join(harnessPath, "HARNESS.md");
+		const linkedDetected = detectLinkedProject(cwd);
 		const harnessDetected = detectWorkspaceHarness(cwd);
+		if (linkedDetected) {
+			notify(ctx, "Heli-Harness Status", "info");
+			notify(ctx, `Version: ${getPackageVersion()}`, "info");
+			notify(ctx, "Mode: global package + linked project", "success");
+			notify(ctx, `CWD: ${cwd}`, "info");
+			notify(ctx, "Project binding: .heli/workspace.json", "success");
+			notify(ctx, "Runtime lock: .heli/heli.lock", "success");
+			notify(ctx, `Embedded compatibility tree: ${harnessDetected ? "also present" : "not required"}`, harnessDetected ? "warning" : "info");
+			notify(ctx, "Active hooks: session_start, before_agent_start, tool_call, input", "info");
+			notify(ctx, "Runtime enforcement is session evidence; verify with: heli explain capabilities", "info");
+			return;
+		}
 		const targetRepo = getTargetRepo(cwd);
 		const policiesDir = join(harnessPath, "policies");
 		const safetyDir = join(harnessPath, "safety");
@@ -1228,17 +1322,17 @@ export default function heliHarnessExtension(pi) {
 				notify(ctx, "Target repo: not selected. Use /heli-target list or /heli-target set <repo> before write workflows.", "warning");
 			}
 		} else {
-			notify(ctx, "Next: run /heli-install or /hh-install to set up workspace harness", "info");
+			notify(ctx, "Next: run /heli-install or /hh-install to link this project to global Heli", "info");
 		}
 	};
 
 	const workflowHandler = (skillName, description) => {
 		return async (_args, ctx) => {
 			const cwd = process.cwd();
-			const harnessDetected = detectWorkspaceHarness(cwd);
-			if (!harnessDetected) {
-				notify(ctx, "Workspace harness not installed", "warning");
-				notify(ctx, "Run /heli-install or /hh-install to set up workspace harness", "info");
+			const projectDetected = detectHeliProject(cwd);
+			if (!projectDetected) {
+				notify(ctx, "Heli project binding not found", "warning");
+				notify(ctx, "Run /heli-install or /hh-install to link this project", "info");
 				return;
 			}
 			notify(ctx, `Running ${description}...`, "info");
@@ -1420,7 +1514,7 @@ export default function heliHarnessExtension(pi) {
 			return;
 		}
 		const cwd = process.cwd();
-		const harnessDetected = detectWorkspaceHarness(cwd);
+		const harnessDetected = detectHeliProject(cwd);
 		notify(ctx, "Heli-Harness Auto Hooks Status", "info");
 		notify(ctx, `session_start hook: ${lastSessionStartAt === "not observed" ? "registered, not observed this session" : `observed at ${lastSessionStartAt}`}`, "info");
 		notify(ctx, `before_agent_start injection: ${harnessDetected ? "active when workspace is detected" : "inactive; workspace not installed"}`, harnessDetected ? "success" : "warning");
@@ -1433,18 +1527,18 @@ export default function heliHarnessExtension(pi) {
 		notify(ctx, "Probes do not prove every future host hook event; they prove this adapter path is active now", "info");
 		notify(ctx, "Use /heli-hooks probe, /heli-hooks probe-off, or /heli-hooks test-guard", "info");
 		if (!harnessDetected) {
-			notify(ctx, "Run /heli-install to activate workspace hooks", "info");
+			notify(ctx, "Run /heli-install to link the project; host hooks are installed at machine/package scope.", "info");
 		}
 	};
 
 	pi.on("session_start", async (_event, ctx) => {
 		const cwd = process.cwd();
-		workspaceDetected = detectWorkspaceHarness(cwd);
+		workspaceDetected = detectHeliProject(cwd);
 		lastSessionStartAt = new Date().toISOString();
 		if (workspaceDetected) {
 			notify(ctx, "Heli-Harness active", "success");
 		} else {
-			notify(ctx, "Heli-Harness package loaded; run /heli-install to set up workspace harness", "info");
+			notify(ctx, "Heli-Harness package loaded; run /heli-install to link this project", "info");
 		}
 		syncStatus(ctx);
 	});
@@ -1454,19 +1548,26 @@ export default function heliHarnessExtension(pi) {
 		lastBeforeAgentStartAt = new Date().toISOString();
 		const existingPrompt = event && event.systemPrompt ? event.systemPrompt : "";
 		const cwd = process.cwd();
-		const heliInstructions = `
-Heli-Harness workspace detected.
+		const heliInstructions = detectLinkedProject(cwd)
+			? `
+Heli linked project detected.
+
+Before non-trivial work:
+- Treat .heli/workspace.json and .heli/heli.lock as the committed project binding.
+- Resolve governance, authority, grants, and runtime capability evidence through the installed Heli package.
+- Read project overlays under .heli/ when present.
+- A local .heli-harness/ tree is not required in linked mode.
+- Preserve dirty work, classify commands, and honor Heli resource authority before mutation.
+- Do not infer runtime enforcement merely from installed files; use current session evidence.`
+			: `
+Heli embedded compatibility workspace detected.
 
 Before non-trivial work:
 - Read .heli-harness/HARNESS.md.
 - Read .heli-harness/workspace/index.json and target.json when present.
 - Identify the target repo.
-- Read .heli-harness/profiles/<repo>.md if present.
 - Preserve dirty work.
-- Update .heli-harness/state/current-task.md for meaningful tasks.
-- Record durable decisions in .heli-harness/state/decisions.md when appropriate.
 - Classify commands before running them.
-- Do not run mutating, API-credit, release, publish, push, or destructive commands without explicit user approval.
 - Prefer safe audit-only and non-mutating checks first.`;
 		const sharedContext = buildSessionContext(cwd, { host: "pi" });
 		const probeInstructions = hookProbePromptPending
@@ -1671,10 +1772,12 @@ HELI_HOOK_OK`
 		return undefined;
 	});
 
-	pi.registerCommand("heli-install", { description: "Install Heli-Harness workspace harness into current folder", handler: installHandler });
-	pi.registerCommand("hh-install", { description: "Alias for /heli-install", handler: installHandler });
-	pi.registerCommand("heli-update", { description: "Update Heli-Harness workspace harness in current folder", handler: updateHandler });
+	pi.registerCommand("heli-install", { description: "Link current project to the globally installed Heli runtime", handler: installHandler });
+	pi.registerCommand("hh-install", { description: "Alias for /heli-install (global-linked project binding)", handler: installHandler });
+	pi.registerCommand("heli-update", { description: "Show the global/Pi host update path", handler: updateHandler });
 	pi.registerCommand("hh-update", { description: "Alias for /heli-update", handler: updateHandler });
+	pi.registerCommand("heli-legacy-install", { description: "Compatibility only: install a local .heli-harness/ tree", handler: legacyInstallHandler });
+	pi.registerCommand("heli-legacy-update", { description: "Compatibility only: update a local .heli-harness/ tree", handler: legacyUpdateHandler });
 	pi.registerCommand("hh-status", { description: "Report Heli-Harness status in current folder", handler: statusHandler });
 	pi.registerCommand("heli-help", { description: "Show Heli-Harness commands and what they do", handler: workflowHandler("heli-help", "Heli-Harness help") });
 	pi.registerCommand("heli-init", { description: "Bootstrap a repo profile for a target repo", handler: workflowHandler("heli-init", "repo profile bootstrap") });
