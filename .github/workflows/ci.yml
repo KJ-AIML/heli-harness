@@ -15,14 +15,14 @@ jobs:
         node: ["20", "22"]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history so whitespace checks can compare against the PR base
           # (shallow depth-1 merge commits look like root commits and otherwise
           # re-check the entire tree, including historical trailing blanks).
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
 
