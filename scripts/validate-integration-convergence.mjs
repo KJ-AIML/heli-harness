@@ -63,6 +63,34 @@ for (const rel of [...new Set(versioned)]) {
 	assert.equal(value.version, version, `${rel} version must match package.json (${version})`);
 }
 
+const currentFacingDocs = [
+	"README.md",
+	"INSTALL.md",
+	"ROADMAP.md",
+	"docs/INSTALL_MATRIX.md",
+	"docs/ADAPTER_SUPPORT_MATRIX.md",
+	"docs/architecture/README.md",
+	"docs/architecture/governance-model.md",
+	"docs/ENFORCEMENT_MATRIX.md",
+	"docs/superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md",
+	".heli-harness/README.md",
+	".heli-harness/INSTALL.md",
+	".heli-harness/HARNESS.md",
+	".heli-harness/state/README.md",
+	".heli-harness/workspace/README.md",
+	".heli-harness/adapters/pi/README.md",
+	".heli-harness/adapters/kimi/KIMI.md",
+	".heli-harness/adapters/grok/GROK.md",
+	".heli-harness/adapters/claude/CLAUDE.md",
+	".heli-harness/adapters/codex/AGENTS.md",
+	".heli-harness/adapters/opencode/OPENCODE.md",
+	".heli-harness/adapters/antigravity/ANTIGRAVITY.md",
+	".heli-harness/skills/heli-install/SKILL.md",
+];
+for (const rel of currentFacingDocs) {
+	assert.ok(text(rel).includes(version), `${rel} must identify current release ${version}`);
+}
+
 // Primary onboarding must not regress to project-local adapter paths.
 for (const rel of ["INSTALL.md", "docs/INSTALL_MATRIX.md"]) {
 	const value = text(rel);
