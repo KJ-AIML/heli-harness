@@ -1,7 +1,7 @@
 # Install Matrix — v0.10.2
 
-**Primary topology:** global Heli distribution → machine-level host integration → lightweight project `.heli/` binding  
-**Architecture:** [Current Heli architecture](architecture/README.md)  
+**Primary topology:** global Heli distribution → machine-level host integration → lightweight project `.heli/` binding
+**Architecture:** [Current Heli architecture](architecture/README.md)
 **Host evidence:** [Adapter Support Matrix](ADAPTER_SUPPORT_MATRIX.md)
 
 ## Canonical linked-project setup
