@@ -158,20 +158,21 @@ Cloud sync remains optional and local-first. See [Cloud Sync](docs/architecture/
 
 Current support claims are evidence-backed and maintained in the [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md).
 
-| Adapter | Current status |
-| --- | --- |
-| Pi | `enforced` |
-| Claude Code | `enforced` |
-| Codex | `enforced` |
-| Cursor | `plugin-wired` |
-| Grok Build | `enforced` |
-| OpenCode | `enforced` |
-| Kimi Code CLI | `enforced` |
-| Antigravity CLI | `verified-plugin-wired` |
-| AXGA / Generic | documented |
-| Windsurf / Cline / Gemini / OpenClaw | planned |
+The support matrix tracks runtime evidence, fresh install, global discovery, linked-project support, update/repair, removal, automated E2E, live-host proof, and distribution currency as separate dimensions.
 
-These labels describe tested integration evidence, **not a sandbox or universal security boundary**.
+Managed lifecycle:
+
+```bash
+heli host install <host>
+heli host status
+heli host update <host>
+heli host repair <host>
+heli host remove <host>
+```
+
+Pi, Claude Code, Codex, Grok Build, OpenCode, Kimi Code CLI, Cursor, and AXGA have managed machine-level lifecycle surfaces. Antigravity is managed when its version-specific plugin parent is supplied through `HELI_ANTIGRAVITY_PLUGIN_DIR`. Generic remains an instruction-only fallback.
+
+Runtime evidence is still evaluated independently: installed files are **not** a sandbox, a universal security boundary, or proof that a host invoked Heli.
 
 ## Validation
 
