@@ -1,48 +1,46 @@
 # Pi / AXGA Adapter — v0.10.1
 
-**Current support evidence:** [docs/ADAPTER_SUPPORT_MATRIX.md](../../../docs/ADAPTER_SUPPORT_MATRIX.md)
+**Current lifecycle evidence:** [docs/ADAPTER_SUPPORT_MATRIX.md](../../../docs/ADAPTER_SUPPORT_MATRIX.md)
 
-## Package install
+## Machine-level package activation
 
-Recommended machine-level activation:
+Recommended:
 
 ```bash
 heli host install pi
 heli host status
 ```
 
-Equivalent direct Pi package install:
+AXGA uses the same package model:
 
 ```bash
-pi install git:github.com/KJ-AIML/heli-harness@v0.10.1
-axga install git:github.com/KJ-AIML/heli-harness@v0.10.1
+heli host install axga
+heli host status
 ```
 
-The package exposes the Heli skill library and Pi extension. Host package installation does not automatically make a project linked or prove that every hook surface is enforced.
+Host package installation is separate from project binding and separate again from live runtime evidence.
 
-## Recommended project setup
+## Project setup
 
-Use the current linked model:
+For a normal project:
 
 ```bash
 npm install -g github:KJ-AIML/heli-harness#v0.10.1
 heli setup
+heli host install pi
 cd /path/to/project
 heli link
 heli doctor
 ```
 
-Pi should start from the linked project root and use `heli status` / `heli explain` to resolve current project, resource authority, and capability evidence.
+Inside Pi, `/heli-install` performs the same architectural action as `heli link`: it creates lightweight `.heli/` binding/state for the current project. It must not normally propose or create `./heli-harness` or `.heli-harness/`.
 
-## Embedded compatibility commands
+Useful Pi commands:
 
-`/heli-install` and `/hh-install` remain available for a deliberate self-contained `.heli-harness/` install. That is a compatibility/hermetic path, not the primary v0.10 topology.
-
-Useful extension commands include:
-
-- `/hh-status`
+- `/heli-install` — link current project to global Heli
+- `/heli-update` — show the machine-level global/Pi host update path
+- `/hh-status` — report linked or compatibility status
 - `/heli-help`
-- `/heli-init`
 - `/heli-review`
 - `/heli-audit`
 - `/heli-validate`
@@ -50,12 +48,27 @@ Useful extension commands include:
 - `/heli-hooks`
 - `/heli-target`
 
+## Embedded compatibility
+
+A self-contained workspace remains available only by explicit legacy naming:
+
+- `/heli-legacy-install` — create a local `.heli-harness/` compatibility tree
+- `/heli-legacy-update` — refresh that compatibility tree
+
+These commands are for hermetic/offline compatibility and dogfood. They are not the primary install recommendation.
+
+## Version and update behavior
+
+The Pi extension reports the Heli package version from root `package.json`. The host manager installs the version matching the global Heli distribution and records machine-level integration state for stale/current detection.
+
+If an older Pi package/catalog copy is already published or installed, a new Heli release must refresh that external distribution; source HEAD alone is not treated as proof that users received the new package.
+
 ## Authority and safety
 
 - Heli instructions are not a sandbox.
-- Runtime guard claims depend on the host exposing the tested hook/tool-call surface.
-- Resource authority and scoped grants come from current Heli state, not from an editable project Markdown file.
+- Runtime guard claims depend on Pi exposing the tested hook/tool-call surface.
+- Linked projects resolve authority and runtime state through the installed Heli package and `.heli/` binding.
+- A local `.heli-harness/` tree is not required in normal linked mode.
 - T6 hard-deny rules remain non-grantable by normal temporary grants.
-- Do not infer broad enforcement merely because the Pi package or skills are installed.
 
-Use the support matrix for the exact current evidence and limitations.
+Use the support matrix for exact current lifecycle and live-host evidence.
