@@ -12,9 +12,9 @@
     "coding-agents",
     "developer-tools"
   ],
-  "purpose": "Parent-level, tool-neutral AI development harness for one workspace containing many repos and many coding agents.",
-  "install_mode": "parent-workspace",
-  "source_of_truth": ".heli-harness/HARNESS.md",
+  "purpose": "Embedded/hermetic compatibility distribution for Heli; normal projects use the global runtime plus .heli/ project binding.",
+  "install_mode": "embedded-compatibility",
+  "source_of_truth": "HARNESS.md",
   "skills": [
     "audit",
     "branch",
@@ -90,5 +90,7 @@
   },
   "supportsLinkedWorkspace": true,
   "project_binding": ".heli/workspace.json",
-  "runtime_lock": ".heli/heli.lock"
+  "runtime_lock": ".heli/heli.lock",
+  "scope": "compatibility-only",
+  "primary_topology": "global-linked"
 }
