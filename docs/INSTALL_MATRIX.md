@@ -1,4 +1,4 @@
-# Install Matrix — v0.10.1
+# Install Matrix — v0.10.2
 
 **Primary topology:** global Heli distribution → machine-level host integration → lightweight project `.heli/` binding  
 **Architecture:** [Current Heli architecture](architecture/README.md)  
@@ -8,7 +8,7 @@
 
 | Step | Command | Result |
 | --- | --- | --- |
-| Install pinned release | `npm install -g github:KJ-AIML/heli-harness#v0.10.1` | Shared/global Heli CLI/runtime |
+| Install pinned release | `npm install -g github:KJ-AIML/heli-harness#v0.10.2` | Shared/global Heli CLI/runtime |
 | Initialize trusted user state | `heli setup` | Machine identity, user policy, locator |
 | Install host integrations | `heli host install all` | Machine-level plugins/hooks/skills from the global package |
 | Inspect lifecycle state | `heli host status` | Absent/current/stale/manual state, separate from runtime proof |
@@ -52,7 +52,7 @@ Removing a host integration does not remove or rewrite:
 Use only when a self-contained workspace is intentional:
 
 ```bash
-npx github:KJ-AIML/heli-harness#v0.10.1 install <path>
+npx github:KJ-AIML/heli-harness#v0.10.2 install <path>
 ```
 
 This creates the legacy-compatible `.heli-harness/` tree. Existing embedded workspaces can migrate with `heli link <path>` after active embedded writer authority is quiesced.
