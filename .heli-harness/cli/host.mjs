@@ -7,16 +7,16 @@ import { wantsJson, stripOutputFlags, printProtocolResult } from "./output.mjs";
 import { protocolOk } from "../protocol/result.mjs";
 
 const HOSTS = Object.freeze({
-	codex: { label: "Codex", runtime: "enforced", cli: "codex", automatic: true },
-	pi: { label: "Pi", runtime: "enforced", cli: "pi", automatic: true },
-	claude: { label: "Claude Code", runtime: "enforced", cli: "claude", automatic: true },
-	grok: { label: "Grok Build", runtime: "enforced", cli: "grok", automatic: true },
-	opencode: { label: "OpenCode", runtime: "enforced", cli: "opencode", automatic: true },
-	kimi: { label: "Kimi Code CLI", runtime: "enforced", cli: "kimi", automatic: true },
-	cursor: { label: "Cursor", runtime: "plugin-wired", cli: "cursor", automatic: true },
-	axga: { label: "AXGA", runtime: "documented", cli: "axga", automatic: true },
-	antigravity: { label: "Antigravity CLI", runtime: "verified-plugin-wired", cli: "antigravity", automatic: "conditional" },
-	generic: { label: "Generic adapter", runtime: "documented", cli: null, automatic: false },
+	codex: { label: "Codex", runtime: "enforced", cli: "codex", automatic: true, installRequiresCli: true },
+	pi: { label: "Pi", runtime: "enforced", cli: "pi", automatic: true, installRequiresCli: true },
+	claude: { label: "Claude Code", runtime: "enforced", cli: "claude", automatic: true, installRequiresCli: true },
+	grok: { label: "Grok Build", runtime: "enforced", cli: "grok", automatic: true, installRequiresCli: true },
+	opencode: { label: "OpenCode", runtime: "enforced", cli: "opencode", automatic: true, installRequiresCli: false },
+	kimi: { label: "Kimi Code CLI", runtime: "enforced", cli: "kimi", automatic: true, installRequiresCli: true },
+	cursor: { label: "Cursor", runtime: "plugin-wired", cli: "cursor", automatic: true, installRequiresCli: false },
+	axga: { label: "AXGA", runtime: "documented", cli: "axga", automatic: true, installRequiresCli: true },
+	antigravity: { label: "Antigravity CLI", runtime: "verified-plugin-wired", cli: "antigravity", automatic: "conditional", installRequiresCli: false },
+	generic: { label: "Generic adapter", runtime: "documented", cli: null, automatic: false, installRequiresCli: false },
 });
 
 const KIMI_START = "# --- heli-harness hooks ---";
@@ -35,9 +35,9 @@ function run(command, args = [], options = {}) {
 	return spawnSync(command, args, { encoding: "utf8", ...options });
 }
 
-function commandPresent(command) {
+function commandPresent(command, env = process.env) {
 	if (!command) return false;
-	const result = run(command, ["--version"]);
+	const result = run(command, ["--version"], { env });
 	return !(result.error && result.error.code === "ENOENT") && result.status === 0;
 }
 
@@ -155,7 +155,7 @@ function hostInstalledVersion(id, env = process.env) {
 export function inspectHost(packageRoot, id, { env = process.env } = {}) {
 	const spec = HOSTS[id];
 	if (!spec) throw new Error("unknown host: " + id);
-	const cliPresent = commandPresent(spec.cli);
+	const cliPresent = commandPresent(spec.cli, env);
 	const paths = hostOwnedPaths(id, env);
 	let installed = false;
 	let detail = "";
@@ -198,7 +198,7 @@ export function inspectHost(packageRoot, id, { env = process.env } = {}) {
 	const installedVersion = installed ? hostInstalledVersion(id, env) : null;
 	const stale = Boolean(installed && installedVersion && currentVersion !== "unknown" && installedVersion !== currentVersion);
 	let lifecycleState = installed ? (stale ? "stale" : installedVersion ? "current" : "unknown-version") : "absent";
-	if (!cliPresent && spec.cli && !["grok", "kimi", "opencode", "cursor", "antigravity"].includes(id)) lifecycleState = "host-unavailable";
+	if (!installed && !cliPresent && spec.installRequiresCli) lifecycleState = "host-unavailable";
 	if (id === "generic") lifecycleState = "manual";
 	if (id === "antigravity" && !paths.root) lifecycleState = "manual";
 
@@ -378,8 +378,9 @@ export function installHost(packageRoot, id, { dryRun = false, force = false, en
 	if (!plan.length) {
 		return { id, ok: true, skipped: true, reason: before.detail || "manual integration", before, steps: [] };
 	}
-	if (!before.cliPresent && spec.cli && !["opencode", "cursor", "antigravity"].includes(id)) {
-		return { id, ok: false, skipped: true, reason: spec.label + " CLI not found on PATH", before, steps: [] };
+	if (!before.cliPresent && spec.installRequiresCli) {
+		const cliLabel = spec.label.endsWith("CLI") ? spec.label : spec.label + " CLI";
+		return { id, ok: false, skipped: true, reason: cliLabel + " not found on PATH", before, steps: [] };
 	}
 	if (!force && before.installed && before.lifecycleState === "current") {
 		return { id, ok: true, already: true, before, after: before, steps: [] };
@@ -411,7 +412,7 @@ export function removeHost(packageRoot, id, { dryRun = false, env = process.env 
 	if (dryRun) return { id, ok: true, dryRun: true, plan, before };
 	const executablePlan = plan.filter(([command]) => {
 		if (["remove-file", "remove-dir", "remove-kimi-block"].includes(command)) return true;
-		return commandPresent(command);
+		return commandPresent(command, env);
 	});
 	const executed = runPlan(executablePlan, { env, remove: true });
 	if (!executed.ok) return { id, ok: false, before, after: inspectHost(packageRoot, id, { env }), steps: executed.steps };

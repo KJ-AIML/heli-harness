@@ -4,7 +4,9 @@ import { join } from "node:path";
 import {
 	planHostInstall,
 	planHostRemove,
+	inspectHost,
 	inspectHosts,
+	installHost,
 } from "../lib/cli/host.mjs";
 
 const root = process.cwd();
@@ -38,5 +40,23 @@ for (const id of ["codex", "pi", "claude", "grok", "opencode", "kimi", "cursor",
 }
 assert.equal(hosts.find((item) => item.id === "antigravity").automatic, "conditional");
 assert.equal(hosts.find((item) => item.id === "generic").lifecycleState, "manual");
+
+const unavailableEnv = {
+	...env,
+	PATH: "",
+	Path: "",
+	HELI_HOST_HOME: join(root, ".test-host-unavailable-home"),
+};
+const kimiUnavailable = inspectHost(root, "kimi", { env: unavailableEnv });
+assert.equal(kimiUnavailable.cliPresent, false);
+assert.equal(kimiUnavailable.installed, false);
+assert.equal(kimiUnavailable.lifecycleState, "host-unavailable");
+
+const kimiInstall = installHost(root, "kimi", { env: unavailableEnv });
+assert.equal(kimiInstall.skipped, true);
+assert.equal(kimiInstall.reason, "Kimi Code CLI not found on PATH");
+
+const openCodeWithoutCli = inspectHost(root, "opencode", { env: unavailableEnv });
+assert.equal(openCodeWithoutCli.lifecycleState, "absent");
 
 console.log("host manager smoke ok");
