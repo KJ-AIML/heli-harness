@@ -40,11 +40,12 @@ Heli does not become an agent runtime, planner, scheduler, sandbox implementatio
 
 ## Now
 
-- Keep `v0.10.1` documentation, package metadata, adapter claims, and architecture references synchronized.
-- Dogfood linked projects across supported hosts.
+- Converge every supported host on the managed global lifecycle: `heli host install|status|update|repair|remove`.
+- Keep linked projects free of a required local `.heli-harness/`; embedded/hermetic mode remains explicit compatibility only.
+- Keep package, adapter, plugin, and host metadata version-aligned through CI gates.
+- Dogfood linked projects across supported hosts and keep live-host proof distinct from installation state.
 - Measure friction and correctness of automatic binding/resource-authority behavior before widening defaults.
 - Keep support claims tied to reproducible smoke/live evidence.
-- Preserve embedded `.heli-harness/` only as a compatibility/hermetic path, not as the primary topology.
 
 ## Next — v0.11 only when evidence warrants it
 
