@@ -52,12 +52,12 @@ const packageVersion = JSON.parse(readFileSync(join(dirname(heliPath), "..", "pa
 		assert.equal(updateResult.status, 0, updateResult.stderr);
 		assert.ok(updateResult.stdout.includes("Updated Heli-Harness at"), "update should report target");
 		assert.ok(
-			updateResult.stdout.includes("codex plugin marketplace upgrade heli-harness"),
-			"update must tell users how to refresh the Codex Git marketplace",
+			updateResult.stdout.includes("heli host update all"),
+			"update must point users to the managed global host lifecycle",
 		);
 		assert.ok(
-			updateResult.stdout.includes("Host plugin refresh"),
-			"update must separate workspace update from host plugin refresh",
+			updateResult.stdout.includes("Host integration refresh"),
+			"update must separate embedded workspace update from global host integration refresh",
 		);
 		assert.ok(
 			updateResult.stdout.includes("does NOT flip legacy") ||
