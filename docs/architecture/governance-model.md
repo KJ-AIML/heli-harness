@@ -1,7 +1,7 @@
-# Heli-Harness Governance Model — v0.10.1
+# Heli-Harness Governance Model — v0.10.2
 
 **Status:** Current canonical governance model
-**Current release:** `v0.10.1`
+**Current release:** `v0.10.2`
 **Architecture index:** [README.md](README.md)
 **Convergence contract:** [Heli v1 Architecture Convergence RFC](../superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md)
 
