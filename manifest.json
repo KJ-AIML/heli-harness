@@ -1,7 +1,7 @@
 {
   "_note": "Root manifest describes the canonical global-linked topology. The .heli-harness/ tree is shipped only as an explicit embedded/hermetic compatibility distribution.",
   "name": "Heli-Harness",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "Portable governance and coordination kernel for coding agents with explicit project binding, resource-scoped authority, scoped grants, and evidence-backed host integrations.",
   "topics": [
     "ai-agents",
