@@ -57,7 +57,7 @@ function usage() {
 Commands:
   --version | -v  print the Heli-Harness version
   setup | link
-  host status|list|install [all|host...]
+  host status|list|install|update|repair|remove [all|host...]
   grant issue|list|revoke
   install | update | uninstall
   target | status | yolo
