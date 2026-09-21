@@ -190,21 +190,11 @@ Concurrent upgrade (when two+ agents may write in this workspace):
   # export HELI_SESSION_ID from claim/start output
   See skill concurrent-upgrade and .heli-harness/state/README.md
 
-Host plugin refresh (workspace update does not upgrade host marketplaces/plugins):
-  - Codex (Git marketplace, recommended):
-            codex plugin marketplace upgrade heli-harness
-  - Codex (still on local marketplace — switch once for upgrade support):
-            codex plugin remove heli-harness@heli-harness
-            codex plugin marketplace remove heli-harness
-            codex plugin marketplace add KJ-AIML/heli-harness
-            codex plugin add heli-harness@heli-harness
-            codex plugin marketplace upgrade heli-harness
-  - Codex (workspace-local dogfood only; re-add after this update):
-            codex plugin marketplace add ./.heli-harness/adapters/codex-plugin
-            codex plugin add heli-harness@heli-harness
-  - Claude: claude plugin install .heli-harness/adapters/claude-plugin
-  - Grok:   node .heli-harness/adapters/grok-plugin/install-user-hooks.mjs
-            (optional skills: grok plugin install .heli-harness/adapters/grok-plugin --trust)
+Host integration refresh (embedded workspace update does not change machine-level host integrations):
+  heli host status
+  heli host update all
+  heli host repair <host>
 
-See INSTALL.md for host-specific details.`);
+The workspace updater is compatibility-only. Normal linked projects use the global Heli package + .heli/ binding.
+See INSTALL.md for host-specific compatibility details.`);
 }

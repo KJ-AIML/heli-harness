@@ -396,6 +396,8 @@ assert.deepEqual(commands.map((command) => command.name), [
 	"hh-install",
 	"heli-update",
 	"hh-update",
+	"heli-legacy-install",
+	"heli-legacy-update",
 	"hh-status",
 	"heli-help",
 	"heli-init",
@@ -787,19 +789,9 @@ Current status: in progress
 const realPlanPrompt = await beforeAgentStart({ systemPrompt: "BASE" }, ctx);
 assert.ok(!/Warning: current-task\.md declares Step count/.test(realPlanPrompt.systemPrompt), "a real Plan: value should not warn even at 3+ steps");
 
-// heli-update is registered and, when confirmed, reaches the shared
-// lib/cli/update.mjs module (already fully tested on its own in
-// scripts/smoke-cli-update.mjs — this only proves the wiring, not the
-// preserve-dirs logic again). In this fixture, process.chdir(tempDir) was
-// called once above and the extension was copied into that same tempDir,
-// so getPackageRoot() and process.cwd() resolve to the identical
-// directory — the same latent gap a maintainer would hit running
-// /heli-update from inside a heli-harness checkout where the package root
-// and workspace are the same directory. That means a full successful
-// round-trip can't be driven through this exact fixture; instead assert
-// that the handler surfaces update()'s new clear same-directory error
-// (proving it calls the real shared module, not a stub) rather than
-// crashing or leaving an unhandled rejection.
+// heli-update is the modern global/package lifecycle entry. It must not
+// rewrite a project-local .heli-harness/ tree. Embedded compatibility updates
+// remain available only through the explicitly named heli-legacy-update command.
 const updateCommand = commands.find((command) => command.name === "heli-update");
 assert.ok(updateCommand, "heli-update should be registered");
 const confirmCtx = {
@@ -811,12 +803,12 @@ const confirmCtx = {
 };
 await updateCommand.options.handler({}, confirmCtx);
 assert.ok(
-	notifications.some((item) => item.message === "Update failed" && item.level === "error"),
-	"heli-update handler should report failure when source and target collide in this fixture",
+	notifications.some((item) => item.message.includes("heli host update pi") && item.level === "info"),
+	"heli-update should point Pi users to the managed machine-level host lifecycle",
 );
 assert.ok(
-	notifications.some((item) => item.message.includes("Source and target are the same directory") && item.level === "error"),
-	"heli-update handler should surface update()'s clear same-directory error, not a raw fs.cpSync crash",
+	!notifications.some((item) => item.message === "Update failed"),
+	"heli-update should not attempt an embedded workspace rewrite",
 );
 
 // Concurrent classification regression: planning state is usable without a

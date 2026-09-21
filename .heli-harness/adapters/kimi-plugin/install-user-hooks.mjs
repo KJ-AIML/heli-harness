@@ -13,8 +13,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const pre = join(here, "hooks", "heli-pre-tool-use.mjs").replaceAll("\\", "/");
 const session = join(here, "hooks", "heli-session-start.mjs").replaceAll("\\", "/");
 const marker = "# --- heli-harness hooks ---";
+const endMarker = "# --- end heli-harness hooks ---";
 
-const home = process.env.KIMI_CODE_HOME || join(homedir(), ".kimi-code");
+const userHome = process.env.HELI_HOST_HOME || homedir();
+const home = process.env.KIMI_CODE_HOME || join(userHome, ".kimi-code");
 mkdirSync(home, { recursive: true });
 const configPath = join(home, "config.toml");
 
@@ -37,6 +39,7 @@ timeout = 10
 event = "SessionStart"
 command = 'node "${session}"'
 timeout = 10
+${endMarker}
 `;
 
 writeFileSync(configPath, `${existing.trimEnd()}\n${block}\n`, "utf8");

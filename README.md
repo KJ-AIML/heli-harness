@@ -6,18 +6,18 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.10.1-informational"></a>
+  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.10.2-informational"></a>
   <a href="https://github.com/KJ-AIML/heli-harness/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/KJ-AIML/heli-harness/ci.yml?branch=main&label=CI"></a>
   <a href="docs/ADAPTER_SUPPORT_MATRIX.md"><img alt="Adapters" src="https://img.shields.io/badge/adapters-evidence--backed-8A2BE2"></a>
 </p>
 
-**Portable governance for coding agents.** Heli-Harness v0.10.1 is a small governance and coordination kernel that gives heterogeneous coding hosts the same policy, resource-authority, approval, evidence, and explanation semantics without becoming the agent runtime.
+**Portable governance for coding agents.** Heli-Harness v0.10.2 is a small governance and coordination kernel that gives heterogeneous coding hosts the same policy, resource-authority, approval, evidence, and explanation semantics without becoming the agent runtime.
 
 ## Current architecture
 
 > Facts describe. Policy constrains. Authority scopes. Grants approve. Evidence explains.
 
-Heli v0.10.1 separates four concerns that older workspace-only releases mixed together:
+Heli v0.10.2 separates four concerns that older workspace-only releases mixed together:
 
 - **Distribution** — shared/global Heli package and host integrations.
 - **Project binding** — committed `.heli/workspace.json` + `.heli/heli.lock`.
@@ -44,12 +44,12 @@ Heli does **not** own model calls, the agent loop, a scheduler, sandbox implemen
 
 See the [current architecture index](docs/architecture/README.md) and [governance model](docs/architecture/governance-model.md).
 
-## Install v0.10.1
+## Install v0.10.2
 
-The current GitHub release is `v0.10.1`. Until the npm registry has `heli-harness@0.10.1`, use the pinned GitHub package for the global CLI:
+The current GitHub release is `v0.10.2`. Until the npm registry has `heli-harness@0.10.2`, use the pinned GitHub package for the global CLI:
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.1
+npm install -g github:KJ-AIML/heli-harness#v0.10.2
 heli --version
 heli setup
 heli host install all
@@ -100,7 +100,7 @@ Full installation and migration details: [INSTALL.md](INSTALL.md).
 
 ## Authority is resource-scoped
 
-v0.10.1 no longer treats a narrative task name as the root write-authority boundary.
+v0.10.2 no longer treats a narrative task name as the root write-authority boundary.
 
 For modeled local worktrees, Heli reasons about the actual resource. A conflicting resource has one active writer authority, with generation/revision tracking and conflict-checked reacquisition.
 
@@ -158,20 +158,21 @@ Cloud sync remains optional and local-first. See [Cloud Sync](docs/architecture/
 
 Current support claims are evidence-backed and maintained in the [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md).
 
-| Adapter | Current status |
-| --- | --- |
-| Pi | `enforced` |
-| Claude Code | `enforced` |
-| Codex | `enforced` |
-| Cursor | `plugin-wired` |
-| Grok Build | `enforced` |
-| OpenCode | `enforced` |
-| Kimi Code CLI | `enforced` |
-| Antigravity CLI | `verified-plugin-wired` |
-| AXGA / Generic | documented |
-| Windsurf / Cline / Gemini / OpenClaw | planned |
+The support matrix tracks runtime evidence, fresh install, global discovery, linked-project support, update/repair, removal, automated E2E, live-host proof, and distribution currency as separate dimensions.
 
-These labels describe tested integration evidence, **not a sandbox or universal security boundary**.
+Managed lifecycle:
+
+```bash
+heli host install <host>
+heli host status
+heli host update <host>
+heli host repair <host>
+heli host remove <host>
+```
+
+Pi, Claude Code, Codex, Grok Build, OpenCode, Kimi Code CLI, Cursor, and AXGA have managed machine-level lifecycle surfaces. Antigravity is managed when its version-specific plugin parent is supplied through `HELI_ANTIGRAVITY_PLUGIN_DIR`. Generic remains an instruction-only fallback.
+
+Runtime evidence is still evaluated independently: installed files are **not** a sandbox, a universal security boundary, or proof that a host invoked Heli.
 
 ## Validation
 
@@ -185,14 +186,14 @@ The check chain covers protocol/decision semantics, capability evidence, linked 
 
 ## Documentation
 
-Use these as current `v0.10.1` references:
+Use these as current `v0.10.2` references:
 
 - [Architecture index](docs/architecture/README.md) — canonical current architecture entry point.
 - [Governance model](docs/architecture/governance-model.md) — policy, authority, grants, decisions, evidence.
 - [Install guide](INSTALL.md) — v0.10 setup/link plus embedded compatibility.
 - [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) — current host claims and evidence.
 - [Enforcement Matrix](docs/ENFORCEMENT_MATRIX.md) — current governance surface/evidence map.
-- [Heli v1 Architecture Convergence RFC](docs/superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md) — accepted architecture contract implemented through v0.10.1.
+- [Heli v1 Architecture Convergence RFC](docs/superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md) — accepted architecture contract implemented through v0.10.2.
 - [Roadmap](ROADMAP.md) — current baseline and next gates.
 - [Changelog](CHANGELOG.md) — historical release facts.
 

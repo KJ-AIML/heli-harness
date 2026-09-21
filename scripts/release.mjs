@@ -68,11 +68,31 @@ const isAllowed = (path) => allowed.some((prefix) => path === prefix || path.sta
 const unrelated = dirtyPaths.filter((path) => !isAllowed(path));
 if (unrelated.length) fail(`unrelated dirty paths: ${unrelated.join(", ")}`);
 
-const versionFiles = [
+const currentFacingVersionFiles = [
 	"package.json", "manifest.json", ".heli-harness/manifest.json", ".heli-harness/adapters/adapters.json",
 	"README.md", "ROADMAP.md", "INSTALL.md", "docs/INSTALL_MATRIX.md", "docs/ADAPTER_SUPPORT_MATRIX.md",
+	".heli-harness/README.md", ".heli-harness/INSTALL.md", ".heli-harness/HARNESS.md",
+	".heli-harness/state/README.md", ".heli-harness/workspace/README.md",
+	".heli-harness/adapters/pi/README.md",
+	".heli-harness/adapters/kimi/KIMI.md", ".heli-harness/adapters/grok/GROK.md",
+	".heli-harness/adapters/claude/CLAUDE.md", ".heli-harness/adapters/codex/AGENTS.md",
+	".heli-harness/adapters/opencode/OPENCODE.md", ".heli-harness/adapters/antigravity/ANTIGRAVITY.md",
+	"docs/architecture/README.md", "docs/architecture/governance-model.md",
+	"docs/ENFORCEMENT_MATRIX.md", "docs/superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md",
 	"scripts/smoke-claude-plugin.mjs", "scripts/smoke-codex-plugin.mjs", "scripts/smoke-cursor-plugin.mjs",
-	...walk(join(root, ".heli-harness", "adapters")).filter((path) => path.endsWith("plugin.json") || path.endsWith("marketplace.json")).map((path) => relative(root, path)),
+];
+
+const adapterVersionFiles = walk(join(root, ".heli-harness", "adapters"))
+	.map((path) => relative(root, path).replaceAll("\\", "/"))
+	.filter((path) =>
+		path.endsWith("plugin.json") ||
+		path.endsWith("marketplace.json") ||
+		path.endsWith("/skills/heli-install/SKILL.md")
+	);
+
+const versionFiles = [
+	...currentFacingVersionFiles,
+	...adapterVersionFiles,
 	// Root Codex marketplace has no embedded version string today; keep it staged with releases when present.
 	...(existsSync(join(root, ".agents", "plugins", "marketplace.json"))
 		? [".agents/plugins/marketplace.json"]

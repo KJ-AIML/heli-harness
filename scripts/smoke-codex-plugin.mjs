@@ -220,14 +220,21 @@ const row = matrix.split("\n").find((line) => line.includes("**Codex**")) || "";
 assert.match(row, /enforced/);
 
 const installMd = read(join(root, "INSTALL.md"));
-assert.match(installMd, /codex plugin marketplace add KJ-AIML\/heli-harness/);
-assert.match(installMd, /codex plugin marketplace add \.\/\.heli-harness\/adapters\/codex-plugin/);
-// Code fences must not recommend the bare relative form Codex rejects.
+assert.match(installMd, /heli host install codex/);
+assert.doesNotMatch(
+	installMd,
+	/codex plugin marketplace add \.\/\.heli-harness\/adapters\/codex-plugin/,
+	"root INSTALL.md must not expose workspace-local Codex dogfood as normal onboarding",
+);
+
+const codexInstallMd = read(join(root, ".heli-harness", "adapters", "codex", "install.md"));
+assert.match(codexInstallMd, /codex plugin marketplace add KJ-AIML\/heli-harness/);
+assert.match(codexInstallMd, /codex plugin marketplace add \.\/\.heli-harness\/adapters\/codex-plugin/);
 assert.ok(
 	!/```(?:bash|powershell)?\s*\n(?:(?!```)[\s\S])*codex plugin marketplace add \.heli-harness\/adapters\/codex-plugin\n(?:(?!```)[\s\S])*```/m.test(
-		installMd,
+		codexInstallMd,
 	),
-	"INSTALL.md code fences must not use bare .heli-harness marketplace path",
+	"Codex compatibility docs must not use bare .heli-harness marketplace path",
 );
 
 console.log("codex plugin smoke ok");
