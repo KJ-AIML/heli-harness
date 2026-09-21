@@ -1,6 +1,6 @@
 # Adapter Support Matrix
 
-**Current released baseline:** `v0.10.1`  
+**Current released baseline:** `v0.10.2`  
 **Architecture:** [Current Heli architecture](architecture/README.md)  
 **Install lifecycle:** [Install Matrix](INSTALL_MATRIX.md)
 
