@@ -27,11 +27,11 @@ Legend: **Yes** = implemented and repository-tested; **Partial** = implemented w
 | Host | Runtime integration | Fresh install | Global discovery | Linked project | Update / repair | Remove | Automated E2E | Live-host proof | Distribution current |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | **Pi** | Yes — extension hooks/guards | Yes | Yes | Yes | Yes | Yes | Yes — linked install regression + runtime smoke | Partial — repository runtime smoke; external installed-package refresh still release-dependent | **Source current**; public package/catalog must be refreshed by the next release |
-| **Claude Code** | Yes — plugin hooks/skills | Yes | Yes | Yes | Yes | Yes | Yes — adapter/plugin smokes | Yes — `live-verify-claude-plugin.mjs` | Yes in repository artifacts |
-| **Codex** | Yes — plugin hooks/skills | Yes | Yes | Yes | Yes | Yes | Yes — adapter/plugin smokes | Yes — install/hook live verify scripts | Yes in repository artifacts |
-| **Grok Build** | Yes — user hooks + skills | Yes | Yes | Yes | Yes | Yes | Yes — hook/plugin smokes | Yes — `live-verify-grok-hooks.mjs` | Yes in repository artifacts |
-| **OpenCode** | Yes — JS plugin | Yes | Yes | Yes | Yes | Yes | Yes — lifecycle namespacing + plugin smoke | Yes — `live-verify-opencode-plugin.mjs` | Yes in repository artifacts |
-| **Kimi Code CLI** | Yes — user hooks | Yes | Yes | Yes | Yes | Yes | Yes — delimited-config lifecycle + plugin smoke | Yes — `live-verify-kimi-hooks.mjs` | Yes in repository artifacts |
+| **Claude Code** | Yes (`enforced`) — plugin hooks/skills | Yes | Yes | Yes | Yes | Yes | Yes — adapter/plugin smokes | Yes — `live-verify-claude-plugin.mjs` | Yes in repository artifacts |
+| **Codex** | Yes (`enforced`) — plugin hooks/skills | Yes | Yes | Yes | Yes | Yes | Yes — adapter/plugin smokes | Yes — install/hook live verify scripts | Yes in repository artifacts |
+| **Grok Build** | Yes (`enforced`) — user hooks + skills | Yes | Yes | Yes | Yes | Yes | Yes — hook/plugin smokes | Yes — `live-verify-grok-hooks.mjs` | Yes in repository artifacts |
+| **OpenCode** | Yes (`enforced`) — JS plugin | Yes | Yes | Yes | Yes | Yes | Yes — lifecycle namespacing + plugin smoke | Yes — `live-verify-opencode-plugin.mjs` | Yes in repository artifacts |
+| **Kimi Code CLI** | Yes (`enforced`) — user hooks | Yes | Yes | Yes | Yes | Yes | Yes — delimited-config lifecycle + plugin smoke | Yes — `live-verify-kimi-hooks.mjs` | Yes in repository artifacts |
 | **Cursor** | Partial — plugin/rules/skills, no runtime guard proof | Yes | Yes | Yes for packaged context/skills | Yes | Yes | Yes — plugin/lifecycle smoke | No | Yes in repository artifacts |
 | **AXGA** | Partial — Pi-compatible package surface | Yes | Yes | Yes by shared Pi package model | Yes | Yes | Partial — host-manager lifecycle only | No dedicated AXGA live proof | Source current; dedicated catalog proof not established |
 | **Antigravity CLI** | Partial — packaged plugin + synthetic hooks | Conditional | Yes when plugin parent is configured | Yes | Conditional | Conditional | Yes — synthetic plugin/lifecycle smoke | No | Yes in repository artifacts |
