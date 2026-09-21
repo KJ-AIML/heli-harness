@@ -69,6 +69,15 @@ heli explain capabilities
 
 Live checks for supported native hooks exercise bounded behaviors such as remote-push denial and environment-file-write denial in isolated workspaces. Heli remains a governance guardrail, not a sandbox or universal host security boundary.
 
+## Evidence anchors
+
+The lifecycle table above is intentionally dimensioned. Existing adapter evidence remains traceable through these commands:
+
+- Claude Code: `node scripts/smoke-claude-adapter.mjs`; live host: `node scripts/live-verify-claude-plugin.mjs`.
+- Codex: `node scripts/smoke-codex-adapter.mjs`; install proof: `node scripts/live-verify-codex-plugin-install.mjs`; hook proof: `node scripts/live-verify-codex-plugin-hook.mjs`.
+- Grok Build: adapter status remains `enforced` where the tested hook surface is available; lifecycle support is reported separately above.
+- OpenCode, Kimi, Cursor, Antigravity, Pi, and AXGA keep their repository smoke/live evidence in the adapter manifest and the `scripts/` verification suite.
+
 ## Maintainer verification
 
 `npm run check` includes host-manager lifecycle smoke, fresh linked-project migration coverage, Pi install-regression coverage, adapter/package validation, and release/version convergence gates. Maintainer-only `scripts/live-verify-*.mjs` commands may consume provider usage and are not end-user setup steps.
