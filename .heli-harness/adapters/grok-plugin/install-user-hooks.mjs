@@ -23,7 +23,8 @@ if (!existsSync(pre) || !existsSync(session)) {
 	process.exit(1);
 }
 
-const targetDir = join(homedir(), ".grok", "hooks");
+const userHome = process.env.HELI_HOST_HOME || homedir();
+const targetDir = join(userHome, ".grok", "hooks");
 mkdirSync(targetDir, { recursive: true });
 const target = join(targetDir, "heli-harness.json");
 
@@ -59,4 +60,4 @@ const config = {
 writeFileSync(target, `${JSON.stringify(config, null, 2)}\n`, "utf8");
 console.log(`Installed Grok user hooks -> ${target}`);
 console.log("Verify with: grok inspect  (expect PreToolUse hooks loaded)");
-console.log("Optional: also run  grok plugin install .heli-harness/adapters/grok-plugin --trust  for skills");
+console.log("Optional skills are managed by: heli host install grok");
