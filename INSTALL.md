@@ -1,15 +1,15 @@
-# Install — Heli-Harness v0.10.1
+# Install — Heli-Harness v0.10.2
 
-**Current release:** `v0.10.1`
+**Current release:** `v0.10.2`
 **Primary model:** shared/global distribution + explicit project binding
 **Architecture:** [docs/architecture/README.md](docs/architecture/README.md)
 
 ## Recommended v0.10 setup
 
-The npm registry publication for `0.10.1` may lag the GitHub release. The pinned GitHub package is the authoritative install path until `npm view heli-harness@0.10.1` succeeds.
+The npm registry publication for `0.10.2` may lag the GitHub release. The pinned GitHub package is the authoritative install path until `npm view heli-harness@0.10.2` succeeds.
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.1
+npm install -g github:KJ-AIML/heli-harness#v0.10.2
 heli --version
 heli setup
 heli host install all
@@ -82,7 +82,7 @@ During migration:
 Use this only when you intentionally need a self-contained workspace bundle:
 
 ```bash
-npx github:KJ-AIML/heli-harness#v0.10.1 install /path/to/workspace
+npx github:KJ-AIML/heli-harness#v0.10.2 install /path/to/workspace
 ```
 
 or from a source checkout:
@@ -90,7 +90,7 @@ or from a source checkout:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.10.1
+git checkout v0.10.2
 ./install.sh /path/to/workspace
 # Windows:
 # .\install.ps1 -Parent "C:\your\workspace"
@@ -194,7 +194,7 @@ See [Cloud Sync](docs/architecture/cloud-sync.md).
 
 ## Maintainer release
 
-Release validation is automated in CI. `v0.10.1` has a GitHub Release and annotated tag.
+Release validation is automated in CI. `v0.10.2` has a GitHub Release and annotated tag.
 
 The repository Release workflow:
 
@@ -216,4 +216,4 @@ heli explain authority
 heli explain capabilities
 ```
 
-Expected package version for this documentation: **0.10.1**.
+Expected package version for this documentation: **0.10.2**.
