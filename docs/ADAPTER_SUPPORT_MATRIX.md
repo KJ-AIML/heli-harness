@@ -36,6 +36,10 @@ Legend: **Yes** = implemented and repository-tested; **Partial** = implemented w
 | **AXGA** | Partial — Pi-compatible package surface | Yes | Yes | Yes by shared Pi package model | Yes | Yes | Partial — host-manager lifecycle only | No dedicated AXGA live proof | Source current; dedicated catalog proof not established |
 | **Antigravity CLI** | Partial — packaged plugin + synthetic hooks | Conditional | Yes when plugin parent is configured | Yes | Conditional | Conditional | Yes — synthetic plugin/lifecycle smoke | No | Yes in repository artifacts |
 | **Generic** | Manual instruction adapter | Manual | Manual | Yes conceptually | Manual | Manual | No host-native E2E | No | N/A |
+| **Windsurf** | No — planned | No | No | No | No | No | No | No | N/A |
+| **Cline** | No — planned | No | No | No | No | No | No | No | N/A |
+| **Gemini** | No — planned | No | No | No | No | No | No | No | N/A |
+| **OpenClaw** | No — planned | No | No | No | No | No | No | No | N/A |
 
 ### Host-specific limits
 
@@ -56,6 +60,8 @@ Legend: **Yes** = implemented and repository-tested; **Partial** = implemented w
 **Antigravity CLI.** The host plugin location is version-specific. Set `HELI_ANTIGRAVITY_PLUGIN_DIR` to the host plugin **parent** directory; Heli manages only its `heli-harness/` child. No live-host proof exists yet.
 
 **AXGA / Generic.** AXGA follows the Pi-compatible package surface but lacks dedicated live-host evidence. Generic remains an instruction-only fallback and must not be presented as equivalent to a native managed host integration.
+
+**Planned adapters.** Windsurf, Cline, Gemini, and OpenClaw remain planned only. They are intentionally excluded from managed host lifecycle claims until host-native install/update/remove and linked-project evidence exist.
 
 ## Runtime evidence rule
 
