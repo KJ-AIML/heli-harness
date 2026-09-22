@@ -2,7 +2,7 @@
 
 ## Heli-Harness identity
 
-Heli v0.10.2 uses canonical governance semantics shared by CLI/machine/hooks/explain. In linked mode, project identity/config is under `.heli/` and live authority is execution-local; `.heli-harness/HARNESS.md` is authoritative only for the embedded compatibility protocol. This adapter translates those semantics into host-facing startup behavior.
+Heli v0.10.3 uses canonical governance semantics shared by CLI/machine/hooks/explain. In linked mode, project identity/config is under `.heli/` and live authority is execution-local; `.heli-harness/HARNESS.md` is authoritative only for the embedded compatibility protocol. This adapter translates those semantics into host-facing startup behavior.
 
 ## Read first
 

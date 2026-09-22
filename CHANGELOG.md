@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.10.3 - Pi runtime evidence distribution fix
+
+### Fixed
+
+- Pi package discovery now loads `extensions/pi-governed.js`, so real `session_start` and `tool_call` callbacks persist session-scoped runtime capability observations while preserving the existing Pi commands and guard decisions.
+- The Pi runtime-evidence smoke imports the extension declared by `package.json` instead of hardcoding the governed wrapper, preventing distribution wiring from drifting away from the tested path.
+- Missing required host CLIs now report `host-unavailable` consistently, and install output no longer duplicates `CLI` in labels such as Kimi Code CLI.
+
+### Changed
+
+- GitHub Actions checkout/setup-node actions use their current Node 24 runtime majors.
+- Integration convergence validation now fails if the Pi package entrypoint regresses to the legacy non-observing extension.
+
 ## v0.10.2 - Global host integration convergence
 
 ### Changed
