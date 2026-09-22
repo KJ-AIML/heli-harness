@@ -94,7 +94,10 @@ try {
 	};
 	const ctx = { ui: { notify() {}, setStatus() {} } };
 
-	const governed = await import(pathToFileURL(join(root, "extensions", "pi-governed.js")).href);
+	const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+	const piEntrypoint = packageJson.pi?.extensions?.[0];
+	assert.equal(piEntrypoint, "./extensions/pi-governed.js", "Pi package must load the governed runtime-evidence wrapper");
+	const governed = await import(pathToFileURL(join(root, piEntrypoint)).href);
 	governed.default(pi);
 	assert.deepEqual(events.map((event) => event.name), ["session_start", "before_agent_start", "tool_call", "input"]);
 	assert.ok(commands.length > 0, "legacy Pi commands must remain registered through wrapper");

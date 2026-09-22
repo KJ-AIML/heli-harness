@@ -1,6 +1,6 @@
 # Heli-Harness
 
-Heli-Harness provides the embedded governance protocol and compatibility assets for Heli v0.10.2. The current architecture is a portable governance kernel with explicit project binding and execution-local/resource-scoped authority. In a linked project, `.heli/workspace.json`, `.heli/heli.lock`, trusted user/global config, and CLI-resolved execution state take precedence over legacy embedded workspace state. In a deliberately embedded/hermetic install, this file remains the local protocol entry point.
+Heli-Harness provides the embedded governance protocol and compatibility assets for Heli v0.10.3. The current architecture is a portable governance kernel with explicit project binding and execution-local/resource-scoped authority. In a linked project, `.heli/workspace.json`, `.heli/heli.lock`, trusted user/global config, and CLI-resolved execution state take precedence over legacy embedded workspace state. In a deliberately embedded/hermetic install, this file remains the local protocol entry point.
 
 ## v0.10 layout and authority
 

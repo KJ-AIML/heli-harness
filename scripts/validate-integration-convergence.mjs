@@ -108,6 +108,7 @@ for (const rel of ["INSTALL.md", "docs/INSTALL_MATRIX.md"]) {
 }
 
 // Pi modern install is project linking; local harness is explicitly legacy only.
+assert.deepEqual(pkg.pi?.extensions, ["./extensions/pi-governed.js"], "Pi package entrypoint must include runtime observation wrapper");
 const pi = text("extensions/pi-extension.js");
 assert.match(pi, /registerCommand\("heli-install", \{ description: "Link current project to the globally installed Heli runtime"/);
 assert.match(pi, /registerCommand\("heli-legacy-install"/);

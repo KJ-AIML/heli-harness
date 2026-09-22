@@ -1,6 +1,6 @@
 {
   "name": "Heli-Harness",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "description": "Portable governance and coordination kernel for coding agents with explicit project binding, resource-scoped authority, scoped grants, and evidence-backed host integrations.",
   "topics": [
     "ai-agents",
