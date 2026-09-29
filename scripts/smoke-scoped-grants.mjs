@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { linkProject } from "../lib/cli/link.mjs";
 import { setupHeli } from "../lib/cli/setup.mjs";
 import {
+	consumeApplicableGrant,
+	grantStorePaths,
 	issueGrant,
 	listGrants,
 } from "../lib/concurrency/grant.mjs";
@@ -39,6 +41,13 @@ try {
 	});
 	assert.equal(denied.deny, true);
 	assert.equal(denied.code, "REMOTE_PUSH_DENIED");
+
+	// Looking for a grant is a read: it must not create per-workspace grant-store
+	// directories (tests used to litter the real ~/.heli/grants this way).
+	const grantStoreDir = grantStorePaths(project, { env }).dir;
+	assert.equal(existsSync(grantStoreDir), false, "a denied hook call must not create the grant store");
+	assert.equal(consumeApplicableGrant(project, { action: "git.push", env }), null);
+	assert.equal(existsSync(grantStoreDir), false, "consuming with no grants must not create the grant store");
 
 	const once = issueGrant(project, {
 		action: "git.push",

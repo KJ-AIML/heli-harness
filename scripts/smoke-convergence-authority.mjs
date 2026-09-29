@@ -11,6 +11,11 @@ import {
 	evaluatePreToolUse,
 	resolveExecutionContext,
 } from "../.heli-harness/adapters/shared/hook-core.mjs";
+import { scrubHeliProcessEnv } from "./lib/hermetic-env.mjs";
+
+// Kernel calls below default to process.env; a stray user-level HELI_SESSION_ID
+// (or HELI_YOLO etc.) must not change what these fixtures resolve to.
+scrubHeliProcessEnv();
 
 function fixture() {
 	const root = mkdtempSync(join(tmpdir(), "heli-convergence-authority-"));

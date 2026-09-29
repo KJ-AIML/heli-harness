@@ -217,6 +217,10 @@ export function consumeApplicableGrant(workspaceRoot, {
 } = {}) {
 	const policy = evaluateGrantPolicy(workspaceRoot, action, { env });
 	if (!policy.grantable || policy.hardDenied) return null;
+	// Read-only probe first: hooks call this on every guarded action, and the
+	// mutex below creates the grant-store directory. No matching grant means
+	// nothing to consume, so never touch the filesystem in that case.
+	if (!findApplicableGrant(workspaceRoot, { action, sessionId, resource, env })) return null;
 	return withGrantMutex(workspaceRoot, (paths) => {
 		const store = readStore(workspaceRoot, { env });
 		const index = store.grants.findIndex((grant) =>

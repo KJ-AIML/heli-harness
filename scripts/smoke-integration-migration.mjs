@@ -3,12 +3,9 @@ import assert from "node:assert/strict";
 import {
 	existsSync,
 	mkdirSync,
-	mkdtempSync,
 	readFileSync,
-	rmSync,
 	writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -19,21 +16,19 @@ import {
 	updateHost,
 	removeHost,
 } from "../lib/cli/host.mjs";
+import { createHermeticEnv } from "./lib/hermetic-env.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const root = mkdtempSync(join(tmpdir(), "heli-integration-migration-"));
+// Host lifecycle calls below spawn host CLIs (grok, kimi, ...). They must only
+// ever reach the fake shims, never the developer's real CLIs or real home.
+const hermetic = createHermeticEnv({ prefix: "heli-integration-migration-" });
+const restoreProcessEnv = hermetic.applyToProcess();
+const root = hermetic.root;
 const project = join(root, "linked-project");
 const legacyProject = join(root, "legacy-project");
-const config = join(root, "config");
-const data = join(root, "data");
-const hostHome = join(root, "home");
+const hostHome = hermetic.home;
 const heli = join(packageRoot, "bin", "heli.mjs");
-const env = {
-	...process.env,
-	HELI_CONFIG_DIR: config,
-	HELI_DATA_DIR: data,
-	HELI_HOST_HOME: hostHome,
-};
+const env = hermetic.env;
 
 function runCli(args) {
 	const result = spawnSync(process.execPath, [heli, ...args], { encoding: "utf8", env });
@@ -106,7 +101,9 @@ try {
 	assert.equal(removeHost(packageRoot, "opencode", { env }).ok, true);
 	assert.ok(existsSync(otherPlugin), "OpenCode removal must preserve unrelated plugins");
 
-	// Grok user hook is isolated to the Heli-owned hook file and removable without a host binary.
+	// Grok user hook is isolated to the Heli-owned hook file. Removal also runs
+	// `grok plugin uninstall`, which must reach the fake grok, never the real one.
+	hermetic.assertFakeResolution("grok");
 	const grokInstall = spawnSync(process.execPath, [
 		join(packageRoot, ".heli-harness", "adapters", "grok-plugin", "install-user-hooks.mjs"),
 	], { encoding: "utf8", env });
@@ -115,6 +112,8 @@ try {
 	assert.ok(existsSync(grokHook));
 	assert.equal(removeHost(packageRoot, "grok", { env }).ok, true);
 	assert.equal(existsSync(grokHook), false);
+	const grokCalls = hermetic.readLog().filter((entry) => entry.host === "grok").map((entry) => entry.args.join(" "));
+	assert.ok(grokCalls.includes("plugin uninstall heli-harness"), `fake grok must receive the uninstall; saw: ${grokCalls.join(" | ")}`);
 
 	// Kimi hook block is delimited, repeatable, and removal keeps unrelated config.
 	const kimiHome = join(hostHome, ".kimi-code");
@@ -147,5 +146,6 @@ try {
 
 	console.log("integration migration smoke ok");
 } finally {
-	rmSync(root, { recursive: true, force: true });
+	restoreProcessEnv();
+	hermetic.cleanup();
 }
