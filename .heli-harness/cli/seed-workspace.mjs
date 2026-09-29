@@ -24,6 +24,7 @@ export const DISTRIBUTION_ENTRIES = [
 	"INSTALL.md",
 	"README.md",
 	"manifest.json",
+	".claude-plugin",
 	"heli.mjs",
 	"cli",
 	"protocol",
