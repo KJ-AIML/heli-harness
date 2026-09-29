@@ -3,8 +3,10 @@
  * PreToolUse wrappers must fail closed: any error -> a deny in the host's own
  * protocol, never a crash (hosts treat a crashed hook as "allow"). That covers
  * the per-host stub the host actually runs too: when the shared wrapper it
- * imports cannot load, the stub itself must deny. Also pins the other direction:
- * a healthy workspace must still be allowed.
+ * imports cannot load, the stub itself must deny. Antigravity's hook configs
+ * must run that stub (not the shared wrapper directly), and the configured
+ * command must deny too. Also pins the other direction: a healthy workspace
+ * must still be allowed.
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -151,6 +153,39 @@ try {
 			assert.match(out.stderr, FAIL_CLOSED, `${wrapper.name} ${label}: reason must also go to stderr`);
 			assert.equal(denyShape(out.body), denyShape(wrapperDeny.body), `${wrapper.name} ${label}: must emit the wrapper's deny contract`);
 		}
+	}
+
+	// Antigravity's hook configs used to run the shared wrapper directly, with no stub in
+	// between, so a missing or broken wrapper crashed the hook (= allow). Both configs must
+	// run the fail-closed stub, and that exact command, run the way a host runs it (from the
+	// workspace root), must deny once every copy of the shared wrapper is gone.
+	const antigravity = WRAPPERS.find((wrapper) => wrapper.name === "antigravity");
+	const antigravityPlugin = join(root, ".heli-harness", "adapters", "antigravity-plugin");
+	for (const configRel of ["hooks.json", "hooks/hooks.json"]) {
+		const config = JSON.parse(readFileSync(join(antigravityPlugin, configRel), "utf8"));
+		const groups = config["heli-harness-pretool"]?.PreToolUse || config.hooks?.PreToolUse || [];
+		const commands = groups.flatMap((group) => group.hooks.map((hook) => hook.command));
+		assert.deepEqual(
+			commands,
+			["node .heli-harness/adapters/antigravity-plugin/hooks/heli-pre-tool-use.mjs"],
+			`antigravity-plugin/${configRel}: PreToolUse must run the fail-closed stub, not the shared wrapper directly`,
+		);
+
+		// An embedded workspace carries the whole adapters/ tree, so the relative command resolves there.
+		const embedded = join(scratch, `antigravity-${configRel.replace("/", "-")}`);
+		cpSync(healthy, embedded, { recursive: true });
+		const adapters = join(embedded, ".heli-harness", "adapters");
+		cpSync(join(root, ".heli-harness", "adapters", "shared"), join(adapters, "shared"), { recursive: true });
+		for (const sub of ["hooks", "shared"]) cpSync(join(antigravityPlugin, sub), join(adapters, "antigravity-plugin", sub), { recursive: true });
+		const entry = { ...antigravity, script: commands[0].replace(/^node /, "") };
+		const label = `configured entry point of antigravity-plugin/${configRel}`;
+		assertAllowed(entry, runHook(entry, embedded, write("notes.txt")), `${label} (control)`);
+		assertDenied(entry, runHook(entry, embedded, bash("git push origin main")), /git push/, `${label} (control: policy deny)`);
+		for (const dir of [join(adapters, "shared"), join(adapters, "antigravity-plugin", "shared")]) rmSync(join(dir, "claude-style-pre-tool-use.mjs"));
+		const out = runHook(entry, embedded, bash("git status"));
+		assertDenied(entry, out, FAIL_CLOSED, `${label} with every copy of the shared wrapper deleted`);
+		assert.match(out.body.hookSpecificOutput.permissionDecisionReason, /ERR_MODULE_NOT_FOUND/, label);
+		assert.match(out.stderr, FAIL_CLOSED, `${label}: reason must also go to stderr`);
 	}
 	console.log("hook fail-closed smoke ok");
 } finally {

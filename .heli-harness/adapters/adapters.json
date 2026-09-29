@@ -342,7 +342,7 @@
         "No live agy CLI denial proof yet — status is verified-plugin-wired, not enforced",
         "Failure results are not parsed from arbitrary host logs; record structured diagnosis runs explicitly",
         "Plugin staging path depends on Antigravity install layout",
-        "Hooks invoke workspace-relative shared scripts (run from parent workspace)",
+        "Hooks invoke workspace-relative scripts under .heli-harness/adapters (run from parent workspace)",
         "Not a sandbox"
       ]
     },

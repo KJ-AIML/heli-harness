@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .heli-harness/adapters/shared/claude-style-pre-tool-use.mjs",
+            "command": "node .heli-harness/adapters/antigravity-plugin/hooks/heli-pre-tool-use.mjs",
             "timeout": 30
           }
         ]
