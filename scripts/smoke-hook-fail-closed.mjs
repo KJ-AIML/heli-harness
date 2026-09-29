@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 /**
  * PreToolUse wrappers must fail closed: any error -> a deny in the host's own
- * protocol, never a crash (hosts treat a crashed hook as "allow"). Also pins the
- * other direction: a healthy workspace must still be allowed.
+ * protocol, never a crash (hosts treat a crashed hook as "allow"). That covers
+ * the per-host stub the host actually runs too: when the shared wrapper it
+ * imports cannot load, the stub itself must deny. Also pins the other direction:
+ * a healthy workspace must still be allowed.
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createTask } from "../lib/concurrency/task.mjs";
 import { createSession, attachSession } from "../lib/concurrency/session.mjs";
 import { scrubHeliProcessEnv } from "./lib/hermetic-env.mjs";
@@ -37,7 +39,7 @@ function workspace(name, files) {
 }
 
 function runHook(wrapper, cwd, stdinText, env = {}) {
-	const result = spawnSync(process.execPath, [join(root, wrapper.rel)], {
+	const result = spawnSync(process.execPath, [wrapper.script ?? join(root, wrapper.rel)], {
 		cwd,
 		input: stdinText,
 		encoding: "utf8",
@@ -62,6 +64,26 @@ function assertAllowed(wrapper, out, label) {
 	assert.equal(out.status, 0, `${wrapper.name} ${label}: exit ${out.status}, stderr=${out.stderr}`);
 	assert.notEqual(out.body?.hookSpecificOutput?.permissionDecision, "deny", `${wrapper.name} ${label}: ${JSON.stringify(out.body)}`);
 }
+
+// Copy only what a stub needs (hooks/ and shared/) so a test can break the copy
+// without touching the repo. Returns a wrapper entry that runs the copied stub.
+function copyPluginHooks(wrapper, name) {
+	const pluginDir = dirname(dirname(wrapper.rel));
+	const dir = join(scratch, name);
+	for (const sub of ["hooks", "shared"]) cpSync(join(root, pluginDir, sub), join(dir, sub), { recursive: true });
+	return { ...wrapper, script: join(dir, "hooks", "heli-pre-tool-use.mjs"), sharedDir: join(dir, "shared") };
+}
+
+// Import resolution, parsing and evaluation are separate failure phases of
+// `await import()`, and only the first one carries an error code.
+const UNLOADABLE_WRAPPER = [
+	{ label: "missing", detail: /ERR_MODULE_NOT_FOUND/, breakFile: (file) => rmSync(file, { force: true }) },
+	{ label: "unparseable", detail: null, breakFile: (file) => writeFileSync(file, "this is not javascript;;;\n") },
+	{ label: "throwing", detail: /simulated import failure/, breakFile: (file) => writeFileSync(file, `throw new Error("simulated import failure");\n`) },
+];
+
+// A stub must deny in the same protocol as the wrapper it imports; only the reason text may differ.
+const denyShape = (body) => JSON.stringify(body, (key, value) => (key === "reason" || key === "permissionDecisionReason" ? "<reason>" : value));
 
 const FAIL_CLOSED = /could not evaluate this action.*denying \(fail-closed\).*heli doctor/s;
 const bash = (command) => JSON.stringify({ tool_name: "Bash", tool_input: { command } });
@@ -112,6 +134,23 @@ try {
 		// Healthy workspace: no false denials.
 		assertAllowed(wrapper, runHook(wrapper, healthy, write("notes.txt")), "healthy Write");
 		assertAllowed(wrapper, runHook(wrapper, healthy, bash("git status")), "healthy Bash");
+
+		// The stub is the process the host actually runs. If the shared wrapper it
+		// imports cannot load (broken or half-updated plugin install) the stub itself
+		// must still deny, with the same contract the wrapper uses.
+		const pristine = copyPluginHooks(wrapper, `${wrapper.name}-pristine`);
+		assertAllowed(pristine, runHook(pristine, healthy, write("notes.txt")), "unbroken plugin copy (control)");
+		const wrapperDeny = runHook(wrapper, healthy, "{not json");
+		for (const variant of UNLOADABLE_WRAPPER) {
+			const stub = copyPluginHooks(wrapper, `${wrapper.name}-${variant.label}`);
+			for (const file of ["claude-style-pre-tool-use.mjs", "grok-style-pre-tool-use.mjs"]) variant.breakFile(join(stub.sharedDir, file));
+			const out = runHook(stub, healthy, bash("git status"));
+			const label = `stub with ${variant.label} shared wrapper`;
+			assertDenied(stub, out, FAIL_CLOSED, label);
+			if (variant.detail) assert.match(out.body.hookSpecificOutput.permissionDecisionReason, variant.detail, `${wrapper.name} ${label}`);
+			assert.match(out.stderr, FAIL_CLOSED, `${wrapper.name} ${label}: reason must also go to stderr`);
+			assert.equal(denyShape(out.body), denyShape(wrapperDeny.body), `${wrapper.name} ${label}: must emit the wrapper's deny contract`);
+		}
 	}
 	console.log("hook fail-closed smoke ok");
 } finally {
