@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .heli-harness/adapters/shared/claude-style-session-start.mjs",
+            "command": "node .heli-harness/adapters/antigravity-plugin/hooks/heli-session-start.mjs",
             "timeout": 5
           }
         ]

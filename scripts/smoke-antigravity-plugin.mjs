@@ -31,7 +31,7 @@ assert.ok(hooks["heli-harness-pretool"]?.PreToolUse, "should define PreToolUse")
 assert.ok(hooks["heli-harness-session"]?.SessionStart, "should define SessionStart");
 
 // Exercise what the config actually runs: hosts execute the configured command, not the
-// shared wrapper it may load (smoke-hook-fail-closed.mjs pins that PreToolUse runs the stub).
+// shared wrapper it may load (smoke-hook-fail-closed.mjs pins that both hooks run their stubs).
 const configuredScript = (group, event) => hooks[group][event][0].hooks[0].command.replace(/^node /, "");
 const pre = configuredScript("heli-harness-pretool", "PreToolUse");
 const session = configuredScript("heli-harness-session", "SessionStart");
