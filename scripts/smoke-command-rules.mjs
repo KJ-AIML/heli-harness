@@ -9,9 +9,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { COMMAND_ANALYSIS_LIMITS, analyzeCommand, commandRunsGitPush, loadCommandRules, matchCommandRules } from "../.heli-harness/adapters/shared/command-policy.mjs";
-import { evaluatePreToolUse, isLikelyShellMutation } from "../.heli-harness/adapters/shared/hook-core.mjs";
+import { DEFAULT_FILE_WRITE_TOOL_NAMES, evaluatePreToolUse, isFileMutationTool, isFileWriteToolName, isLikelyShellMutation } from "../.heli-harness/adapters/shared/hook-core.mjs";
 import { issueGrant, listGrants } from "../lib/concurrency/grant.mjs";
 import { projectWorkspaceKey } from "../lib/concurrency/project-binding.mjs";
+import { createTask } from "../lib/concurrency/task.mjs";
 import { scrubHeliProcessEnv } from "./lib/hermetic-env.mjs";
 
 scrubHeliProcessEnv();
@@ -241,6 +242,10 @@ function writeFile(cwd, filePath) {
 	return evaluatePreToolUse({ cwd, host: "test", env, toolName: "Write", toolInput: { file_path: filePath, content: "x" } });
 }
 
+function tool(cwd, toolName, toolInput, extraEnv = {}) {
+	return evaluatePreToolUse({ cwd, host: "test", env: { ...env, ...extraEnv }, toolName, toolInput });
+}
+
 function grant(ws, action) {
 	return issueGrant(ws, { action, scope: "once", resource: { type: "workspace", id: projectWorkspaceKey(ws, { env }) }, env });
 }
@@ -387,6 +392,61 @@ try {
 		assert.equal(allowed.deny, false, `${label}: ${allowed.reason}`);
 		assert.equal(bash(roomy, `${command}\nrm -rf build`).code, "TIER_BLOCKED", `${label}: the sentinel after it must still be found`);
 	}
+
+	// File-editing tools carry data being written, not a command being run, so command rules
+	// (the T6 floor, the rules file, the git push gate and the size budget) never read their
+	// content. A tool is one of these by NAME, from the same list that marks it a file writer;
+	// any other tool that carries a command stays analyzed, whatever its name suggests.
+	const editing = workspace("editing");
+	const makefilePatch = "*** Begin Patch\n*** Update File: Makefile\n@@ clean:\n \t@echo cleaning\n+\trm -rf build\n*** End Patch\n";
+	const patched = tool(editing, "apply_patch", { command: makefilePatch });
+	assert.equal(patched.deny, false, `an apply_patch that adds "rm -rf build" to a Makefile: ${patched.reason}`);
+	const hugePatch = `*** Begin Patch\n*** Add File: docs/big.txt\n${`+${"x".repeat(70)}\n`.repeat(Math.ceil((LIMITS.maxCommandChars * 2) / 72))}*** End Patch\n`;
+	assert.ok(hugePatch.length > LIMITS.maxCommandChars * 2, "the patch is over twice the size limit");
+	const bigPatched = tool(editing, "apply_patch", { command: hugePatch });
+	assert.equal(bigPatched.deny, false, `an apply_patch over the size limit: ${bigPatched.reason}`);
+	const written = tool(editing, "Write", { file_path: "notes.txt", content: "git push --force origin main\n" });
+	assert.equal(written.deny, false, `a Write whose content is a git push: ${written.reason}`);
+	assert.equal(bash(editing, "rm -rf build").code, "TIER_BLOCKED", "control: the same text as a shell command is still a T6");
+	for (const name of [...DEFAULT_FILE_WRITE_TOOL_NAMES, "APPLY_PATCH", "Fs.Write"]) {
+		const result = tool(editing, name, { file_path: "notes.txt", command: "rm -rf build && git push --force origin main" });
+		assert.equal(result.deny, false, `${name}: every name on the write-tool list is skipped, in any case: ${result.reason}`);
+	}
+	// The list is the caller's when it passes one (a host may declare its own writers).
+	const customInput = { file_path: "notes.txt", command: "rm -rf build" };
+	assert.equal(evaluatePreToolUse({ cwd: editing, host: "test", env, toolName: "custom_edit", toolInput: customInput, writeToolNames: ["custom_edit"] }).deny, false);
+	assert.equal(evaluatePreToolUse({ cwd: editing, host: "test", env, toolName: "custom_edit", toolInput: customInput }).code, "TIER_BLOCKED", "not on the default list, so analyzed");
+	assert.equal(evaluatePreToolUse({ cwd: editing, host: "test", env, toolName: "apply_patch", toolInput: customInput, writeToolNames: ["custom_edit"] }).code, "TIER_BLOCKED", "a custom list replaces the default one");
+	assert.equal(isFileWriteToolName("apply_patch"), true);
+	assert.equal(isFileWriteToolName("APPLY_PATCH"), true);
+	assert.equal(isFileWriteToolName("Bash"), false);
+	assert.equal(isFileWriteToolName("mcp__fs__write_file"), false, "a name that only looks like a writer is not on the list");
+	assert.equal(isFileWriteToolName(undefined), false);
+	assert.equal(isFileWriteToolName("Edit", null), true, "no list means the default list");
+	assert.equal(isFileWriteToolName("custom_edit", ["custom_edit"]), true);
+	assert.equal(isFileMutationTool("mcp__fs__write_file", { paths: ["notes.txt"] }), true, "isFileMutationTool keeps its path-aware fallback");
+
+	// Fail toward analysis: a tool that is not on the list is analyzed as before, even one that
+	// looks like a file writer and carries a path.
+	for (const unrecognized of ["run_thing", "custom_runner", "mcp__fs__write_file", "PowerShell"]) {
+		const result = tool(editing, unrecognized, { file_path: "notes.txt", command: "rm -rf build" });
+		assert.equal(result.code, "TIER_BLOCKED", `${unrecognized}: ${result.reason}`);
+	}
+	assert.equal(tool(editing, "custom_runner", { command: hugePatch }).code, "COMMAND_TOO_COMPLEX", "an unrecognized tool still gets the size budget");
+	assert.equal(tool(editing, "Bash", { description: "rm -rf build" }).code, "TIER_BLOCKED", "the description fallback for tools that are not file editors is unchanged");
+
+	// Path extraction and every write check still run for the file-editing tools.
+	assert.equal(tool(editing, "apply_patch", { command: "*** Begin Patch\n*** Add File: .env\n+X=1\n*** End Patch\n" }).code, "ENV_WRITE_DENIED", "the patch path is still read");
+	const stuckEditing = workspace("editing-stuck", shippedRules, "# Current Task\n\nTarget repo: demo\n\nCurrent status: blocked\n\nFailed attempts count: 2\n");
+	assert.match(tool(stuckEditing, "apply_patch", { command: makefilePatch }).reason, /failed attempts/, "the stuck-task gate sees the patch instead of a T6 false positive");
+	const concurrentEditing = workspace("editing-concurrent");
+	mkdirSync(join(concurrentEditing, ".heli-harness", "workspace"), { recursive: true });
+	writeFileSync(join(concurrentEditing, ".heli-harness", "workspace", "schema.json"), JSON.stringify({ schemaVersion: 1, mode: "concurrent" }));
+	createTask(concurrentEditing, { taskId: "t1", repositoryId: "demo", worktreePath: concurrentEditing });
+	const unboundPatch = tool(concurrentEditing, "apply_patch", { command: makefilePatch });
+	const unboundWrite = tool(concurrentEditing, "Write", { file_path: "Makefile", content: "clean:\n\trm -rf build\n" });
+	assert.equal(unboundWrite.deny, true, "control: a Write without a bound session is refused");
+	assert.equal(unboundPatch.code, unboundWrite.code, `an unbound apply_patch reaches the same ownership gate as a Write: ${unboundPatch.reason}`);
 
 	// A grant is not consumed when a later check denies (stuck task gate).
 	const stuck = workspace("stuck", shippedRules, "# Current Task\n\nTarget repo: demo\n\nCurrent status: blocked\n\nFailed attempts count: 2\n");

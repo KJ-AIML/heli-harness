@@ -236,14 +236,26 @@ function hasMutationVerb(tokens) {
 	);
 }
 
+/**
+ * True when `toolName` is on the write-tool list (DEFAULT_FILE_WRITE_TOOL_NAMES unless
+ * the caller passes its own), compared by name only and ignoring case. Unlike
+ * isFileMutationTool it has no path-aware fallback, so a tool that merely looks like a
+ * file writer is not one.
+ */
+export function isFileWriteToolName(toolName, writeToolNames = DEFAULT_FILE_WRITE_TOOL_NAMES) {
+	const name = String(toolName ?? "").toLowerCase();
+	for (const knownName of writeToolNames ?? DEFAULT_FILE_WRITE_TOOL_NAMES) {
+		if (String(knownName).toLowerCase() === name) return true;
+	}
+	return false;
+}
+
 export function isFileMutationTool(
 	toolName,
 	{ paths = [], writeToolNames = DEFAULT_FILE_WRITE_TOOL_NAMES } = {},
 ) {
 	const name = String(toolName ?? "");
-	for (const knownName of writeToolNames ?? DEFAULT_FILE_WRITE_TOOL_NAMES) {
-		if (String(knownName).toLowerCase() === name.toLowerCase()) return true;
-	}
+	if (isFileWriteToolName(name, writeToolNames)) return true;
 	if (!Array.isArray(paths) || paths.length === 0) return false;
 	return hasMutationVerb(normalizedToolNameTokens(name));
 }
@@ -444,7 +456,16 @@ export function evaluatePreToolUse({
 	// Command rules: EVERY rule is evaluated (built-in floor + workspace file).
 	// Any T6 match is a hard deny that dominates authority, grants, YOLO and
 	// HELI_ALLOW_COMMAND, so it runs before ownership and before YOLO.
-	const commandPolicy = rawCommand.trim() ? evaluateCommandRules(ctx.workspaceRoot, rawCommand, env) : null;
+	//
+	// They read commands, not the content of file-editing tools: an `apply_patch` or
+	// `Write` carries data being written (a Makefile line `rm -rf build`, a 100 KB file),
+	// never a command being run. A tool is one of these by NAME, from the list that marks
+	// it a file writer; any other tool that carries `command` text stays analyzed, whatever
+	// its name suggests. Paths are still read from the input above and every write check
+	// below still runs.
+	const commandPolicy = rawCommand.trim() && !isFileWriteToolName(name, writeToolNames)
+		? evaluateCommandRules(ctx.workspaceRoot, rawCommand, env)
+		: null;
 	// A command too large or too deeply nested to analyze quickly is refused: hosts
 	// treat a hook that times out as an allow, and unanalyzed text could hide a T6.
 	if (commandPolicy?.limitExceeded) {
