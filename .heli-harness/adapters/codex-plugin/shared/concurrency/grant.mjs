@@ -209,6 +209,21 @@ export function findApplicableGrant(workspaceRoot, {
 	) || null;
 }
 
+/**
+ * Read-only lookup used by the hook to decide: policy-permitted AND a matching
+ * active grant exists. Never creates directories and never consumes a use.
+ */
+export function findUsableGrant(workspaceRoot, {
+	action,
+	sessionId = null,
+	resource = null,
+	env = process.env,
+} = {}) {
+	const policy = evaluateGrantPolicy(workspaceRoot, action, { env });
+	if (!policy.grantable || policy.hardDenied) return null;
+	return findApplicableGrant(workspaceRoot, { action, sessionId, resource, env });
+}
+
 export function consumeApplicableGrant(workspaceRoot, {
 	action,
 	sessionId = null,

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -28,6 +29,8 @@ assert.equal(typeof mod.default, "function");
 
 await withFixtureWorkspace({
 	".heli-harness/HARNESS.md": "# Heli-Harness\n",
+	// A healthy workspace ships its command rules; a missing rules file denies shell commands.
+	".heli-harness/safety/command-rules.json": readFileSync(join(root, ".heli-harness", "safety", "command-rules.json"), "utf8"),
 	".heli-harness/state/current-task.md": "# Current Task\n\nTarget repo: demo\n\nCurrent status: blocked\n\nFailed attempts count: 2\n",
 }, async (cwd) => {
 	const hooks = await mod.HeliHarness({ directory: cwd });

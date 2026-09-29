@@ -18,10 +18,13 @@ import {
 } from "./concurrency/resolve.mjs";
 import { resolveYolo, allowGitPushScoped, allowEnvWriteScoped } from "./concurrency/yolo-scope.mjs";
 import { sessionHoldsWriteLease, refreshLease } from "./concurrency/lease.mjs";
-import { findWorkspaceRoot, pathsFor } from "./concurrency/paths.mjs";
-import { consumeApplicableGrant } from "./concurrency/grant.mjs";
+import { findWorkspaceRoot } from "./concurrency/paths.mjs";
+import { consumeApplicableGrant, findUsableGrant } from "./concurrency/grant.mjs";
 import { resourceIdForWorktree } from "./concurrency/resource-authority.mjs";
 import { evaluateDiagnosisWriteGate, readActionPolicy, readDiagnosis } from "./concurrency/diagnosis.mjs";
+import { approvalReason, evaluateCommandRules, hardDenyReason } from "./command-policy.mjs";
+
+export { commandRuleTokens, commandMatchesRuleTokens } from "./command-policy.mjs";
 
 export function field(text, label) {
 	const match = new RegExp(`^${label}:[ \\t]*(.*)$`, "m").exec(text);
@@ -244,9 +247,17 @@ export function isFileMutationTool(
 	return hasMutationVerb(normalizedToolNameTokens(name));
 }
 
-export function isLikelyShellMutation(toolName, commandText) {
+const SHELL_TOOL_NAME_RE = /(^|[_\-.])(bash|shell|terminal|exec|run_command|run-command)($|[_\-.])/;
+
+/** Tools whose `command` is executed by a shell (MCP tools never are). */
+export function isShellTool(toolName) {
 	const name = String(toolName ?? "").toLowerCase();
-	if (!/(^|[_\-.])(bash|shell|terminal|exec|run_command|run-command)($|[_\-.])/.test(name)) return false;
+	if (name.startsWith("mcp__")) return false;
+	return SHELL_TOOL_NAME_RE.test(name);
+}
+
+export function isLikelyShellMutation(toolName, commandText) {
+	if (!isShellTool(toolName)) return false;
 	const command = String(commandText ?? "").toLowerCase();
 	if (!command.trim()) return false;
 	// Best-effort common mutation detection only; this is not a sandbox.
@@ -303,20 +314,36 @@ function taskRiskTier(ctx) {
 	return field(readFileSync(taskPath, "utf8"), "Risk tier") || "S1";
 }
 
-function scopedGrantFor(ctx, action, env = process.env) {
+function grantRequest(ctx, action, env) {
+	return {
+		action,
+		sessionId: ctx.sessionId || null,
+		resource: {
+			type: "worktree",
+			id: resourceIdForWorktree(ctx.worktreeRoot || ctx.workspaceRoot),
+		},
+		env,
+	};
+}
+
+/** Read-only: is there a usable grant for this action? Never consumes a use. */
+function findScopedGrant(ctx, action, env = process.env) {
 	if (!ctx?.workspaceRoot || !action) return null;
 	try {
-		return consumeApplicableGrant(ctx.workspaceRoot, {
-			action,
-			sessionId: ctx.sessionId || null,
-			resource: {
-				type: "worktree",
-				id: resourceIdForWorktree(ctx.worktreeRoot || ctx.workspaceRoot),
-			},
-			env,
-		});
+		return findUsableGrant(ctx.workspaceRoot, grantRequest(ctx, action, env));
 	} catch {
-		// Grant-store contention or malformed local state fails closed.
+		// Malformed local grant state fails closed (no grant).
+		return null;
+	}
+}
+
+/** Consume one use; call only once the final decision is allow. */
+function consumeScopedGrant(ctx, action, env = process.env) {
+	if (!ctx?.workspaceRoot || !action) return null;
+	try {
+		return consumeApplicableGrant(ctx.workspaceRoot, grantRequest(ctx, action, env));
+	} catch {
+		// Grant-store contention fails closed.
 		return null;
 	}
 }
@@ -389,7 +416,6 @@ export function evaluatePreToolUse({
 	});
 
 	const rawCommand = String(toolInput?.command ?? toolInput?.description ?? "");
-	const command = rawCommand.replace(/\s+/g, " ").trim().toLowerCase();
 	const paths = [...pathsFrom(toolInput), ...patchPathsFrom(rawCommand)].map((path) =>
 		path.replaceAll("\\", "/").toLowerCase(),
 	);
@@ -400,12 +426,21 @@ export function evaluatePreToolUse({
 	const taskStateOnly = isTaskStateWriteForContext(ctx, paths) || isTaskStateWrite(paths);
 	let ownershipDecision = null;
 
-	// T6 hard denies dominate every normal authority/grant path. Evaluate them
-	// before actor/resource authority so a missing session can never mask a
-	// destructive-command denial. T5 approvals continue through the normal
-	// authority + scoped-grant flow below.
-	const preAuthorityTier = evaluateCommandTierRules(ctx.workspaceRoot || cwd, command, env);
-	if (preAuthorityTier?.hardDeny) return { ...preAuthorityTier, ctx };
+	// Command rules: EVERY rule is evaluated (built-in floor + workspace file).
+	// Any T6 match is a hard deny that dominates authority, grants, YOLO and
+	// HELI_ALLOW_COMMAND, so it runs before ownership and before YOLO.
+	const commandPolicy = rawCommand.trim() ? evaluateCommandRules(ctx.workspaceRoot, rawCommand, env) : null;
+	if (commandPolicy?.hardDenies.length) {
+		return {
+			deny: true,
+			hardDeny: true,
+			code: "TIER_BLOCKED",
+			ruleId: commandPolicy.hardDenies[0].id,
+			ruleIds: commandPolicy.hardDenies.map((match) => match.id),
+			reason: commandPolicy.hardDenies.map(hardDenyReason).join("\n"),
+			ctx,
+		};
+	}
 
 	// Ownership gates — NEVER bypassed by YOLO.
 	if (isWrite && !taskStateOnly) {
@@ -447,7 +482,7 @@ export function evaluatePreToolUse({
 	const diagnosis = ctx.taskId ? readDiagnosis(ctx.workspaceRoot, ctx.taskId) : null;
 	const diagnosisGate = evaluateDiagnosisWriteGate(diagnosis, {
 		riskTier: taskRiskTier(ctx),
-		isWrite: isWrite && !isTaskStateWriteForContext(ctx, paths) && !isTaskStateWrite(paths),
+		isWrite: isWrite && !taskStateOnly,
 		action: structuredHeliAction(toolInput),
 		policy: readActionPolicy(ctx.workspaceRoot || cwd),
 	});
@@ -460,77 +495,92 @@ export function evaluatePreToolUse({
 		};
 	}
 
-	const yolo = resolveYolo({
+	const scope = {
 		workspaceRoot: ctx.workspaceRoot || cwd,
 		cwd,
 		taskId: ctx.taskId,
 		sessionId: ctx.sessionId,
 		env,
 		legacyMode: ctx.legacyMode,
-	});
+	};
+	const yolo = resolveYolo(scope);
 	if (yolo.active) {
 		return { deny: false, yolo: true, yoloSource: yolo.source, ctx };
 	}
 
-	const appliedGrants = [];
+	// A Heli workspace whose rules file is missing or unreadable cannot evaluate
+	// T5 approvals: deny shell commands instead of silently skipping them.
 	if (
-		/\bgit\s+push\b/.test(command) &&
-		!allowGitPushScoped({
-			workspaceRoot: ctx.workspaceRoot || cwd,
-			cwd,
-			taskId: ctx.taskId,
-			sessionId: ctx.sessionId,
-			env,
-			legacyMode: ctx.legacyMode,
-		})
+		commandPolicy &&
+		ctx.workspaceRoot &&
+		isShellTool(name) &&
+		(commandPolicy.status === "missing" || commandPolicy.status === "malformed")
 	) {
-		const grant = scopedGrantFor(ctx, "git.push", env);
-		if (!grant) {
-			return {
-				deny: true,
-				code: "REMOTE_PUSH_DENIED",
-				reason:
-					"Heli-Harness blocks git push without scoped authority. Preferred opt-in: `heli grant issue --action git.push --scope once`. Emergency/debug overrides remain HELI_ALLOW_GIT_PUSH or YOLO.",
-				ctx,
-			};
-		}
-		appliedGrants.push(grant);
-	}
-	if (
-		paths.some((path) => /(^|\/)\.env(\.|$)/.test(path)) &&
-		!allowEnvWriteScoped({
-			workspaceRoot: ctx.workspaceRoot || cwd,
-			cwd,
-			taskId: ctx.taskId,
-			sessionId: ctx.sessionId,
-			env,
-			legacyMode: ctx.legacyMode,
-		})
-	) {
-		const grant = scopedGrantFor(ctx, "env.write", env);
-		if (!grant) {
-			return {
-				deny: true,
-				code: "ENV_WRITE_DENIED",
-				reason:
-					"Heli-Harness blocks .env-style writes without scoped authority. Preferred opt-in: `heli grant issue --action env.write --scope once`.",
-				ctx,
-			};
-		}
-		appliedGrants.push(grant);
+		return {
+			deny: true,
+			code: "COMMAND_RULES_UNAVAILABLE",
+			reason: `Heli-Harness cannot evaluate shell commands: the safety rules file ${commandPolicy.rulesPath} is ${commandPolicy.status}. Built-in hard-deny rules still apply, but approval rules cannot be checked, so shell commands are denied until the file is restored (restore it from version control, or run \`heli update\` in an embedded workspace; \`heli doctor\` helps diagnose). File edits are not affected.`,
+			ctx,
+		};
 	}
 
-	const tierDenial = evaluateCommandTierRules(ctx.workspaceRoot || cwd, command, env);
-	if (tierDenial) {
-		if (tierDenial.hardDeny) return { ...tierDenial, ctx };
-		const grant = scopedGrantFor(ctx, tierDenial.actionId, env);
-		if (!grant) return { ...tierDenial, ctx };
-		appliedGrants.push(grant);
+	// Approval stage: collect EVERY required approval and look grants up
+	// read-only. Grants are consumed only after the final decision is allow.
+	const requirements = [];
+	if (commandPolicy?.gitPush && !allowGitPushScoped(scope)) {
+		requirements.push({
+			action: "git.push",
+			code: "REMOTE_PUSH_DENIED",
+			reason:
+				"Heli-Harness blocks git push without scoped authority. Ask the user to run `heli grant issue --action git.push --scope once` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_GIT_PUSH or YOLO.",
+		});
+	}
+	if (paths.some((path) => /(^|\/)\.env(\.|$)/.test(path)) && !allowEnvWriteScoped(scope)) {
+		requirements.push({
+			action: "env.write",
+			code: "ENV_WRITE_DENIED",
+			reason:
+				"Heli-Harness blocks .env-style writes without scoped authority. Ask the user to run `heli grant issue --action env.write --scope once` in their own terminal.",
+		});
+	}
+	for (const match of commandPolicy?.approvals || []) {
+		requirements.push({
+			action: `command.approval.${match.id}`,
+			code: "TIER_APPROVAL_REQUIRED",
+			ruleId: match.id,
+			reason: approvalReason(match),
+		});
+	}
+	const missing = requirements.filter((requirement) => !findScopedGrant(ctx, requirement.action, env));
+	if (missing.length) {
+		return {
+			deny: true,
+			code: missing[0].code,
+			...(missing[0].ruleId ? { ruleId: missing[0].ruleId, actionId: missing[0].action } : {}),
+			missingApprovals: missing.map((requirement) => requirement.action),
+			reason: missing.map((requirement) => requirement.reason).join("\n"),
+			ctx,
+		};
 	}
 
-	if (isWrite && !isTaskStateWriteForContext(ctx, paths) && !isTaskStateWrite(paths)) {
+	if (isWrite && !taskStateOnly) {
 		const gateReason = readTaskGateForContext(ctx) || readPlanGateForContext(ctx);
 		if (gateReason) return { deny: true, reason: gateReason, ctx };
+	}
+
+	// Final decision is allow: consume one use of each approval now.
+	const appliedGrants = [];
+	for (const requirement of requirements) {
+		const grant = consumeScopedGrant(ctx, requirement.action, env);
+		if (!grant) {
+			return {
+				deny: true,
+				code: "GRANT_NO_LONGER_AVAILABLE",
+				reason: `Heli-Harness could not use the approval for ${requirement.action}: it was used up, revoked or expired while this call was evaluated. Ask the user to issue a new grant.`,
+				ctx,
+			};
+		}
+		appliedGrants.push(grant);
 	}
 
 	return {
@@ -547,116 +597,6 @@ export function evaluatePreToolUse({
 				}
 			: {}),
 	};
-}
-
-/**
- * Split a command (or a rule's `match`) into lowercase tokens.
- *
- * Normalization pipeline, in order:
- *  1. lowercase — closes "GIT PUSH".
- *  2. shell separators (`;` `&` `|` `(` `)` and newlines) become spaces, so they
- *     act as token boundaries — closes "git push;echo hi", "git push;",
- *     "git push|cat", "git push&&echo ok" (punctuation glued to a token used to
- *     produce "push;echo" and slip past the rule tokens).
- *  3. split on whitespace runs — closes "git  push" / "git\tpush".
- *  4. strip surrounding quote characters (' " `) from each token — closes
- *     `"git" "push"`. Only leading/trailing quotes are removed; token interiors
- *     are untouched and tokens are never merged, so `echo "digit pushups"` still
- *     tokenizes to [echo, digit, pushups] and stays allowed.
- */
-export function commandRuleTokens(value) {
-	return String(value ?? "")
-		.toLowerCase()
-		.replace(/[;&|()\r\n]/g, " ")
-		.split(/\s+/)
-		.map((token) => token.replace(/^["'`]+/, "").replace(/["'`]+$/, ""))
-		.filter(Boolean);
-}
-
-/**
- * Program-position tokens also match a path-qualified invocation of the same
- * program, so `node .heli-harness/heli.mjs push` still trips the `heli.mjs push`
- * rule (substring matching used to cover this). Applied to the FIRST rule token
- * only — later tokens are argument positions and must match exactly.
- * Quotes are already stripped by commandRuleTokens, so a quoted path
- * (`"C:\tools\heli.mjs" push`) hits the same suffix check.
- */
-function commandTokenMatches(commandToken, ruleToken, isProgramPosition) {
-	if (commandToken === ruleToken) return true;
-	if (!isProgramPosition) return false;
-	return commandToken.endsWith(`/${ruleToken}`) || commandToken.endsWith(`\\${ruleToken}`);
-}
-
-/**
- * True when the rule's tokens appear as a CONSECUTIVE subsequence of the
- * command's tokens. Token-sequence matching (not substring) so "git push" no
- * longer fires on "echo digit pushups" while still firing on any real
- * whitespace/case variant of `git push`.
- */
-export function commandMatchesRuleTokens(commandTokens, ruleTokens) {
-	if (!ruleTokens.length || ruleTokens.length > commandTokens.length) return false;
-	for (let start = 0; start + ruleTokens.length <= commandTokens.length; start += 1) {
-		let hit = true;
-		for (let offset = 0; offset < ruleTokens.length; offset += 1) {
-			if (!commandTokenMatches(commandTokens[start + offset], ruleTokens[offset], offset === 0)) {
-				hit = false;
-				break;
-			}
-		}
-		if (hit) return true;
-	}
-	return false;
-}
-
-/**
- * Enforce safety/command-rules.json T5/T6 rules on command strings.
- * T6 (block) and T5 (explicit approval) deny; T0–T4 stay advisory.
- * YOLO bypasses this (safety scope) — callers run it after the YOLO early-return.
- * git-push has its own dedicated check with scoped opt-ins; skipped here so a
- * granted HELI_ALLOW_GIT_PUSH is not re-denied by the generic rule.
- *
- * Matching is token-sequence based; known-unfixable evasions (shell variable
- * indirection, base64, aliases) remain out of scope — this is best-effort
- * command guarding, not a sandbox.
- */
-export function evaluateCommandTierRules(workspaceRoot, command, env = process.env) {
-	if (!command || !workspaceRoot) return null;
-	const rulesPath = join(pathsFor(workspaceRoot).safetyDir, "command-rules.json");
-	if (!existsSync(rulesPath)) return null;
-	let rules;
-	try {
-		rules = JSON.parse(readFileSync(rulesPath, "utf8"));
-	} catch {
-		return null; // malformed safety overlay is advisory-only; ownership gates still hold
-	}
-	if (!Array.isArray(rules?.rules)) return null;
-	const approved = String(env.HELI_ALLOW_COMMAND || "")
-		.split(",")
-		.map((s) => s.trim())
-		.filter(Boolean);
-	const commandTokens = commandRuleTokens(command);
-	if (!commandTokens.length) return null;
-	for (const rule of rules.rules) {
-		if (!rule?.match || (rule.tier !== "T5" && rule.tier !== "T6")) continue;
-		if (rule.id === "git-push") continue;
-		const ruleTokens = commandRuleTokens(rule.match);
-		if (!ruleTokens.length || !commandMatchesRuleTokens(commandTokens, ruleTokens)) continue;
-		if (approved.includes(rule.id)) continue;
-		const kind = rule.tier === "T6" ? "blocks destructive command" : "requires explicit approval for";
-		return {
-			deny: true,
-			code: rule.tier === "T6" ? "TIER_BLOCKED" : "TIER_APPROVAL_REQUIRED",
-			hardDeny: rule.tier === "T6",
-			ruleId: rule.id,
-			actionId: `command.approval.${rule.id}`,
-			reason:
-				`Heli-Harness ${kind} "${rule.match}" (rule ${rule.id}, tier ${rule.tier}): ${rule.reason || "see safety/command-rules.json"}. ` +
-				(rule.tier === "T6"
-					? "This is a hard deny; scoped grants do not override it."
-					: `Preferred opt-in: \`heli grant issue --action command.approval.${rule.id} --scope once\`. Emergency/debug overrides remain HELI_ALLOW_COMMAND=${rule.id} or YOLO.`),
-		};
-	}
-	return null;
 }
 
 export { resolveExecutionContext };

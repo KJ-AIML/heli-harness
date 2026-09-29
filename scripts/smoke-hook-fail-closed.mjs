@@ -183,6 +183,8 @@ try {
 	const antigravity = WRAPPERS.find((wrapper) => wrapper.name === "antigravity");
 	const concurrentBase = workspace("antigravity-concurrent", {
 		".heli-harness/HARNESS.md": "# Heli\n",
+		// A healthy workspace ships its command rules; a missing rules file denies shell commands.
+		".heli-harness/safety/command-rules.json": shippedRules,
 		".heli-harness/workspace/schema.json": JSON.stringify({ schemaVersion: 1, mode: "concurrent" }),
 	});
 	for (const configRel of ["hooks.json", "hooks/hooks.json"]) {
