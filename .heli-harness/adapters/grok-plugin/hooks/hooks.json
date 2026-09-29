@@ -20,7 +20,7 @@
           {
             "type": "command",
             "command": "node \"${GROK_PLUGIN_ROOT}/hooks/heli-pre-tool-use.mjs\"",
-            "timeout": 5,
+            "timeout": 30,
             "statusMessage": "Checking Heli-Harness safety policy..."
           }
         ]

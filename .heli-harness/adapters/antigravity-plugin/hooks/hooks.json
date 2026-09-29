@@ -19,7 +19,7 @@
           {
             "type": "command",
             "command": "node .heli-harness/adapters/shared/claude-style-pre-tool-use.mjs",
-            "timeout": 5
+            "timeout": 30
           }
         ]
       }

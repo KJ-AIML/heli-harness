@@ -33,7 +33,7 @@ ${marker}
 event = "PreToolUse"
 matcher = ".*"
 command = 'node "${pre}"'
-timeout = 10
+timeout = 30
 
 [[hooks]]
 event = "SessionStart"

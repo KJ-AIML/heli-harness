@@ -44,43 +44,55 @@ export function readText(path, fallback = "") {
 	}
 }
 
+const RENAME_RETRY_CODES = new Set(["EPERM", "EBUSY", "EACCES"]);
+const RENAME_MAX_ATTEMPTS = 20;
+
+function sleepSync(ms) {
+	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
 /**
- * Atomic JSON write via temp file + rename into place.
- * On Windows, rename over existing may fail — unlink then rename as fallback.
+ * Rename `from` over `to`, retrying transient Windows sharing violations
+ * (EPERM/EBUSY/EACCES from antivirus, indexers or a concurrent reader).
+ * The target is NEVER deleted first: a failed write leaves the previous
+ * content intact. On final failure the temp file is removed and the error
+ * is rethrown. `rename` is injectable for tests.
+ */
+export function renameWithRetry(from, to, { rename = renameSync, attempts = RENAME_MAX_ATTEMPTS } = {}) {
+	for (let attempt = 1; ; attempt += 1) {
+		try {
+			rename(from, to);
+			return to;
+		} catch (error) {
+			if (!RENAME_RETRY_CODES.has(error?.code) || attempt >= attempts) {
+				try {
+					unlinkSync(from);
+				} catch {
+					/* temp cleanup is best-effort */
+				}
+				throw error;
+			}
+			sleepSync(Math.min(10 * attempt, 100));
+		}
+	}
+}
+
+/**
+ * Atomic JSON write via temp file + rename into place (see renameWithRetry).
  */
 export function writeJsonAtomic(path, value, { spaces = 2 } = {}) {
 	ensureDir(dirname(path));
 	const payload = `${JSON.stringify(value, null, spaces)}\n`;
 	const tmp = join(dirname(path), `.${randomBytes(8).toString("hex")}.tmp`);
 	writeFileSync(tmp, payload, "utf8");
-	try {
-		renameSync(tmp, path);
-	} catch {
-		try {
-			if (existsSync(path)) unlinkSync(path);
-		} catch {
-			/* ignore */
-		}
-		renameSync(tmp, path);
-	}
-	return path;
+	return renameWithRetry(tmp, path);
 }
 
 export function writeTextAtomic(path, text) {
 	ensureDir(dirname(path));
 	const tmp = join(dirname(path), `.${randomBytes(8).toString("hex")}.tmp`);
 	writeFileSync(tmp, text, "utf8");
-	try {
-		renameSync(tmp, path);
-	} catch {
-		try {
-			if (existsSync(path)) unlinkSync(path);
-		} catch {
-			/* ignore */
-		}
-		renameSync(tmp, path);
-	}
-	return path;
+	return renameWithRetry(tmp, path);
 }
 
 /**

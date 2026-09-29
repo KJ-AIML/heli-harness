@@ -1,0 +1,119 @@
+#!/usr/bin/env node
+/**
+ * PreToolUse wrappers must fail closed: any error -> a deny in the host's own
+ * protocol, never a crash (hosts treat a crashed hook as "allow"). Also pins the
+ * other direction: a healthy workspace must still be allowed.
+ */
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createTask } from "../lib/concurrency/task.mjs";
+import { createSession, attachSession } from "../lib/concurrency/session.mjs";
+import { scrubHeliProcessEnv } from "./lib/hermetic-env.mjs";
+
+scrubHeliProcessEnv();
+const root = process.cwd();
+const scratch = mkdtempSync(join(tmpdir(), "heli-fail-closed-"));
+const baseEnv = { ...process.env, HELI_CONFIG_DIR: join(scratch, "config"), HELI_DATA_DIR: join(scratch, "data") };
+const shippedRules = readFileSync(join(root, ".heli-harness", "safety", "command-rules.json"), "utf8");
+
+const WRAPPERS = [
+	{ name: "claude", rel: ".heli-harness/adapters/claude-plugin/hooks/heli-pre-tool-use.mjs", denyStatus: 0 },
+	{ name: "codex", rel: ".heli-harness/adapters/codex-plugin/hooks/heli-pre-tool-use.mjs", denyStatus: 0 },
+	{ name: "kimi", rel: ".heli-harness/adapters/kimi-plugin/hooks/heli-pre-tool-use.mjs", denyStatus: 0 },
+	{ name: "antigravity", rel: ".heli-harness/adapters/antigravity-plugin/hooks/heli-pre-tool-use.mjs", denyStatus: 0 },
+	{ name: "grok", rel: ".heli-harness/adapters/grok-plugin/hooks/heli-pre-tool-use.mjs", denyStatus: 2 },
+];
+
+function workspace(name, files) {
+	const dir = join(scratch, name);
+	for (const [rel, content] of Object.entries(files)) {
+		mkdirSync(join(dir, rel, ".."), { recursive: true });
+		writeFileSync(join(dir, rel), content);
+	}
+	return dir;
+}
+
+function runHook(wrapper, cwd, stdinText, env = {}) {
+	const result = spawnSync(process.execPath, [join(root, wrapper.rel)], {
+		cwd,
+		input: stdinText,
+		encoding: "utf8",
+		env: { ...baseEnv, ...env },
+	});
+	let body = null;
+	try {
+		body = result.stdout.trim() ? JSON.parse(result.stdout) : null;
+	} catch {
+		body = { unparseable: result.stdout };
+	}
+	return { status: result.status, body, stderr: result.stderr };
+}
+
+function assertDenied(wrapper, out, reasonPattern, label) {
+	assert.equal(out.status, wrapper.denyStatus, `${wrapper.name} ${label}: exit ${out.status}, stderr=${out.stderr}`);
+	assert.equal(out.body?.hookSpecificOutput?.permissionDecision, "deny", `${wrapper.name} ${label}: expected a JSON deny, got ${JSON.stringify(out.body)} stderr=${out.stderr}`);
+	assert.match(out.body.hookSpecificOutput.permissionDecisionReason, reasonPattern, `${wrapper.name} ${label}`);
+}
+
+function assertAllowed(wrapper, out, label) {
+	assert.equal(out.status, 0, `${wrapper.name} ${label}: exit ${out.status}, stderr=${out.stderr}`);
+	assert.notEqual(out.body?.hookSpecificOutput?.permissionDecision, "deny", `${wrapper.name} ${label}: ${JSON.stringify(out.body)}`);
+}
+
+const FAIL_CLOSED = /could not evaluate this action.*denying \(fail-closed\).*heli doctor/s;
+const bash = (command) => JSON.stringify({ tool_name: "Bash", tool_input: { command } });
+const write = (file_path) => JSON.stringify({ tool_name: "Write", tool_input: { file_path, content: "x" } });
+
+try {
+	const healthy = workspace("healthy", {
+		".heli-harness/HARNESS.md": "# Heli\n",
+		".heli-harness/safety/command-rules.json": shippedRules,
+		".heli-harness/state/current-task.md": "# Current Task\n\nTarget repo: demo\n\nCurrent status: in progress\n\nFailed attempts count: 0\n",
+		".heli-harness/workspace/target.json": JSON.stringify({ targetRepo: "demo" }),
+	});
+	const badBinding = workspace("bad-binding", {
+		".heli/workspace.json": JSON.stringify({ schemaVersion: 99, workspaceId: "x" }),
+	});
+	const badLock = workspace("bad-lock", {
+		".heli/workspace.json": JSON.stringify({ schemaVersion: 1, workspaceId: "heli-ws-bad-lock", resources: [{ id: "root", type: "worktree", path: "." }] }),
+		".heli/heli.lock": "{not json",
+	});
+
+	// events.jsonl replaced by a directory: the decision receipt write fails (EISDIR)
+	// AFTER a deny was decided. The deny must still reach the host.
+	const eisdir = workspace("eisdir", {
+		".heli-harness/HARNESS.md": "# Heli\n",
+		".heli-harness/safety/command-rules.json": shippedRules,
+		".heli-harness/workspace/schema.json": JSON.stringify({ schemaVersion: 1, mode: "concurrent" }),
+	});
+	createTask(eisdir, { taskId: "t1", repositoryId: "demo", worktreePath: eisdir });
+	createSession(eisdir, { sessionId: "observer", mode: "observe", worktreePath: eisdir });
+	attachSession(eisdir, "observer", "t1", { mode: "observe", worktreePath: eisdir });
+	const eventsPath = join(eisdir, ".heli-harness", "tasks", "t1", "events.jsonl");
+	rmSync(eventsPath, { force: true });
+	mkdirSync(eventsPath);
+
+	for (const wrapper of WRAPPERS) {
+		assertDenied(wrapper, runHook(wrapper, healthy, "{not json"), FAIL_CLOSED, "malformed stdin");
+		assertDenied(wrapper, runHook(wrapper, healthy, ""), FAIL_CLOSED, "empty stdin");
+		assertDenied(wrapper, runHook(wrapper, healthy, JSON.stringify({ tool_input: { command: "ls" } })), FAIL_CLOSED, "payload without tool name");
+		assertDenied(wrapper, runHook(wrapper, badBinding, write("src/a.js")), /UNSUPPORTED_WORKSPACE_SCHEMA.*fail-closed/s, "schema-invalid .heli/workspace.json");
+		assertDenied(wrapper, runHook(wrapper, badLock, bash("git status")), /INVALID_HELI_LOCK.*fail-closed/s, "evaluator throws (unreadable heli.lock)");
+		const failed = runHook(wrapper, badLock, bash("git status"));
+		assert.match(failed.stderr, FAIL_CLOSED, `${wrapper.name}: fail-closed reason must also go to stderr`);
+
+		const eisdirOut = runHook(wrapper, eisdir, write("src/x.ts"), { HELI_SESSION_ID: "observer" });
+		assertDenied(wrapper, eisdirOut, /not write|mode/i, "receipt write fails after deny (EISDIR)");
+		assert.match(eisdirOut.stderr, /decision receipt failed/i, `${wrapper.name}: side-effect failure must be reported on stderr`);
+
+		// Healthy workspace: no false denials.
+		assertAllowed(wrapper, runHook(wrapper, healthy, write("notes.txt")), "healthy Write");
+		assertAllowed(wrapper, runHook(wrapper, healthy, bash("git status")), "healthy Bash");
+	}
+	console.log("hook fail-closed smoke ok");
+} finally {
+	rmSync(scratch, { recursive: true, force: true });
+}
