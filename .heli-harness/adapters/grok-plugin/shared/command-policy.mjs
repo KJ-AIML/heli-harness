@@ -11,6 +11,11 @@
  *   are skipped, and sh/bash/cmd/pwsh/powershell/eval payloads are unwrapped.
  *   Each segment is read in a POSIX and a Windows dialect; a rule matches if
  *   ANY plausible reading matches.
+ * - Program names are compared without their directory and a trailing
+ *   .exe/.cmd/.bat/.com/.ps1, in any case (`git.exe`, `npm.cmd`), by the built-in
+ *   rules and by the rules file alike.
+ * - Analysis runs inside a deterministic budget (COMMAND_ANALYSIS_LIMITS). A
+ *   command over it is refused fail-closed, never analyzed in part and allowed.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -19,6 +24,35 @@ import { pathsFor } from "./concurrency/paths.mjs";
 const MAX_UNWRAP_DEPTH = 4;
 const POSIX_SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish"]);
 const GIT_OPTIONS_WITH_VALUE = new Set(["-c", "--git-dir", "--work-tree", "--namespace"]);
+
+/**
+ * Deterministic analysis budget: counts of work, never wall-clock. Hosts treat a
+ * hook that times out as an allow, so a command the analysis cannot finish quickly
+ * must be refused (fail-closed) instead. Analysis either finishes within every
+ * limit or reports `limitExceeded`; it never skips text silently.
+ *
+ * - maxCommandChars: longest command text analyzed. Also bounds the regex
+ *   heuristics that scan the raw text before analysis.
+ * - maxScanChars: characters scanned in total (one scan per dialect per visited
+ *   text, counting every unwrapped payload). A backstop against payload fan-out.
+ * - maxTokens: words split out in total, across both dialect readings and every
+ *   unwrapped payload.
+ * - maxSegmentTokens: words in one command. Rule tests scan a command's words
+ *   once per program word, so their worst case grows with its square.
+ * - maxNesting: sh -c / cmd /c / powershell -Command / eval layers.
+ *
+ * Sizing (scripts/smoke-command-rules.mjs pins it): the slowest adversarial input
+ * that fits these limits takes about 0.5 s through the whole hook (the host's hook
+ * timeout is 30 s), while a 200-line prose heredoc uses about a third of the word
+ * and character limits.
+ */
+export const COMMAND_ANALYSIS_LIMITS = Object.freeze({
+	maxCommandChars: 49152,
+	maxScanChars: 524288,
+	maxTokens: 16384,
+	maxSegmentTokens: 256,
+	maxNesting: MAX_UNWRAP_DEPTH,
+});
 
 /** Lowercased program name of a token: strips directories and .exe/.cmd/.bat/.com/.ps1. */
 export function programName(token) {
@@ -130,7 +164,9 @@ function unwrapPayloads(tokens) {
 		const program = programName(tokens[i]);
 		if (POSIX_SHELLS.has(program)) {
 			for (let j = i + 1; j < tokens.length; j += 1) {
-				if (/^-[a-z]*c[a-z]*$/i.test(tokens[j]) && j + 1 < tokens.length) {
+				// A short-option cluster containing `c` (-c, -lc, -ec). Two linear tests instead of
+				// /^-[a-z]*c[a-z]*$/, which backtracks quadratically on a long `-ccc...c!` token.
+				if (/^-[a-z]+$/i.test(tokens[j]) && /c/i.test(tokens[j]) && j + 1 < tokens.length) {
 					payloads.push(tokens[j + 1]);
 					break;
 				}
@@ -159,37 +195,79 @@ function unwrapPayloads(tokens) {
 }
 
 /**
- * Parse command text into de-duplicated segments.
- * @returns {{ segments: Array<{ tokens: string[], rawTokens: string[], text: string, dialect: "posix"|"windows" }> }}
+ * Parse command text into de-duplicated segments, within COMMAND_ANALYSIS_LIMITS.
+ * @param {string} command
+ * @param {{ limits?: typeof COMMAND_ANALYSIS_LIMITS }} [options] `limits` lets tests hit each limit with small input.
+ * @returns {{
+ *   segments: Array<{ tokens: string[], rawTokens: string[], text: string, dialect: "posix"|"windows" }>,
+ *   limitExceeded: null | { limit: string, max: number, message: string },
+ *   work: { commandChars: number, scannedChars: number, tokens: number, segmentTokens: number, nesting: number },
+ * }}
  *   `tokens` are lowercased with git global options removed; `rawTokens` keep case.
+ *   When `limitExceeded` is set the analysis stopped early and `segments` is
+ *   incomplete: callers must refuse the command instead of matching rules on it.
  */
-export function analyzeCommand(command) {
+export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS } = {}) {
+	const commandText = String(command ?? "");
 	const segments = [];
 	const seen = new Set();
 	const visited = new Set();
+	const work = { commandChars: commandText.length, scannedChars: 0, tokens: 0, segmentTokens: 0, nesting: 0 };
+	let limitExceeded = null;
+	const exceed = (limit, max, message) => {
+		limitExceeded ??= { limit, max, message };
+	};
 	const visit = (source, depth) => {
-		if (!String(source ?? "").trim() || depth > MAX_UNWRAP_DEPTH) return;
+		if (limitExceeded) return;
+		if (depth === 0 && source.length > limits.maxCommandChars) {
+			exceed("command-chars", limits.maxCommandChars, `the command is ${source.length} characters long and the limit is ${limits.maxCommandChars}`);
+			return;
+		}
+		if (!source.trim()) return;
+		if (depth > limits.maxNesting) {
+			exceed("nesting", limits.maxNesting, `its shell commands are nested more than ${limits.maxNesting} levels deep`);
+			return;
+		}
 		// Re-visiting the same text at the same depth adds nothing, and without this
 		// a run of `eval` tokens (each unwraps to its own suffix) grows exponentially.
 		const visitKey = `${depth}\u0000${source}`;
 		if (visited.has(visitKey)) return;
 		visited.add(visitKey);
+		work.nesting = Math.max(work.nesting, depth);
+		work.scannedChars += source.length * 2; // one scan per dialect
+		if (work.scannedChars > limits.maxScanChars) {
+			exceed("scan-chars", limits.maxScanChars, `checking it would scan more than ${limits.maxScanChars} characters of shell text once nested commands are unwrapped`);
+			return;
+		}
 		for (const dialect of ["posix", "windows"]) {
-			for (const text of splitSegments(String(source), dialect)) {
+			for (const text of splitSegments(source, dialect)) {
 				const rawTokens = tokenize(text, dialect);
 				if (!rawTokens.length) continue;
+				work.segmentTokens = Math.max(work.segmentTokens, rawTokens.length);
+				work.tokens += rawTokens.length;
+				if (rawTokens.length > limits.maxSegmentTokens) {
+					exceed("segment-tokens", limits.maxSegmentTokens, `one command in it has more than ${limits.maxSegmentTokens} words`);
+					return;
+				}
+				if (work.tokens > limits.maxTokens) {
+					exceed("tokens", limits.maxTokens, `it has more than ${limits.maxTokens} words`);
+					return;
+				}
 				const tokens = normalizeGitTokens(rawTokens.map((token) => token.toLowerCase()));
 				const key = `${dialect}\u0000${tokens.join("\u0000")}`;
 				if (!seen.has(key)) {
 					seen.add(key);
 					segments.push({ tokens, rawTokens, text, dialect });
 				}
-				for (const payload of unwrapPayloads(rawTokens)) visit(payload, depth + 1);
+				for (const payload of unwrapPayloads(rawTokens)) {
+					visit(payload, depth + 1);
+					if (limitExceeded) return;
+				}
 			}
 		}
 	};
-	visit(command, 0);
-	return { segments };
+	visit(commandText, 0);
+	return { segments, limitExceeded, work };
 }
 
 /** Drop git global options (`-C dir`, `-c k=v`, `--git-dir=x`, `--no-pager`, ...) so `git -C . push` reads as `git push`. */
@@ -224,13 +302,17 @@ export function commandRuleTokens(value) {
 
 /**
  * Program-position tokens also match a path-qualified invocation of the same
- * program (`node .heli-harness/heli.mjs push` trips `heli.mjs push`). Applied to
- * the FIRST rule token only.
+ * program (`node .heli-harness/heli.mjs push` trips `heli.mjs push`), and a bare
+ * program name matches its Windows spellings the way the built-in rules do: the
+ * directory and a trailing .exe/.cmd/.bat/.com/.ps1 are ignored, in any case
+ * (`npm.cmd publish`, `"C:\Program Files\Git\cmd\git.exe" push`). Applied to the
+ * FIRST rule token only.
  */
 function commandTokenMatches(commandToken, ruleToken, isProgramPosition) {
 	if (commandToken === ruleToken) return true;
 	if (!isProgramPosition) return false;
-	return commandToken.endsWith(`/${ruleToken}`) || commandToken.endsWith(`\\${ruleToken}`);
+	if (commandToken.endsWith(`/${ruleToken}`) || commandToken.endsWith(`\\${ruleToken}`)) return true;
+	return !/[\\/]/.test(ruleToken) && programName(commandToken) === programName(ruleToken);
 }
 
 /** True when the rule tokens appear as a consecutive run in the command tokens. */
@@ -458,14 +540,32 @@ export function approvalReason(match) {
 	return `Heli-Harness requires explicit approval for "${match.summary}" (rule ${match.id}, tier T5): ${match.reason}. Ask the user to run \`heli grant issue --action command.approval.${match.id} --scope once\` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_COMMAND=${match.id} or YOLO.`;
 }
 
+/** Fail-closed reason for a command the analysis refused (see COMMAND_ANALYSIS_LIMITS). */
+function limitExceededReason(limitExceeded) {
+	return `Heli-Harness could not evaluate this action (COMMAND_TOO_COMPLEX: ${limitExceeded.message}); denying (fail-closed). Commands this large or deeply nested cannot be checked against the safety rules in time. Use the Write or Edit tool for large file content, or split the command into smaller commands.`;
+}
+
 /**
  * Evaluate a command against built-in + workspace rules.
- * @returns {{ status: string, rulesPath: string|null, analysis: object, gitPush: boolean, hardDenies: object[], approvals: object[] }}
+ * @returns {{ status: string, rulesPath: string|null, analysis: object, gitPush: boolean, hardDenies: object[], approvals: object[], limitExceeded: null|{ limit: string, max: number, message: string, reason: string } }}
  *   `approvals` excludes T5 ids approved via HELI_ALLOW_COMMAND; T6 is never approvable.
+ *   `limitExceeded` is set when the command is over the analysis budget: no rule was
+ *   evaluated, and the caller must deny it with `limitExceeded.reason`.
  */
 export function evaluateCommandRules(workspaceRoot, command, env = process.env) {
 	const loaded = loadCommandRules(workspaceRoot);
 	const analysis = analyzeCommand(command);
+	if (analysis.limitExceeded) {
+		return {
+			status: loaded.status,
+			rulesPath: loaded.rulesPath,
+			analysis,
+			gitPush: false,
+			hardDenies: [],
+			approvals: [],
+			limitExceeded: { ...analysis.limitExceeded, reason: limitExceededReason(analysis.limitExceeded) },
+		};
+	}
 	const matches = matchCommandRules(analysis, loaded.projectRules);
 	const approved = new Set(String(env.HELI_ALLOW_COMMAND || "").split(",").map((value) => value.trim()).filter(Boolean));
 	return {
@@ -475,5 +575,6 @@ export function evaluateCommandRules(workspaceRoot, command, env = process.env) 
 		gitPush: commandRunsGitPush(analysis),
 		hardDenies: matches.filter((match) => match.tier === "T6"),
 		approvals: matches.filter((match) => match.tier === "T5" && !approved.has(match.id)),
+		limitExceeded: null,
 	};
 }

@@ -23,6 +23,7 @@ import { consumeApplicableGrant, findUsableGrant } from "./concurrency/grant.mjs
 import { resourceIdForWorktree } from "./concurrency/resource-authority.mjs";
 import { evaluateDiagnosisWriteGate, readActionPolicy, readDiagnosis } from "./concurrency/diagnosis.mjs";
 import { approvalReason, evaluateCommandRules, hardDenyReason } from "./command-policy.mjs";
+import { COMMAND_ANALYSIS_LIMITS } from "./command-policy.mjs";
 
 export { commandRuleTokens, commandMatchesRuleTokens } from "./command-policy.mjs";
 
@@ -256,15 +257,29 @@ export function isShellTool(toolName) {
 	return SHELL_TOOL_NAME_RE.test(name);
 }
 
+// The sed/perl in-place regexes below backtrack quadratically on a long run of
+// whitespace or of repeated words (1.8 s at 48 KB), so past this size they are
+// replaced by a linear check.
+const IN_PLACE_REGEX_MAX_CHARS = 8192;
+
 export function isLikelyShellMutation(toolName, commandText) {
 	if (!isShellTool(toolName)) return false;
-	const command = String(commandText ?? "").toLowerCase();
+	const text = String(commandText ?? "");
+	// Text over the analysis limit is refused before it can run: skip the heuristics
+	// below and report a likely write.
+	if (text.length > COMMAND_ANALYSIS_LIMITS.maxCommandChars) return true;
+	const command = text.toLowerCase();
 	if (!command.trim()) return false;
 	// Best-effort common mutation detection only; this is not a sandbox.
 	if (/(^|[^<])>>?\s*[^&|]/m.test(command)) return true;
 	if (/\b(tee|touch|mkdir|rmdir|rm|mv|cp|truncate)\b/.test(command)) return true;
-	if (/\bsed\s+[^\n;|&]*-i(?:\s|$)/.test(command)) return true;
-	if (/\bperl\s+[^\n;|&]*-p?i(?:\s|$)/.test(command)) return true;
+	if (command.length > IN_PLACE_REGEX_MAX_CHARS) {
+		// Too long for the exact check: any sed or perl invocation counts as an in-place edit.
+		if (/\b(sed|perl)\s/.test(command)) return true;
+	} else {
+		if (/\bsed\s+[^\n;|&]*-i(?:\s|$)/.test(command)) return true;
+		if (/\bperl\s+[^\n;|&]*-p?i(?:\s|$)/.test(command)) return true;
+	}
 	if (/\bgit\s+(add|commit|checkout|switch|restore|reset|clean|rm|mv)\b/.test(command)) return true;
 	if (/\b(npm|pnpm|yarn|bun)\s+(install|add|remove|uninstall|update|upgrade)\b/.test(command)) return true;
 	return false;
@@ -430,6 +445,17 @@ export function evaluatePreToolUse({
 	// Any T6 match is a hard deny that dominates authority, grants, YOLO and
 	// HELI_ALLOW_COMMAND, so it runs before ownership and before YOLO.
 	const commandPolicy = rawCommand.trim() ? evaluateCommandRules(ctx.workspaceRoot, rawCommand, env) : null;
+	// A command too large or too deeply nested to analyze quickly is refused: hosts
+	// treat a hook that times out as an allow, and unanalyzed text could hide a T6.
+	if (commandPolicy?.limitExceeded) {
+		return {
+			deny: true,
+			hardDeny: true,
+			code: "COMMAND_TOO_COMPLEX",
+			reason: commandPolicy.limitExceeded.reason,
+			ctx,
+		};
+	}
 	if (commandPolicy?.hardDenies.length) {
 		return {
 			deny: true,

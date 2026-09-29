@@ -8,8 +8,8 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { analyzeCommand, commandRunsGitPush, matchCommandRules } from "../.heli-harness/adapters/shared/command-policy.mjs";
-import { evaluatePreToolUse } from "../.heli-harness/adapters/shared/hook-core.mjs";
+import { COMMAND_ANALYSIS_LIMITS, analyzeCommand, commandRunsGitPush, loadCommandRules, matchCommandRules } from "../.heli-harness/adapters/shared/command-policy.mjs";
+import { evaluatePreToolUse, isLikelyShellMutation } from "../.heli-harness/adapters/shared/hook-core.mjs";
 import { issueGrant, listGrants } from "../lib/concurrency/grant.mjs";
 import { projectWorkspaceKey } from "../lib/concurrency/project-binding.mjs";
 import { scrubHeliProcessEnv } from "./lib/hermetic-env.mjs";
@@ -61,6 +61,28 @@ const T6_TABLE = [
 	["echo `git reset --hard`", ["git-reset-hard"]],
 	["ls\nrm -rf dist", ["destructive-delete"]],
 	["eval 'git reset --hard'", ["git-reset-hard"]],
+	// Windows executable spellings read as the plain program: directory and a
+	// trailing .exe/.cmd/.bat/.com/.ps1 are dropped, in any case.
+	["git.exe reset --hard", ["git-reset-hard"]],
+	["GIT.EXE -C . reset --hard", ["git-reset-hard"]],
+	["\"C:\\Program Files\\Git\\cmd\\git.exe\" clean -fdx", ["git-clean-force"]],
+	["& \"C:\\Program Files\\Git\\cmd\\git.exe\" push --force origin main", ["git-push-force"]],
+	["git.cmd push -f", ["git-push-force"]],
+	["git.bat push -f", ["git-push-force"]],
+	["git.com push -f", ["git-push-force"]],
+	["git.ps1 push -f", ["git-push-force"]],
+	["rm.exe -rf build", ["destructive-delete"]],
+	["\"C:\\Program Files\\Git\\usr\\bin\\rm.exe\" -rf build", ["destructive-delete"]],
+	["/usr/bin/RM -Rf build", ["destructive-delete"]],
+	["find.exe . -delete", ["find-delete"]],
+	["bash.exe -c 'rm -rf /'", ["destructive-delete"]],
+	["cmd.exe /c rd /s /q build", ["windows-rmdir"]],
+	["powershell.exe -NoProfile -Command \"Remove-Item -Recurse -Force src\"", ["powershell-remove-item-recurse-force"]],
+	["pwsh.exe -c \"git.exe reset --hard\"", ["git-reset-hard"]],
+	["git.exe status", []],
+	["git.exe push origin main", []],
+	["rm.exe -f build.log", []],
+	["mygit.exe reset --hard", []],
 	// Legitimate, non-destructive commands must not match any built-in rule.
 	["rm -f build.log", []],
 	["rm -r build", []],
@@ -96,19 +118,107 @@ const PUSH_TABLE = [
 	["getprop | grep push", false],
 	["git pull", false],
 	["git -C push status", false],
+	["git.exe push", true],
+	["GIT.EXE -C . push", true],
+	["git.cmd push", true],
+	["git.bat push", true],
+	["git.com push", true],
+	["git.ps1 push", true],
+	["\"C:\\Program Files\\Git\\cmd\\git.exe\" push origin main", true],
+	["& \"C:\\Program Files\\Git\\cmd\\git.exe\" push origin main", true],
+	["'C:\\Program Files\\Git\\cmd\\git.exe' -c core.editor=x push", true],
+	["cmd /c git.exe push", true],
+	["mygit.exe push", false],
+	["git.exe pull", false],
+	["echo git.exe pushups", false],
 ];
 for (const [command, expected] of PUSH_TABLE) {
 	assert.equal(commandRunsGitPush(analyzeCommand(command)), expected, `git push detection for ${JSON.stringify(command)}`);
 }
 
-// Analysis cost stays bounded. Every `eval` token unwraps to its own suffix, and
-// re-parsing those suffixes at every nesting level took 11 s for 32 tokens and 35 s
-// for 40 (the hook timeout is 30 s). Hosts treat a hook that times out as an allow,
-// so a slow parse would let the T6 floor be bypassed.
-const evalChainStart = Date.now();
-const evalChainMatches = matchCommandRules(analyzeCommand(`${"eval ".repeat(40)}rm -rf build`)).map((match) => match.id);
-assert.deepEqual(evalChainMatches, ["destructive-delete"]);
-assert.ok(Date.now() - evalChainStart < 2000, `analyzing a 40-token eval chain took ${Date.now() - evalChainStart} ms`);
+// Rules-file layer: the shipped project rules match Windows spellings like the plain
+// ones (npm is npm.cmd and git is git.exe on Windows), without loosening anything else.
+const shipped = loadCommandRules(root);
+assert.equal(shipped.status, "ok");
+const RULES_TABLE = [
+	["npm publish", ["npm-publish"]],
+	["npm.cmd publish", ["npm-publish"]],
+	["NPM.CMD PUBLISH --tag next", ["npm-publish"]],
+	["\"C:\\Program Files\\nodejs\\npm.cmd\" publish", ["npm-publish"]],
+	["pnpm.cmd publish", ["pnpm-publish"]],
+	["yarn.cmd publish", ["yarn-publish"]],
+	["npm.cmd run release", ["npm-run-release"]],
+	["npm.cmd version patch", ["npm-version"]],
+	["git.exe tag v1.0.0", ["git-tag"]],
+	["GIT.EXE -C repo tag v1.0.0", ["git-tag"]],
+	["heli.cmd push", ["heli-cloud-push"]],
+	["heli.exe sync", ["heli-cloud-sync"]],
+	["heli.ps1 sync --auto on", ["heli-cloud-sync"]],
+	["node .heli-harness/heli.mjs push", ["heli-mjs-cloud-push"]],
+	["node.exe .heli-harness\\heli.mjs sync", ["heli-mjs-cloud-sync"]],
+	["npm.cmd test", []],
+	["npmx.cmd publish", []],
+	["mynpm.cmd publish", []],
+	["git.exe status", []],
+	["heli.cmd status", []],
+	["echo npm.cmd publisher", []],
+];
+for (const [command, expected] of RULES_TABLE) {
+	const got = matchCommandRules(analyzeCommand(command), shipped.projectRules).map((match) => match.id).sort();
+	assert.deepEqual(got, [...expected].sort(), `rules-file layer for ${JSON.stringify(command)}`);
+}
+
+// ------------------------------------------------------ analysis budget
+// Hosts treat a hook that times out as an allow, so analysis runs on a deterministic
+// budget (counts, never wall-clock) and a command over it is denied fail-closed. Without
+// one, `rm` x20000 took 60 s, `sed ` x50000 took 8 s and `eval` x400 took 3 s here (the
+// hook timeout is 30 s), and nesting deeper than four layers was skipped silently.
+const LIMITS = COMMAND_ANALYSIS_LIMITS;
+const nestedBash = (levels, inner) => {
+	let command = inner;
+	for (let i = 0; i < levels; i += 1) command = `bash -c ${JSON.stringify(command)}`;
+	return command;
+};
+const exceeded = (command, options) => analyzeCommand(command, options).limitExceeded;
+
+// Each limit on its own: just inside is analyzed in full, just outside is refused.
+assert.equal(exceeded("x".repeat(LIMITS.maxCommandChars)), null);
+assert.equal(exceeded("x".repeat(LIMITS.maxCommandChars + 1))?.limit, "command-chars");
+assert.equal(exceeded("w ".repeat(LIMITS.maxSegmentTokens)), null);
+assert.equal(exceeded("w ".repeat(LIMITS.maxSegmentTokens + 1))?.limit, "segment-tokens");
+assert.equal(exceeded("a;".repeat(Math.floor(LIMITS.maxTokens / 4))), null);
+assert.equal(exceeded("a;".repeat(LIMITS.maxTokens))?.limit, "tokens");
+assert.equal(exceeded(nestedBash(LIMITS.maxNesting, "echo hi")), null);
+assert.equal(analyzeCommand(nestedBash(LIMITS.maxNesting, "echo hi")).work.nesting, LIMITS.maxNesting, "the deepest allowed layer is really analyzed");
+assert.equal(exceeded(nestedBash(LIMITS.maxNesting + 1, "echo hi"))?.limit, "nesting", "deeper nesting used to be skipped silently");
+assert.equal(exceeded("eval eval eval eval rm -rf build"), null, "four nested evals still fit");
+assert.equal(exceeded("eval eval eval eval eval rm -rf build")?.limit, "nesting");
+assert.equal(exceeded("bash -c 'a b' && bash -c 'c d'", { limits: { ...LIMITS, maxScanChars: 20 } })?.limit, "scan-chars");
+const oversizedSegment = exceeded("w ".repeat(LIMITS.maxSegmentTokens + 1));
+assert.equal(oversizedSegment.max, LIMITS.maxSegmentTokens);
+assert.match(oversizedSegment.message, new RegExp(String(LIMITS.maxSegmentTokens)), "the message names the limit");
+
+// Regexes that backtrack quadratically on one long token or whitespace run would defeat
+// the counters above (they see only a couple of words), so they are pinned separately.
+// The 1 s bound is below what the unfixed code took here (2.3 s, 1.8 s, 1.8 s) and far
+// above what the fixed code takes (under 50 ms).
+function within(limitMs, label, fn) {
+	const startedAt = Date.now();
+	const value = fn();
+	const elapsed = Date.now() - startedAt;
+	assert.ok(elapsed < limitMs, `${label} took ${elapsed} ms (limit ${limitMs} ms)`);
+	return value;
+}
+const nearLimit = LIMITS.maxCommandChars - 10;
+assert.equal(within(1000, "bash -ccc...c! at the size limit", () => analyzeCommand(`bash -${"c".repeat(nearLimit)}!`)).limitExceeded, null, "a long flag token is analyzed, quickly");
+assert.equal(within(1000, "sed regex, 4x the size limit", () => isLikelyShellMutation("Bash", "sed ".repeat(LIMITS.maxCommandChars))), true, "over the command limit the heuristics are skipped");
+assert.equal(within(1000, "sed + spaces to the size limit", () => isLikelyShellMutation("Bash", `sed${" ".repeat(nearLimit)}`)), true);
+assert.equal(within(1000, "perl + tabs to the size limit", () => isLikelyShellMutation("Bash", `perl${"\t".repeat(nearLimit)}`)), true);
+// Short text keeps the exact in-place check; long text treats any sed/perl as an edit.
+assert.equal(isLikelyShellMutation("Bash", "sed -i s/a/b/ f"), true);
+assert.equal(isLikelyShellMutation("Bash", "sed -n p f"), false);
+assert.equal(isLikelyShellMutation("Bash", "echo hello; ".repeat(1100)), false, "a long command without a writer is not a mutation");
+assert.equal(isLikelyShellMutation("Bash", `${"echo hello; ".repeat(1100)}sed -n p f`), true, "a long command that runs sed counts as an edit");
 
 // ------------------------------------------------------------ evaluation
 function workspace(name, rulesText = shippedRules, taskText = "# Current Task\n\nTarget repo: demo\n\nCurrent status: in progress\n\nFailed attempts count: 0\n") {
@@ -138,6 +248,47 @@ function grant(ws, action) {
 function remainingUses(ws, grantId) {
 	return listGrants(ws, { activeOnly: false, env }).find((item) => item.grantId === grantId).remainingUses;
 }
+
+const FAIL_CLOSED_PREFIX = "Heli-Harness could not evaluate this action (COMMAND_TOO_COMPLEX: ";
+
+/** A command over the analysis budget is a hard deny in the fail-closed format, decided fast. */
+function assertTooComplex(dir, command, label, extraEnv = {}) {
+	const startedAt = Date.now();
+	const result = bash(dir, command, extraEnv);
+	const elapsed = Date.now() - startedAt;
+	assert.equal(result.code, "COMMAND_TOO_COMPLEX", `${label}: ${result.reason}`);
+	assert.equal(result.deny, true, label);
+	assert.equal(result.hardDeny, true, label);
+	assert.ok(result.reason.startsWith(FAIL_CLOSED_PREFIX), `${label}: ${result.reason}`);
+	assert.match(result.reason, /\); denying \(fail-closed\)\./, label);
+	assert.match(result.reason, /Write or Edit tool for large file content/, label);
+	assert.match(result.reason, /split the command/, label);
+	assert.ok(elapsed < 5000, `${label}: took ${elapsed} ms`);
+}
+
+// Deterministic prose for the large-command pins. Apostrophes, double quotes and backticks
+// come in pairs on every line, so the text stays balanced however the parser pairs them up.
+const PROSE_LINES = [
+	(n) => `Step ${n}: keep the parser's limits pinned; don't let one large note trip them.`,
+	(n) => `The hook reads note ${n} once (it is cheap), then moves on to the next line & the next.`,
+	(n) => `Use \`git status\` first, then compare the result with \`git diff\` before item ${n}.`,
+	(n) => `| item ${n} | owner | status | next step |`,
+	(n) => `Review item ${n}: the rollout plan, the rollback plan, and who signs off on each of them.`,
+	(n) => `Item ${n} says "check twice" and "commit once", which is the whole point of this note.`,
+	(n) => `Paragraph ${n}: this line keeps going for a while, mixing plain words with commas, a colon: like this, and a dash - like that, so words per line look like a real document instead of a list of short items.`,
+	() => "",
+];
+// Inside a double-quoted commit message only lines without double quotes or backticks are used.
+const QUOTE_FREE_LINES = [0, 1, 3, 4, 6, 7];
+const proseLines = (count, { quoted = true } = {}) =>
+	Array.from({ length: count }, (_, i) => PROSE_LINES[quoted ? i % PROSE_LINES.length : QUOTE_FREE_LINES[i % QUOTE_FREE_LINES.length]](i + 1));
+const LARGE_COMMANDS = [
+	["git commit -m with a 50-line message", `git commit -m "${proseLines(50, { quoted: false }).join("\n")}"`],
+	["git commit -m with a 50-line heredoc message", `git commit -m "$(cat <<'EOF'\n${proseLines(50).join("\n")}\n\nCo-Authored-By: Someone <someone@example.com>\nEOF\n)"`],
+	["cat > notes.md heredoc of 200 lines", `cat > notes.md <<'EOF'\n${proseLines(200).join("\n")}\nEOF`],
+];
+// Every meter of a realistic large command stays under 1/HEADROOM of its limit.
+const HEADROOM = 2;
 
 try {
 	const ws = workspace("main");
@@ -186,6 +337,56 @@ try {
 	grant(ws, "git.push");
 	assert.equal(bash(ws, "git push origin main").deny, false);
 	assert.equal(bash(ws, "git push origin main").code, "REMOTE_PUSH_DENIED", "a once grant allows exactly one push");
+
+	// Windows spellings need the same approvals as the plain commands, and each grant is spent once.
+	const spelled = workspace("spellings");
+	const spelledPublish = bash(spelled, "NPM.CMD PUBLISH");
+	assert.equal(spelledPublish.code, "TIER_APPROVAL_REQUIRED", spelledPublish.reason);
+	assert.deepEqual(spelledPublish.missingApprovals, ["command.approval.npm-publish"]);
+	const spelledPublishGrant = grant(spelled, "command.approval.npm-publish");
+	assert.equal(bash(spelled, "\"C:\\Program Files\\nodejs\\npm.cmd\" publish").deny, false);
+	assert.equal(remainingUses(spelled, spelledPublishGrant.grantId), 0);
+	assert.equal(bash(spelled, "GIT.EXE -C . push origin main").code, "REMOTE_PUSH_DENIED");
+	assert.deepEqual(bash(spelled, "git.exe push --force").missingApprovals, ["git.push", "command.approval.git-push-force"]);
+	const spelledPushGrant = grant(spelled, "git.push");
+	assert.equal(bash(spelled, "& \"C:\\Program Files\\Git\\cmd\\git.exe\" push origin main").deny, false);
+	assert.equal(remainingUses(spelled, spelledPushGrant.grantId), 0);
+
+	// Over the analysis budget: refused quickly and identically with or without a Heli
+	// workspace, and neither an override (YOLO, HELI_ALLOW_COMMAND) nor a grant changes it.
+	const roomy = workspace("budget");
+	const bare = join(scratch, "no-heli-budget");
+	mkdirSync(bare, { recursive: true });
+	const PATHOLOGICAL = [
+		["rm x20000", `${"rm ".repeat(20000)}-rf x`],
+		["eval x400", `${"eval ".repeat(400)}x`],
+		["eval x40 then rm -rf", `${"eval ".repeat(40)}rm -rf build`],
+		["nested bash -c x8", nestedBash(8, "echo hi")],
+		["sed x50000 (200 KB)", "sed ".repeat(50000)],
+		["one more one-word command than the word limit", "a;".repeat(LIMITS.maxTokens + 1)],
+		["a single word of twice the size limit", `echo ${"x".repeat(LIMITS.maxCommandChars * 2)}`],
+	];
+	for (const [label, command] of PATHOLOGICAL) {
+		assertTooComplex(roomy, command, label);
+		assertTooComplex(bare, command, `${label} (no Heli binding)`);
+	}
+	assertTooComplex(roomy, `${"eval ".repeat(400)}x`, "YOLO does not lift the budget", { HELI_YOLO: "1", HELI_ALLOW_COMMAND: "command-too-complex" });
+	const budgetGrant = grant(roomy, "command.approval.git-tag");
+	assertTooComplex(roomy, `git tag v1.0.0 && ${"eval ".repeat(400)}x`, "a granted T5 in an over-budget command");
+	assert.equal(remainingUses(roomy, budgetGrant.grantId), 1, "a refused call must not consume the T5 grant");
+
+	// Realistic large commands are analyzed in full and allowed, with room to spare. A
+	// sentinel `rm -rf build` after the text is still found, so nothing was skipped.
+	for (const [label, command] of LARGE_COMMANDS) {
+		const analysis = analyzeCommand(command);
+		assert.equal(analysis.limitExceeded, null, label);
+		for (const [meter, limit] of [["commandChars", "maxCommandChars"], ["scannedChars", "maxScanChars"], ["tokens", "maxTokens"], ["segmentTokens", "maxSegmentTokens"]]) {
+			assert.ok(analysis.work[meter] * HEADROOM <= LIMITS[limit], `${label}: ${meter} ${analysis.work[meter]} is over 1/${HEADROOM} of ${limit} ${LIMITS[limit]}`);
+		}
+		const allowed = bash(roomy, command);
+		assert.equal(allowed.deny, false, `${label}: ${allowed.reason}`);
+		assert.equal(bash(roomy, `${command}\nrm -rf build`).code, "TIER_BLOCKED", `${label}: the sentinel after it must still be found`);
+	}
 
 	// A grant is not consumed when a later check denies (stuck task gate).
 	const stuck = workspace("stuck", shippedRules, "# Current Task\n\nTarget repo: demo\n\nCurrent status: blocked\n\nFailed attempts count: 2\n");
