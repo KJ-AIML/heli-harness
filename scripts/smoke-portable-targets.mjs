@@ -19,7 +19,7 @@ try {
 }
 
 function fixtureWorkspace(label = "heli-portable") {
-	const dir = mkdtempSync(join(tmpdir(), `${label}-`));
+	const dir = canonicalizePath(mkdtempSync(join(tmpdir(), `${label}-`)));
 	mkdirSync(join(dir, ".heli-harness", "workspace"), { recursive: true });
 	writeFileSync(join(dir, ".heli-harness", "HARNESS.md"), "# Heli-Harness\n");
 	writeFileSync(

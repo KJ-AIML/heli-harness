@@ -25,6 +25,7 @@ import { acquireWriteLease } from "../lib/concurrency/lease.mjs";
 import { issueGrant, listGrants } from "../lib/concurrency/grant.mjs";
 import { projectWorkspaceKey } from "../lib/concurrency/project-binding.mjs";
 import { isTaskStateWriteForContext, resolveExecutionContext } from "../lib/concurrency/resolve.mjs";
+import { canonicalizePath } from "../lib/concurrency/index.mjs";
 import { runGrant } from "../lib/cli/grant.mjs";
 import { assertHumanTerminal } from "../lib/cli/human-gate.mjs";
 import { runYolo } from "../lib/cli/yolo.mjs";
@@ -33,7 +34,7 @@ import { scrubHeliProcessEnv } from "./lib/hermetic-env.mjs";
 scrubHeliProcessEnv();
 const root = process.cwd();
 const heli = join(root, "bin", "heli.mjs");
-const scratch = mkdtempSync(join(tmpdir(), "heli-self-protection-"));
+const scratch = canonicalizePath(mkdtempSync(join(tmpdir(), "heli-self-protection-")));
 const hostHome = join(scratch, "home");
 const env = {
 	...process.env,
