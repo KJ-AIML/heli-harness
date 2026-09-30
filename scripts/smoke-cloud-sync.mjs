@@ -581,10 +581,13 @@ try {
 		"a different workspace starts over",
 	);
 
-	// The clone must not depend on the user's git config. One that allows the ext:: transport (it runs a command) or
-	// forbids local clones changes nothing about what `heli init --clone` does with a remote the sync server named.
+	// The clone must not depend on the user's environment. A git config that allows the ext:: transport (it runs a command)
+	// and GIT_ALLOW_PROTOCOL, which git lets override every protocol.*.allow setting (a `-c` included), must not turn a remote
+	// the sync server named into a command. And a user's own stricter policy (no local clones) is honored, not overridden.
 	const hostileGitConfig = join(root, "hostile-gitconfig");
-	writeFileSync(hostileGitConfig, '[protocol "ext"]\n\tallow = always\n[protocol "file"]\n\tallow = never\n');
+	writeFileSync(hostileGitConfig, '[protocol "ext"]\n\tallow = always\n');
+	const strictGitConfig = join(root, "strict-gitconfig");
+	writeFileSync(strictGitConfig, '[protocol "file"]\n\tallow = never\n');
 	const extMarker = join(root, "ext-ran");
 	const extHelper = join(root, "ext-helper.mjs");
 	writeFileSync(extHelper, `import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(extMarker)}, "ran"); process.exit(1);\n`);
@@ -607,18 +610,30 @@ try {
 	ok(await cli(["install", wsG], cfgA), "install ws-g");
 	symlinkSync(join(wsG, ".heli-harness"), join(wsG, "aliased"), "junction");
 	const initG = ok(
-		await asHuman("init", ["lab", "--dir", wsG, "--clone", "--accept-policy-changes"], { ...cfgA, ...passphrase, GIT_CONFIG_GLOBAL: hostileGitConfig }),
-		"init --clone under a hostile git config",
+		await asHuman("init", ["lab", "--dir", wsG, "--clone", "--accept-policy-changes"], { ...cfgA, ...passphrase, GIT_CONFIG_GLOBAL: hostileGitConfig, GIT_ALLOW_PROTOCOL: "file:ext" }),
+		"init --clone under a hostile git environment",
 	);
 	assert.equal(existsSync(extMarker), false, "the ext:: transport must not run a command");
-	assert.ok(existsSync(join(wsG, "repos", "local", "README.md")), "a local clone still works when the user's git config forbids the file transport");
+	assert.ok(existsSync(join(wsG, "repos", "local", "README.md")), "a local clone works under git's default policy");
 	assert.equal(existsSync(join(wsG, ".heli-harness", "profiles", "evil")), false, "a folder that leads into Heli's own state is not a clone target");
 	assert.match(initG.stderr, /"aliased\/profiles\/evil" in workspace\/index\.json leads into Heli's own state/);
-	const { gitCloneArgs } = await import("../lib/cli/cloud.mjs");
+	const wsI = join(root, "ws-i");
+	const strictInit = ok(
+		await asHuman("init", ["lab", "--dir", wsI, "--clone", "--accept-policy-changes"], { ...cfgA, ...passphrase, GIT_CONFIG_GLOBAL: strictGitConfig }),
+		"init --clone under a strict git config",
+	);
+	assert.equal(existsSync(join(wsI, "repos", "local", "README.md")), false, "a user's own `file = never` is honored, not overridden");
+	assert.match(strictInit.stderr, /Clone failed for local/);
+	const { gitCloneArgs, gitCloneEnv } = await import("../lib/cli/cloud.mjs");
 	assert.deepEqual(
 		gitCloneArgs("https://example.invalid/r.git", "/t/r"),
-		["-c", "protocol.ext.allow=never", "-c", "protocol.file.allow=user", "clone", "--", "https://example.invalid/r.git", "/t/r"],
+		["-c", "protocol.ext.allow=never", "clone", "--", "https://example.invalid/r.git", "/t/r"],
 		'"--" still comes right before the remote',
+	);
+	assert.deepEqual(
+		gitCloneEnv({ PATH: "p", GIT_ALLOW_PROTOCOL: "ext", git_allow_protocol: "ext", GIT_CONFIG_GLOBAL: "g" }),
+		{ PATH: "p", GIT_CONFIG_GLOBAL: "g" },
+		"only the variable that beats -c is removed, in any case",
 	);
 
 	// Browser activation: a link cannot approve a device in one click, and the

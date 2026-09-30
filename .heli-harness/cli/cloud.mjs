@@ -533,12 +533,27 @@ export function resolvesIntoHeliState(dir, repoPath) {
 
 /**
  * The git command line that clones a repo the sync server named. "--" ends git's option parsing, so neither value
- * can inject an option. The ext:: transport (it runs a command) is switched off whatever the user's git config says,
- * and a local path is cloned because the user asked for this very clone (protocol.file.allow=user), also when their
- * config or an older git forbids it.
+ * can inject an option. The ext:: transport (it runs a command) is switched off whatever the user's git config says
+ * (and gitCloneEnv keeps GIT_ALLOW_PROTOCOL from switching it back on). Nothing is loosened: a local path is left to
+ * git's own policy, which allows a clone the user started, and a stricter policy of the user's (say
+ * protocol.file.allow=never) is honored, not overridden.
  */
 export function gitCloneArgs(remote, target) {
-	return ["-c", "protocol.ext.allow=never", "-c", "protocol.file.allow=user", "clone", "--", remote, target];
+	return ["-c", "protocol.ext.allow=never", "clone", "--", remote, target];
+}
+
+/**
+ * The environment a clone of a server-named remote runs in: the caller's, minus GIT_ALLOW_PROTOCOL. Git lets that
+ * variable override every protocol.*.allow setting, `-c protocol.ext.allow=never` included, so it could switch the
+ * ext:: transport (it runs a command) back on. Checked against git 2.55: GIT_CONFIG_COUNT, GIT_CONFIG_PARAMETERS,
+ * GIT_CONFIG_GLOBAL and GIT_PROTOCOL_FROM_USER do not beat `-c`, so they can stay.
+ */
+export function gitCloneEnv(env = process.env) {
+	const clean = { ...env };
+	for (const key of Object.keys(clean)) {
+		if (key.toUpperCase() === "GIT_ALLOW_PROTOCOL") delete clean[key];
+	}
+	return clean;
 }
 
 function safeRemote(value) {
@@ -590,7 +605,7 @@ async function runInit(args, packageRoot) {
 		}
 		if (repo.remote && args.includes("--clone")) {
 			console.log(`Cloning ${repo.name} from ${repo.remote}...`);
-			const result = spawnSync("git", gitCloneArgs(repo.remote, join(dir, repoPath)), { stdio: "inherit" });
+			const result = spawnSync("git", gitCloneArgs(repo.remote, join(dir, repoPath)), { stdio: "inherit", env: gitCloneEnv() });
 			if (result.status !== 0) console.warn(`Clone failed for ${repo.name} — clone it manually.`);
 		} else {
 			console.log(
