@@ -101,7 +101,9 @@ function precedesData(word) {
  * timeout is 30 s), while a 200-line prose heredoc uses about a third of the word
  * and character limits. The protected-state check that follows (shellWriteTargets and
  * classifyShellWriteTargets; scripts/smoke-self-protection.mjs pins it) adds about 0.6 s
- * for the worst fit, a thousand paths each in its own chain of missing directories.
+ * for the worst fit, a thousand paths each in its own chain of missing directories, and
+ * under a second for a `cd` chain of the length the limits allow (some 4,000 `cd`s, or 1,300
+ * of them each followed by a write): a chain costs a target no more than a short one does.
  */
 export const COMMAND_ANALYSIS_LIMITS = Object.freeze({
 	maxCommandChars: 49152,
@@ -149,8 +151,11 @@ function splitSegments(text, dialect) {
 		const prev = source[i - 1];
 		const next = source[i + 1];
 		const redirectAmpersand = ch === "&" && (prev === ">" || prev === "<" || next === ">");
+		// `>|` overrides noclobber: the `|` belongs to the redirect (what follows is the file), it is not a pipe.
+		const redirectPipe = ch === "|" && prev === ">";
 		const separator =
 			!redirectAmpersand &&
+			!redirectPipe &&
 			(ch === ";" || ch === "\n" || ch === "\r" || ch === "|" || ch === "&" || ch === "(" || ch === ")" ||
 				(dialect === "posix" && ch === "`"));
 		if (separator) {
@@ -332,9 +337,12 @@ function quotedCommandWords(tokens, programs) {
  *   word that starts with one is analyzed as a command line. Default: the built-in rules' programs.
  * @returns {{
  *   segments: Array<{ tokens: string[], rawTokens: string[], text: string, dialect: "posix"|"windows" }>,
+ *   sequence: Array<{ tokens: string[], rawTokens: string[], text: string, dialect: "posix"|"windows" }>,
  *   limitExceeded: null | { limit: string, max: number, message: string },
  *   work: { commandChars: number, scannedChars: number, tokens: number, segmentTokens: number, nesting: number },
  * }}
+ *   `sequence` holds the same segment objects once per occurrence, in reading order (a segment that appears
+ *   twice is in `segments` once and in `sequence` twice), for readers that depend on position.
  *   `tokens` are lowercased with git global options removed; `rawTokens` keep case.
  *   When `limitExceeded` is set the analysis stopped early and `segments` is
  *   incomplete: callers must refuse the command instead of matching rules on it.
@@ -342,7 +350,8 @@ function quotedCommandWords(tokens, programs) {
 export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS, commandPrograms = BUILTIN_COMMAND_PROGRAMS } = {}) {
 	const commandText = String(command ?? "");
 	const segments = [];
-	const seen = new Set();
+	const sequence = [];
+	const seen = new Map();
 	const visited = new Set();
 	const work = { commandChars: commandText.length, scannedChars: 0, tokens: 0, segmentTokens: 0, nesting: 0 };
 	let limitExceeded = null;
@@ -389,10 +398,15 @@ export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS, comm
 				// Keyed on the words as written: on a case-sensitive file system `rm .HELI-HARNESS/x` and
 				// `rm .heli-harness/x` name different files, and the write-target check reads both.
 				const key = `${dialect}\u0000${rawTokens.join("\u0000")}`;
-				if (!seen.has(key)) {
-					seen.add(key);
-					segments.push({ tokens, rawTokens, text, dialect });
+				let segment = seen.get(key);
+				if (!segment) {
+					segment = { tokens, rawTokens, text, dialect };
+					seen.set(key, segment);
+					segments.push(segment);
 				}
+				// A rule reads a segment once, but what a segment does to a path depends on where it stands
+				// (`cd a; rm x; cd b; rm x`), so every occurrence is kept, in order, for the write-target check.
+				sequence.push(segment);
 				// Wrapper payloads and quoted command lines are visited like the command itself, so they
 				// count against the same word, character and nesting limits.
 				for (const payload of new Set([...unwrapPayloads(rawTokens), ...quotedCommandWords(rawTokens, commandPrograms)])) {
@@ -403,7 +417,7 @@ export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS, comm
 		}
 	};
 	visit(commandText, 0);
-	return { segments, limitExceeded, work };
+	return { segments, sequence, limitExceeded, work };
 }
 
 /** Drop git global options (`-C dir`, `-c k=v`, `--git-dir=x`, `--no-pager`, ...) so `git -C . push` reads as `git push`. */
@@ -786,14 +800,47 @@ const RENAME_PROGRAMS = new Set(["rename-item", "rni", "ren", "rename"]);
 const EDITOR_PROGRAMS = new Set(["sed", "perl"]);
 const IN_PLACE_FLAG = /^(?:-[a-z]*i|--in-place)/i;
 const CD_PROGRAMS = new Set(["cd", "pushd", "chdir", "set-location", "sl", "push-location"]);
-// Groups: (1) the `&` of `>&word`, (2) the target. The file-descriptor prefix has at most three
-// digits: `\d+` would be super-linear on a long run of digits.
-const REDIRECT_RE = /(?:^|[^<>&=])(?:\d{1,3}|&|\*)?>>?(&?)\s*("[^"]*"|'[^']*'|[^\s;&|<>]+)/g;
+// Words that can stand before a `cd` without changing what it does: shell keywords and the wrappers of a builtin.
+const CD_PREFIXES = new Set(["builtin", "command", "time", "!", "{", "then", "do", "else", "elif", "if", "while", "until"]);
+// Groups: (1) the `&` of `>&word`, (2) the target. The operator is `>`, `>>`, `>|` (overrides noclobber) or `<>`
+// (opens for reading and writing and creates the file: `exec 3<>file`, then `>&3`). The lead may be `=`: `x=>file`
+// is an empty assignment followed by a redirect. The file-descriptor prefix has at most three digits: `\d+`
+// would be super-linear on a long run of digits. The target is one shell word: quoted parts and plain characters
+// in any mix (`yol''o.json`, `"a b"c`); nothing follows the group, so it never backtracks.
+const REDIRECT_RE = /(?:^|[^<>&])(?:\d{1,3}|&|\*)?(?:>>|>\||<>|>)(&?)\s*((?:"[^"]*"|'[^']*'|[^\s;&|<>])+)/g;
 const NULL_SINKS = /^(\/dev\/(null|stdout|stderr)|nul|\$null)$/i;
+// Programs that write the file an option names, not a redirect: the one-letter options that take a path (a character class,
+// searched natively so a long cluster of letters costs nothing) and the long option names. curl also writes a header dump
+// (-D), a cookie jar (-c) and, with `--output-dir`, the folder `-O` saves into; wget also saves into a folder (-P) and
+// writes a log (-o, -a).
+const OUTPUT_OPTIONS = new Map([
+	["sort", { short: /[o]/, long: ["output"] }],
+	["curl", { short: /[oDc]/, long: ["output", "output-dir", "dump-header", "cookie-jar"] }],
+	["wget", { short: /[OPoa]/, long: ["output-document", "directory-prefix", "output-file", "append-output"] }],
+]);
+// PowerShell parameters that name a file or folder to write: the full name and how many letters tell it from its neighbors.
+const POWERSHELL_OUTPUTS = new Map([
+	["invoke-webrequest", { name: "outfile", least: 4 }],
+	["iwr", { name: "outfile", least: 4 }],
+	["invoke-restmethod", { name: "outfile", least: 4 }],
+	["irm", { name: "outfile", least: 4 }],
+	["expand-archive", { name: "destinationpath", least: 4 }],
+]);
+// rsync options that take the next word as their value, so it is not mistaken for the destination.
+const RSYNC_VALUE_OPTIONS = new Set([
+	"-e", "-T", "-B", "-M", "-f", "--rsh", "--exclude", "--include", "--exclude-from", "--include-from", "--filter", "--files-from",
+	"--rsync-path", "--bwlimit", "--port", "--partial-dir", "--backup-dir", "--suffix", "--log-file", "--link-dest", "--compare-dest",
+	"--copy-dest", "--temp-dir", "--max-size", "--min-size", "--timeout", "--contimeout", "--modify-window", "--chmod", "--usermap",
+	"--groupmap", "--chown", "--out-format", "--block-size", "--compress-level", "--skip-compress", "--address", "--sockopts",
+	"--password-file", "--iconv", "--protocol", "--checksum-choice", "--max-delete", "--stop-after", "--stop-at",
+]);
 
-/** The file a redirect writes, or null for a null sink or a file-descriptor copy (`2>&1`, `>&2`, `>&-`). */
-function redirectTarget(copy, word) {
-	const target = word.replace(/^["']|["']$/g, "");
+/**
+ * The file a redirect writes, or null for a null sink or a file-descriptor copy (`2>&1`, `>&2`, `>&-`). The word is read
+ * as the shell reads it: quotes and backslashes removed, `$'...'` and `$"..."` as `'...'` and `"..."`. Nothing is expanded.
+ */
+function redirectTarget(copy, word, dialect) {
+	const target = tokenize(word.replace(/\$(?=['"])/g, ""), dialect)[0] ?? "";
 	if (copy && /^(?:\d+|-)$/.test(target)) return null;
 	return target && !NULL_SINKS.test(target) ? target : null;
 }
@@ -802,9 +849,22 @@ function isOptionWord(word) {
 	return word.startsWith("-") || /^\/[a-z?]+$/i.test(word);
 }
 
-/** The directory a `cd`-like command changes to: its first argument that is not an option (bare POSIX `cd` goes home). */
-function cdArgument(tokens, dialect) {
-	let index = 1;
+/** Where the command word of a segment is: past keywords (`then`, `{`, `!`), `builtin`, `command` and `time` with their options, and `VAR=value` words. */
+function commandWordAt(tokens) {
+	let index = 0;
+	let options = false;
+	while (index < tokens.length) {
+		const token = tokens[index];
+		if (CD_PREFIXES.has(token.toLowerCase())) options = true;
+		else if (!ASSIGNMENT_WORD.test(token) && !(options && token.startsWith("-"))) break;
+		index += 1;
+	}
+	return index;
+}
+
+/** The directory a `cd`-like command at `at` changes to: its first argument that is not an option (bare POSIX `cd` goes home). */
+function cdArgument(tokens, dialect, at) {
+	let index = at + 1;
 	for (; index < tokens.length; index += 1) {
 		if (tokens[index] === "--") {
 			index += 1;
@@ -822,54 +882,250 @@ function siblingPath(existing, name) {
 }
 
 /**
+ * The folder a GNU cp, mv, install or ln is told to fill, when the option carries it in the same word:
+ * `--target-directory=d`, `-td`, `-atd`. (`-t d` and `--target-directory d` leave the folder as the next word, which is read as a target.)
+ */
+function attachedFolder(token, dialect) {
+	if (token.startsWith("--")) return token.startsWith("--target-directory=") ? token.slice("--target-directory=".length) : null;
+	return dialect === "posix" ? (/^-[a-z]*?t(.+)$/.exec(token)?.[1] ?? null) : null;
+}
+
+/** The values of the options that take a path, in the spellings getopt reads: `-o v`, `-ov`, `-sSo v` (a cluster that ends in it), `--long v`, `--long=v`. */
+function optionValues(tokens, from, { short, long }) {
+	const values = [];
+	for (let index = from; index < tokens.length; index += 1) {
+		const token = tokens[index];
+		if (token === "--") break;
+		if (token.startsWith("--")) {
+			const equals = token.indexOf("=");
+			if (!long.includes(token.slice(2, equals < 0 ? token.length : equals))) continue;
+			if (equals >= 0) values.push(token.slice(equals + 1));
+			else if (index + 1 < tokens.length) values.push(tokens[++index]);
+		} else if (token.length > 1 && token[0] === "-") {
+			// The first letter of the cluster that takes a value takes the rest of the word, or else the next word.
+			const found = token.slice(1).search(short);
+			if (found < 0) continue;
+			const attached = token.slice(found + 2);
+			if (attached) values.push(attached);
+			else if (index + 1 < tokens.length) values.push(tokens[++index]);
+		}
+	}
+	return values;
+}
+
+/** The values of one PowerShell parameter: `-OutFile v`, `-outfile:v`, or any unambiguous prefix of the name. */
+function powershellValues(tokens, from, { name, least }) {
+	const values = [];
+	for (let index = from; index < tokens.length; index += 1) {
+		const token = tokens[index];
+		if (token.length < 2 || token[0] !== "-") continue;
+		const colon = token.indexOf(":");
+		const parameter = token.slice(1, colon < 0 ? token.length : colon).toLowerCase();
+		if (parameter.length < least || !name.startsWith(parameter)) continue;
+		if (colon >= 0) values.push(token.slice(colon + 1));
+		else if (index + 1 < tokens.length) values.push(tokens[++index]);
+	}
+	return values;
+}
+
+/** What `tar` writes: the folder it extracts into (the current one unless `-C` says otherwise), or the archive it creates. */
+function tarTargets(tokens, from) {
+	let extracts = false;
+	let creates = false;
+	const archives = [];
+	const directories = [];
+	for (let index = from; index < tokens.length; index += 1) {
+		const token = tokens[index];
+		if (token === "--") break;
+		if (token.startsWith("--")) {
+			const equals = token.indexOf("=");
+			const name = token.slice(2, equals < 0 ? token.length : equals);
+			if (name === "extract" || name === "get") extracts = true;
+			else if (name === "create" || name === "append" || name === "update") creates = true;
+			else if (name === "file" || name === "directory") {
+				const value = equals >= 0 ? token.slice(equals + 1) : tokens[index + 1];
+				if (equals < 0) index += 1;
+				if (value !== undefined) (name === "file" ? archives : directories).push(value);
+			}
+		} else if ((token.length > 1 && token[0] === "-") || (index === from && /^[A-Za-z]+$/.test(token))) {
+			// A cluster of letters, with or without its dash (`-xzf`, `czf`): `f` and `C` take the rest of the word or the next word.
+			const letters = token[0] === "-" ? token.slice(1) : token;
+			for (let at = 0; at < letters.length; at += 1) {
+				const letter = letters[at];
+				if (letter === "x") extracts = true;
+				else if (letter === "c" || letter === "r" || letter === "u") creates = true;
+				else if (letter === "f" || letter === "C") {
+					const attached = letters.slice(at + 1);
+					const value = attached || tokens[index + 1];
+					if (!attached) index += 1;
+					if (value !== undefined) (letter === "f" ? archives : directories).push(value);
+					break;
+				}
+			}
+		}
+	}
+	return [...(extracts ? (directories.length ? directories : ["."]) : []), ...(creates ? archives : [])];
+}
+
+/** What `unzip` writes: the folder after `-d`, or the current one. Listing, testing and printing (`-l -t -v -p -z -Z`) write nothing. */
+function unzipTargets(tokens, from) {
+	const directories = [];
+	let readsOnly = false;
+	for (let index = from; index < tokens.length; index += 1) {
+		const token = tokens[index];
+		if (token === "--") break;
+		if (token === "-d" || (token.length > 2 && /^-[A-Za-z]*d$/.test(token))) {
+			if (index + 1 < tokens.length) directories.push(tokens[++index]);
+		} else if (/^-d./.test(token)) {
+			directories.push(token.slice(2));
+		} else if (/^-[A-Za-z]+$/.test(token) && /[ltvpzZ]/.test(token)) {
+			readsOnly = true;
+		}
+	}
+	return directories.length ? directories : readsOnly ? [] : ["."];
+}
+
+/** The last word of an rsync command that is not an option (or an option's value): the destination, when there is a source before it. */
+function rsyncDestination(tokens, from) {
+	const words = [];
+	for (let index = from; index < tokens.length; index += 1) {
+		const token = tokens[index];
+		if (token === "--") {
+			words.push(...tokens.slice(index + 1));
+			break;
+		}
+		if (token.startsWith("-")) {
+			if (RSYNC_VALUE_OPTIONS.has(token) || /^-[A-Za-z]+e$/.test(token)) index += 1;
+			continue;
+		}
+		words.push(token);
+	}
+	return words.length >= 2 ? words[words.length - 1] : null;
+}
+
+/**
+ * The files and folders named by writers whose output path is an option or an argument in a fixed place: `sort -o`,
+ * `curl -o`, `wget -O`, PowerShell `-OutFile`, `tar` (extract folder, created archive), `unzip`, `rsync`. Every appearance of
+ * a program's name is read as a command (a wrapper's option can take the name as its value: `env -u tar tar xzf a`), each
+ * to the end of its segment, which is at most `maxSegmentTokens` words. `curl -O` and `wget` without `-O` take the file
+ * name from the URL, and `patch` from diff headers; those, and any interpreter, are out of reach.
+ */
+function explicitOutputs(tokens) {
+	const outputs = new Set();
+	for (let index = 0; index < tokens.length; index += 1) {
+		const program = programName(tokens[index]);
+		const from = index + 1;
+		let found;
+		if (OUTPUT_OPTIONS.has(program)) found = optionValues(tokens, from, OUTPUT_OPTIONS.get(program));
+		else if (POWERSHELL_OUTPUTS.has(program)) found = powershellValues(tokens, from, POWERSHELL_OUTPUTS.get(program));
+		else if (program === "tar") found = tarTargets(tokens, from);
+		else if (program === "unzip") found = unzipTargets(tokens, from);
+		else if (program === "rsync") found = [rsyncDestination(tokens, from)];
+		else continue;
+		for (const output of found) if (output && output !== "-" && !NULL_SINKS.test(output)) outputs.add(output);
+	}
+	return [...outputs];
+}
+
+const NO_DIRECTORIES = Object.freeze([]);
+
+/** The `cd`s before a write, as a linked list: each `cd` adds one node and every later target shares the rest. */
+function cdNode(parent, dir, id) {
+	return { id, dir, parent, depth: parent ? parent.depth + 1 : 1, dirs: null };
+}
+
+/** A chain as the array `cdPath` promises, built once per node and only when somebody reads it. */
+function cdDirs(node) {
+	if (!node) return NO_DIRECTORIES;
+	if (!node.dirs) {
+		const dirs = new Array(node.depth);
+		for (let cursor = node, index = node.depth - 1; cursor; cursor = cursor.parent, index -= 1) dirs[index] = cursor.dir;
+		node.dirs = Object.freeze(dirs);
+	}
+	return node.dirs;
+}
+
+/**
+ * One write target. `cdPath` is the array the interface promises (built on first read, since a copy per `cd`
+ * would cost O(chain) each); `cdChain` is the same chain as a linked list, so a reader resolves it one `cd` at
+ * a time and a long chain costs a target no more than a short one. It is not enumerable.
+ */
+function writeTarget(path, chain) {
+	const target = { path };
+	Object.defineProperty(target, "cdPath", { enumerable: true, get: () => cdDirs(chain) });
+	Object.defineProperty(target, "cdChain", { value: chain });
+	return target;
+}
+
+/**
  * Best-effort list of paths a shell command writes, moves or deletes:
  * redirection targets, arguments of file-mutating programs (POSIX and
  * PowerShell/cmd), `dd of=`, and `sed -i`/`perl -i` files. Each target carries
- * the `cd` arguments seen earlier in the same dialect so callers can resolve it
- * both against the original cwd and against the changed directory. Targets are
- * de-duplicated, and `cdPath` arrays are shared between targets, never modified.
- * @returns {Array<{ path: string, cdPath: string[] }>}
+ * the `cd` arguments seen earlier in the same dialect (`cdPath`) so callers can resolve it
+ * both against the original cwd and against the changed directory. Every occurrence of a
+ * segment is read in order (`analysis.sequence`), because what a relative path names depends
+ * on the `cd`s before it. Targets are de-duplicated per `cd` chain.
+ * Every `cd` is read as if it succeeded, in order (also behind `then`, `{`, `!`, `builtin`, `time`
+ * and `VAR=x`); the directory the command started in is always checked too. A `cd` that fails,
+ * `cd a || cd b`, `cd -` and a `cd` inside a subshell are beyond that reading. Words are read after
+ * quote removal (`yol''o.json`, `yolo\.json`, `$'x'`) but never expanded: wildcards, `$(...)`,
+ * variables set in the command and ANSI-C escapes (`$'\x79olo.json'`) are out of reach.
+ * @returns {Array<{ path: string, cdPath: string[] }>} plus a non-enumerable `cdChain` (see writeTarget)
  */
 export function shellWriteTargets(analysis) {
 	const targets = [];
 	const seen = new Set();
-	const chains = { posix: { id: 0, dirs: [] }, windows: { id: 0, dirs: [] } };
+	const chains = { posix: null, windows: null };
+	let nextChainId = 1;
 	const add = (path, dialect) => {
-		const key = `${dialect}\u0000${chains[dialect].id}\u0000${path}`;
+		const chain = chains[dialect];
+		const key = `${dialect}\u0000${chain ? chain.id : 0}\u0000${path}`;
 		if (seen.has(key)) return;
 		seen.add(key);
-		targets.push({ path, cdPath: chains[dialect].dirs });
+		targets.push(writeTarget(path, chain));
 	};
-	for (const segment of analysis.segments) {
+	for (const segment of analysis.sequence ?? analysis.segments) {
 		const { dialect } = segment;
 		for (const match of segment.text.matchAll(REDIRECT_RE)) {
-			const target = redirectTarget(match[1], match[2]);
+			const target = redirectTarget(match[1], match[2], dialect);
 			if (target) add(target, dialect);
 		}
 		const tokens = segment.rawTokens;
-		if (CD_PROGRAMS.has(programName(tokens[0]))) {
-			const dir = cdArgument(tokens, dialect);
-			if (dir) chains[dialect] = { id: chains[dialect].id + 1, dirs: [...chains[dialect].dirs, dir] };
+		const commandAt = commandWordAt(tokens);
+		if (CD_PROGRAMS.has(programName(tokens[commandAt]))) {
+			const dir = cdArgument(tokens, dialect, commandAt);
+			if (dir) {
+				chains[dialect] = cdNode(chains[dialect], dir, nextChainId);
+				nextChainId += 1;
+			}
 			continue;
 		}
+		for (const output of explicitOutputs(tokens)) add(output, dialect);
 		// One pass: a token is a target when a file-mutating program came before it in the same command.
 		const editorAt = tokens.findIndex((token) => EDITOR_PROGRAMS.has(programName(token)));
 		const editsInPlace = editorAt >= 0 && tokens.some((token, index) => index > editorAt && IN_PLACE_FLAG.test(token));
-		let renameAt = -1;
+		const renames = [];
 		let writing = false;
 		let afterDd = false;
 		for (let index = 0; index < tokens.length; index += 1) {
 			const token = tokens[index];
 			const program = programName(token);
-			if (writing && !isOptionWord(token)) add(token, dialect);
+			if (writing) {
+				const folder = isOptionWord(token) ? attachedFolder(token, dialect) : token;
+				if (folder) add(folder, dialect);
+			}
 			if (afterDd && token.toLowerCase().startsWith("of=")) add(token.slice(3), dialect);
 			if (editsInPlace && index > editorAt && !token.startsWith("-")) add(token, dialect);
 			if (WRITE_PROGRAMS.has(program)) writing = true;
 			if (program === "dd") afterDd = true;
-			if (renameAt < 0 && RENAME_PROGRAMS.has(program)) renameAt = index;
+			if (RENAME_PROGRAMS.has(program)) renames.push(index);
 		}
-		if (renameAt >= 0) {
-			const names = tokens.slice(renameAt + 1).filter((token) => !isOptionWord(token)).slice(0, 2);
+		// Every appearance of a rename program counts: the first can be an option's value (`env -u ren ren a b`).
+		for (const renameAt of renames) {
+			const names = [];
+			for (let index = renameAt + 1; index < tokens.length && names.length < 2; index += 1) {
+				if (!isOptionWord(tokens[index])) names.push(tokens[index]);
+			}
 			if (names.length === 2) {
 				for (const sibling of [siblingPath(names[0], names[1]), siblingPath(names[1], names[0])]) {
 					if (sibling) add(sibling, dialect);

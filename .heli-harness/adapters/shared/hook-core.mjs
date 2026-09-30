@@ -28,7 +28,10 @@ import {
 	classifyShellWriteTargets,
 	classifyToolPaths,
 	disablesClaudeHooks,
+	heliEnvironmentKeys,
+	protectedEnvironmentReason,
 	protectedWriteReason,
+	settingsContentOf,
 } from "./concurrency/protected-paths.mjs";
 
 export { commandRuleTokens, commandMatchesRuleTokens } from "./command-policy.mjs";
@@ -203,6 +206,9 @@ export function patchPathsFrom(commandText, out = []) {
 export const DEFAULT_FILE_WRITE_TOOL_NAMES = Object.freeze([
 	"Edit",
 	"Write",
+	// Claude Code's other file writers: one name each, so the verb-based fallback below never sees them as `edit`.
+	"MultiEdit",
+	"NotebookEdit",
 	"apply_patch",
 	"write",
 	"edit",
@@ -325,13 +331,6 @@ export function readPlanGate(cwd) {
 export function withCliHint(reason) {
 	if (!reason || !/`heli /.test(reason)) return reason;
 	return `${reason}\n(heli not on PATH? Run: node .heli-harness/heli.mjs <command> from the workspace root.)`;
-}
-
-/** Every string inside a tool input, at any depth (the text a settings write would contain). */
-function stringLeaves(value, out = []) {
-	if (typeof value === "string") out.push(value);
-	else if (value && typeof value === "object") for (const item of Object.values(value)) stringLeaves(item, out);
-	return out;
 }
 
 function taskRiskTier(ctx) {
@@ -517,16 +516,27 @@ export function evaluatePreToolUse({
 	if (protectedEntry) {
 		return { deny: true, hardDeny: true, code: "HELI_STATE_PROTECTED", reason: protectedWriteReason(protectedEntry), ctx };
 	}
-	const settingsWrite = [...structuredEntries, ...shellEntries].some((entry) => entry.kind === "claude-settings");
-	if (settingsWrite && disablesClaudeHooks(isShellTool(name) ? rawCommand : stringLeaves(toolInput).join("\n"))) {
-		return {
-			deny: true,
-			hardDeny: true,
-			code: "HELI_HOOKS_PROTECTED",
-			reason:
-				"Heli-Harness blocks settings changes that disable Claude Code hooks or the Heli plugin (disableAllHooks / enabledPlugins). Ask the user to change Claude settings themselves.",
-			ctx,
-		};
+	const settingsEntry = [...structuredEntries, ...shellEntries].find((entry) => entry.kind === "claude-settings");
+	if (settingsEntry) {
+		// A shell command is read whole, and for the assignments jq and PowerShell make; a file tool by the text it puts in the
+		// file (not the text it replaces).
+		const loose = isShellTool(name);
+		const written = loose ? rawCommand : settingsContentOf(toolInput);
+		if (disablesClaudeHooks(written, { loose })) {
+			return {
+				deny: true,
+				hardDeny: true,
+				code: "HELI_HOOKS_PROTECTED",
+				reason:
+					"Heli-Harness blocks settings changes that disable Claude Code hooks or the Heli plugin (disableAllHooks / enabledPlugins). Ask the user to change Claude settings themselves.",
+				ctx,
+			};
+		}
+		// The env block of a settings file can reach Heli's hooks: HELI_YOLO or a relocated grant store is self-approval.
+		const heliVariables = heliEnvironmentKeys(written, { loose });
+		if (heliVariables.length) {
+			return { deny: true, hardDeny: true, code: "HELI_STATE_PROTECTED", reason: protectedEnvironmentReason(settingsEntry, heliVariables), ctx };
+		}
 	}
 
 	// Ownership gates — NEVER bypassed by YOLO.

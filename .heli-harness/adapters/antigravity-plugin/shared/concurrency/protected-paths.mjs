@@ -23,9 +23,15 @@
  *   claude-settings — .claude/settings*.json (content-checked by the caller).
  *   other      — everything else (normal ownership rules apply).
  *
- * This is a guardrail, not a sandbox: wildcards, shell variables set inside the
- * command, and interpreters (`python -c`) can still name a path this module
- * never sees spelled out.
+ * This is a guardrail, not a sandbox: wildcards, `$(...)`, ANSI-C escapes (`$'\x79'`), shell
+ * variables set inside the command, and interpreters (`python -c`) can still name a path this
+ * module never sees spelled out (words are read after quote removal, never expanded). So can a
+ * writer that takes its file name from elsewhere
+ * (`curl -O` and `wget` from the URL, `patch` and `git apply` from diff headers,
+ * `git checkout`), and a `cd` that does not do what the command says: every `cd` is
+ * read as if it succeeded, in order, next to the directory the command started in,
+ * so a `cd` that fails, `cd a || cd b`, `cd -` and a `cd` inside a subshell are not followed.
+ * Settings are read for what a write puts in them, not for what a copy or a move brings.
  */
 import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
@@ -41,6 +47,8 @@ const AUTHORITY_DIRS = new Set(["sessions", "locks", "bindings"]);
 const HELI_LOCATION_MARKERS = [".heli-harness", "/.heli/", "/.heli-data/", "heli-harness.json", "heli-harness-bundle", "/plugins/local/heli-harness", ".claude/settings"];
 // A path this long cannot exist on POSIX and is not worth a filesystem walk on Windows.
 const MAX_REALPATH_CHARS = 4096;
+// How much longer than the hook's own cwd a `cd` chain may make the working directory (see createChainResolver).
+const MAX_CHAIN_GROWTH = 1024;
 
 /** Where Heli installs host hooks (same rule as lib/cli/host.mjs userHome). */
 function hostHome(env) {
@@ -326,20 +334,69 @@ export function classifyToolPaths(rawPaths, { workspaceRoot = null, cwd = proces
 }
 
 /**
- * The directories a `cd` chain leads to from `cwd`: as written, and as Git Bash reads `/c/...` on
- * Windows. Every step is normalized like any other path, so `cd .heli-harness.` or a junction
- * lands where the shell lands.
+ * Resolves `cd` chains one hop at a time and remembers every hop: the directory a chain leads to is
+ * its parent's directory plus one `cd`, so a target costs the same after ten `cd`s as after ten
+ * thousand. (Walking the whole chain for every target made a 19 KB command take two minutes.)
+ * Every `cd` is normalized like any other path, so `cd .heli-harness.` or a junction lands where
+ * the shell lands, and each hop is read as written and, on Windows, as Git Bash reads `/c/...`.
+ * A chain node is `{ dir, parent }`, as shellWriteTargets builds it; a target made by hand has only
+ * its `cdPath` array, which is interned into the same kind of node.
  */
-function chainBases(cwd, cdPath, scope) {
-	const walk = (gitBash) => {
-		let dir = cwd;
-		for (const step of cdPath) {
-			const [written, alternate] = spellings(String(step).trim(), { cwd: dir, lookup: scope.lookup });
-			dir = normalizeSpelling(gitBash ? (alternate ?? written) : written, { cwd: dir, cache: scope.cache }).path;
-		}
-		return dir;
+function createChainResolver(cwd, scope) {
+	const states = new Map();
+	const interned = new Map();
+	const firstSteps = new Map();
+	const start = { native: cwd, gitBash: cwd, bases: [cwd] };
+	const longest = cwd.length + MAX_CHAIN_GROWTH;
+
+	const hop = (state, step) => {
+		const [written, alternate] = spellings(String(step).trim(), { cwd: state.native, lookup: scope.lookup });
+		let native = normalizeSpelling(written, { cwd: state.native, cache: scope.cache }).path;
+		const readsAlike = !isWindows() || (alternate === undefined && state.gitBash === state.native);
+		let gitBash = readsAlike ? native : normalizeSpelling(alternate ?? written, { cwd: state.gitBash, cache: scope.cache }).path;
+		// A working directory cannot be longer than the OS allows, so a chain that grows past that has `cd`s that
+		// fail (nobody checked) and following it further is meaningless: keep the last directory that could exist.
+		// Without this, each hop costs O(length so far) and a 30 KB run of `cd`s takes seconds.
+		if (native.length > longest) native = state.native;
+		if (gitBash.length > longest) gitBash = state.gitBash;
+		return native === state.native && gitBash === state.gitBash ? state : { native, gitBash, bases: [...new Set([cwd, native, gitBash])] };
 	};
-	return [...new Set([cwd, walk(false), ...(isWindows() ? [walk(true)] : [])])];
+	const stateOf = (node) => {
+		const pending = [];
+		let cursor = node;
+		while (cursor && !states.has(cursor)) {
+			pending.push(cursor);
+			cursor = cursor.parent;
+		}
+		let state = cursor ? states.get(cursor) : start;
+		for (let index = pending.length - 1; index >= 0; index -= 1) {
+			state = hop(state, pending[index].dir);
+			states.set(pending[index], state);
+		}
+		return state;
+	};
+	const child = (parent, step) => {
+		const steps = parent ? (parent.children ??= new Map()) : firstSteps;
+		let next = steps.get(step);
+		if (!next) {
+			next = { dir: step, parent, children: null };
+			steps.set(step, next);
+		}
+		return next;
+	};
+	const nodeOf = (target) => {
+		if ("cdChain" in target) return target.cdChain;
+		const chain = target.cdPath || [];
+		let node = interned.get(chain);
+		if (node === undefined) {
+			node = null;
+			for (const step of chain) node = child(node, step);
+			interned.set(chain, node);
+		}
+		return node;
+	};
+	/** The directories to try a target's relative path against: where the command started, and where its `cd`s lead. */
+	return { basesOf: (target) => stateOf(nodeOf(target)).bases };
 }
 
 /**
@@ -350,27 +407,87 @@ function chainBases(cwd, cdPath, scope) {
 export function classifyShellWriteTargets(targets, { workspaceRoot = null, cwd = process.cwd(), env = process.env } = {}) {
 	const scope = newScope({ cwd, env });
 	const locations = protectedLocations(workspaceRoot, { env, cwd, cache: scope.cache });
-	const basesByChain = new Map();
+	const chains = createChainResolver(cwd, scope);
 	const entries = [];
 	for (const target of targets || []) {
-		const chain = target.cdPath || [];
-		let bases = basesByChain.get(chain);
-		if (!bases) {
-			bases = chainBases(cwd, chain, scope);
-			basesByChain.set(chain, bases);
-		}
-		for (const base of bases) entries.push(...classifyRaw(target.path, base, locations, scope));
+		for (const base of chains.basesOf(target)) entries.push(...classifyRaw(target.path, base, locations, scope));
 	}
 	return entries;
 }
 
-/** True when a settings payload turns Heli off (all hooks, or the Heli plugin). */
-export function disablesClaudeHooks(text) {
-	// JSON allows `\u0041` for `A` inside a key, so the payload is read as the file would be.
-	const value = String(text ?? "").replace(/\\u([0-9a-f]{4})/gi, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
-	return /"disableAllHooks"\s*:\s*true/i.test(value) || /"heli-harness@[^"]*"\s*:\s*false/i.test(value);
+/** JSON allows \u0041 for A inside a key, so a settings payload is read as the file would be. */
+function decodeJsonEscapes(text) {
+	return String(text ?? "").replace(/\\u([0-9a-f]{4})/gi, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
+}
+
+// Fields that hold the text an edit replaces, not the text it writes: old_string, oldString, old_str, oldText, old_source,
+// original, search, find, and their spellings.
+const REPLACED_TEXT_KEYS = /^(?:old|original|previous|before|search|find)(?:_?(?:string|str|text|source|content|pattern))?$/i;
+// Text that is a patch: Codex's `*** Begin Patch` format or a unified diff.
+const PATCH_TEXT = /^(?:\*\*\* (?:Begin Patch|Add File: |Update File: |Delete File: )|diff --git |@@ )/m;
+
+function addedLines(patch) {
+	const added = [];
+	for (const line of patch.split(/\r?\n/)) if (line.startsWith("+") && !line.startsWith("+++")) added.push(line.slice(1));
+	return added.join("\n");
+}
+
+/**
+ * The text a file tool's input puts in a settings file: every string except the ones that hold the text being replaced
+ * (`old_string`, `oldText`, `old_str`, ...), and only the added lines of a patch. What an edit removes is not read: the
+ * check is for a write that turns Heli off, and re-enabling hooks is what the user wants.
+ */
+export function settingsContentOf(toolInput) {
+	const parts = [];
+	const stack = [[toolInput, undefined]];
+	while (stack.length) {
+		const [value, key] = stack.pop();
+		if (typeof value === "string") {
+			if (key !== undefined && REPLACED_TEXT_KEYS.test(key)) continue;
+			parts.push(PATCH_TEXT.test(value) ? addedLines(value) : value);
+		} else if (value && typeof value === "object") {
+			const isList = Array.isArray(value);
+			for (const [childKey, child] of Object.entries(value)) stack.push([child, isList ? undefined : childKey]);
+		}
+	}
+	return parts.join("\n");
+}
+
+// The ways a settings payload turns Heli off (all hooks, or the Heli plugin). A file tool writes JSON, so a key is read the way
+// JSON spells it. A shell command may edit the file with jq or PowerShell instead (`.disableAllHooks=true`, `$s.disableAllHooks =
+// $true`, `Add-Member disableAllHooks $true`, `.enabledPlugins["heli-harness@x"]=false`), and those assignments count for a
+// command. No pattern lets whitespace be split two ways, so a long run of it cannot make a match quadratic.
+const HOOKS_OFF_JSON = [/"disableAllHooks"\s*:\s*true/i, /"heli-harness@[^"]*"\s*:\s*false/i];
+const HOOKS_OFF_ASSIGNED = [
+	/\bdisableAllHooks["']?(?:\s*(?:\|?=|:)\s*|\s+(?:-Value\s+)?)\$?true\b/i,
+	/\bheli-harness@[\w.-]*["'\]]*(?:\s*(?:\|?=|:)\s*|\s+(?:-Value\s+)?)\$?false\b/i,
+];
+
+/** True when a settings payload turns Heli off (all hooks, or the Heli plugin). `loose` also reads a shell command's assignments. */
+export function disablesClaudeHooks(text, { loose = false } = {}) {
+	const value = decodeJsonEscapes(text);
+	return HOOKS_OFF_JSON.some((pattern) => pattern.test(value)) || (loose && HOOKS_OFF_ASSIGNED.some((pattern) => pattern.test(value)));
+}
+
+/**
+ * The HELI_ variables a settings payload sets in an `env` block (any key that starts with HELI_, in any case: Windows
+ * variable names are). Claude Code can hand that block to Heli's hook processes, so HELI_YOLO, HELI_GUARDS,
+ * HELI_ALLOW_* or a relocated HELI_DATA_DIR/HELI_CONFIG_DIR (the store that holds the grants) would be
+ * self-approval. For a file tool only a JSON key counts: a value that only mentions one ("Bash(HELI_YOLO=1 npm test)")
+ * is not a key. A shell command can set one with jq or PowerShell (`.env.HELI_YOLO="1"`), so `loose` reads any word that starts
+ * with HELI_ (not `NOT_HELI_X`); a command that writes a settings file and only mentions one is refused too, which is the price
+ * of not parsing every editor.
+ */
+export function heliEnvironmentKeys(text, { loose = false } = {}) {
+	const pattern = loose ? /\b(HELI_[A-Z0-9_]+)/gi : /"(HELI_[^"\s]*)"\s*:/gi;
+	return [...new Set([...decodeJsonEscapes(text).matchAll(pattern)].map((match) => match[1]))];
 }
 
 export function protectedWriteReason(entry) {
 	return `Heli-Harness protects its own authority state: ${entry.raw} is ${entry.label}. Agents may not write it. Use the Heli CLI for normal state changes (heli task/session/target commands), or ask the user to run approval/YOLO commands in their own terminal.`;
+}
+
+/** Reason for a settings write that sets HELI_ environment variables (see heliEnvironmentKeys). */
+export function protectedEnvironmentReason(entry, keys) {
+	return `Heli-Harness protects its own authority state: ${entry.raw} would set ${keys.join(", ")} in an env block, and the host can pass that block to Heli's hook processes, so it could switch YOLO on or move the store that holds Heli's grants and state. Agents may not set HELI_ variables there; ask the user to change Claude settings themselves.`;
 }

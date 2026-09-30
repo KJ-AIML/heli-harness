@@ -54,7 +54,7 @@ $env:HELI_ALLOW_ENV_WRITE = "1"
 ## What YOLO never skips
 
 - T6 hard-deny rules, including Heli's built-in floor (recursive forced deletes, `git reset --hard`, `git clean -f` with `-d`/`-x`)
-- Heli self-protection: agent-run `heli grant issue` / `heli yolo on` / takeovers, and agent writes to Heli's own state
+- Heli self-protection: agent-run `heli grant issue` / `heli yolo on` / takeovers, and agent writes to Heli's own state, or to Claude settings that turn hooks off or set `HELI_` variables in `env`
 - Ownership / write-authority gates
 
 ## What YOLO is **not**

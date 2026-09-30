@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { COMMAND_ANALYSIS_LIMITS, analyzeCommand, evaluateCommandRules, shellWriteTargets } from "../.heli-harness/adapters/shared/command-policy.mjs";
 import { evaluatePreToolUse } from "../.heli-harness/adapters/shared/hook-core.mjs";
-import { classifyShellWriteTargets, classifyToolPaths, disablesClaudeHooks, normalizePolicyPath } from "../.heli-harness/adapters/shared/concurrency/protected-paths.mjs";
+import { classifyShellWriteTargets, classifyToolPaths, disablesClaudeHooks, heliEnvironmentKeys, normalizePolicyPath } from "../.heli-harness/adapters/shared/concurrency/protected-paths.mjs";
 import { createTask } from "../lib/concurrency/task.mjs";
 import { createSession, attachSession } from "../lib/concurrency/session.mjs";
 import { acquireWriteLease } from "../lib/concurrency/lease.mjs";
@@ -449,6 +449,7 @@ try {
 		"Rename-Item .heli-harness/tasks/t1/plan.md task.json",
 		"rename-item -NewName yolo.json -Path .heli-harness/tasks/t1/plan.md",
 		"ren .heli-harness\\tasks\\t1\\plan.md task.json",
+		"env -u ren ren .heli-harness/tasks/t1/plan.md yolo.json", // the first `ren` is an option's value, the second is the command
 		"mklink /H hard.json .heli-harness\\tasks\\t1\\yolo.json",
 		"New-Item -ItemType HardLink -Path hard.json -Target .heli-harness/tasks/t1/yolo.json",
 		"robocopy forged .heli-harness/tasks/t1 yolo.json",
@@ -742,6 +743,522 @@ try {
 	symlinkSync(join(ws, "src"), join(ws, ".heli-harness", "tasks", "t1", "reports"), linkKind);
 	assert.equal(write(ws, ".heli-harness/tasks/t1/reports/app.js", asObserver).code, "NOT_WRITE_MODE");
 	assert.equal(write(ws, ".heli-harness/tasks/t1/reports/app.js", asOwner).deny, false, "the writer may write it");
+
+	// 16. Fix round 1. Every occurrence of a command is read in order, so a `cd` or a write that appears twice is not
+	// dropped (a repeated segment used to vanish and take the directory it changed to with it).
+	for (const command of [
+		"cd .heli-harness; cd ..; cd .heli-harness; cd state; echo x > yolo.json",
+		"cd a; echo x > yolo.json; cd ..; cd .heli-harness/state; echo x > yolo.json",
+		"cd d1; cd ..; cd d2; cd ..; cd .heli-harness/state; echo x > yolo.json",
+		"rm task.json; cd .heli-harness/tasks/t1; rm task.json",
+	]) {
+		assert.ok(writeKinds(command).has("authority"), command);
+	}
+	// The targets keep their documented shape, { path, cdPath }, though a chain is stored one node per `cd`; a target made by hand
+	// (an array and no chain) is classified like one from the analysis.
+	assert.deepStrictEqual(shellWriteTargets(analyzeCommand("cd a && cd b && echo x > f")).find((target) => target.path === "f"), { path: "f", cdPath: ["a", "b"] });
+	assert.deepStrictEqual(shellWriteTargets(analyzeCommand("echo x > f"))[0], { path: "f", cdPath: [] });
+	assert.deepEqual(Object.keys(shellWriteTargets(analyzeCommand("cd a && echo x > f"))[0]), ["path", "cdPath"]);
+	for (const cdPath of [[".heli-harness/state"], [".heli-harness", "state"]]) {
+		const byHand = classifyShellWriteTargets([{ path: "yolo.json", cdPath }, { path: "y", cdPath }, { path: "z" }], { workspaceRoot: legacy, cwd: legacy, env });
+		assert.ok(byHand.some((entry) => entry.kind === "authority" && entry.raw === "yolo.json"), JSON.stringify(cdPath));
+	}
+	// A chain stops growing the working directory at a bound (no real directory is longer than the OS allows, and a chain that long
+	// has `cd`s that fail): that is what keeps each hop cheap however many there are.
+	const grown = classifyShellWriteTargets(
+		shellWriteTargets(analyzeCommand(`${Array.from({ length: 60 }, (_, i) => `cd ${"x".repeat(100)}${i}`).join("; ")}; echo y > out.txt`)),
+		{ workspaceRoot: legacy, cwd: legacy, env },
+	);
+	assert.ok(grown.length > 0 && grown.every((entry) => entry.normalized.length < legacy.length + 1024 + 300), `the chain grew the directory to ${Math.max(...grown.map((entry) => entry.normalized.length))} characters`);
+	// A `cd` chain costs the same per target however long it is. It used to cost O(chain) per target: a 19 KB command
+	// took 121 s, one write after 3,500 `cd`s took 8 s, and hosts treat a hook that times out as an allow. The shapes
+	// below run at and near the analysis limits and must still be denied for the protected write at their end.
+	const largestFit = (build) => {
+		let low = 1;
+		let high = 20000;
+		while (low < high) {
+			const mid = Math.ceil((low + high) / 2);
+			if (analyzeCommand(build(mid)).limitExceeded) high = mid - 1;
+			else low = mid;
+		}
+		return low;
+	};
+	const protectedTail = "echo x > .heli-harness/state/yolo.json";
+	const chainShapes = [
+		["cd dK; echo x > fK", (n) => `${Array.from({ length: n }, (_, i) => `cd d${i}; echo x > f${i}`).join("; ")}; ${protectedTail}`],
+		["cd dK", (n) => `${Array.from({ length: n }, (_, i) => `cd d${i}`).join("; ")}; ${protectedTail}`],
+		["cd dK; cd ..", (n) => `${Array.from({ length: n }, (_, i) => `cd d${i}; cd ..`).join("; ")}; ${protectedTail}`],
+		["cd <long name>", (n) => `${Array.from({ length: n }, (_, i) => `cd ${"long".repeat(20)}${i}`).join("; ")}; ${protectedTail}`],
+		// The chain's own result decides this one: every pair returns to the start, then `cd` goes into Heli state.
+		["cd dK; cd .. then cd into state", (n) => `${Array.from({ length: n }, (_, i) => `cd d${i}; cd ..`).join("; ")}; cd .heli-harness/state; echo x > yolo.json`],
+	];
+	for (const [label, build] of chainShapes) {
+		const largest = largestFit(build);
+		assert.ok(largest >= 500, `${label}: the analysis limits allow only ${largest}`);
+		for (const size of [...new Set([100, 200, 400, 800, Math.floor(largest * 0.9), largest].filter((n) => n <= largest))]) {
+			const command = build(size);
+			assert.ok(command.length <= limits.maxCommandChars, `${label} x${size} fits the command limit`);
+			assert.equal(analyzeCommand(command).limitExceeded, null, `${label} x${size} fits the analysis limits`);
+			const started = Date.now();
+			const result = evaluate(legacy, "Bash", { command });
+			const elapsed = Date.now() - started;
+			assert.equal(result.code, "HELI_STATE_PROTECTED", `${label} x${size}: ${result.code} ${result.reason}`);
+			assert.ok(elapsed < 5000, `${label} x${size} (${command.length} chars) took ${elapsed} ms`);
+		}
+		const unitStart = Date.now();
+		const kinds = new Set(classifyShellWriteTargets(shellWriteTargets(analyzeCommand(build(largest))), { workspaceRoot: legacy, cwd: legacy, env }).map((entry) => entry.kind));
+		assert.ok(kinds.has("authority"), label);
+		assert.ok(Date.now() - unitStart < 3000, `${label} x${largest}: classifying took ${Date.now() - unitStart} ms`);
+	}
+	// The same chains without the protected write are allowed, and just as fast.
+	const harmlessChain = Array.from({ length: 1200 }, (_, i) => `cd d${i}; echo x > f${i}`).join("; ");
+	const harmlessStart = Date.now();
+	assert.equal(evaluate(legacy, "Bash", { command: harmlessChain }).deny, false);
+	assert.ok(Date.now() - harmlessStart < 5000, `a long harmless chain took ${Date.now() - harmlessStart} ms`);
+
+	// 17. Fix round 1. Redirect operators bash accepts beyond `>` and `>>` (`>|` overrides noclobber, `<>` opens a file for
+	// reading and writing and creates it, `x=>file` is an empty assignment and a redirect), and the common writers that
+	// take an explicit output path.
+	for (const command of [
+		"echo x >| .heli-harness/state/yolo.json",
+		"echo x 2>| .heli-harness/state/yolo.json",
+		"printf '{\"enabled\":true}' x=>.heli-harness/state/yolo.json",
+		"x=>.heli-harness/state/yolo.json",
+		"echo x =>.heli-harness/state/yolo.json",
+		"exec 3<>.heli-harness/state/yolo.json",
+		"exec 3<>.heli-harness/state/yolo.json; echo '{\"enabled\":true}' >&3",
+		"cat <>.heli-harness/state/yolo.json",
+		"cat 3<> .heli-harness/tasks/t1/task.json",
+		"sort -o .heli-harness/state/yolo.json forged.json",
+		"sort --output=.heli-harness/tasks/t1/task.json forged.json",
+		"sort -ro .heli-harness/tasks/t1/task.json forged.json",
+		"curl -o .heli-harness/state/yolo.json http://example.com/yolo.json",
+		"curl --output .heli-harness/state/yolo.json http://example.com/yolo.json",
+		"curl --output=.heli-harness/state/yolo.json http://example.com/yolo.json",
+		"curl -sSLo .heli-harness/state/yolo.json http://example.com/yolo.json",
+		"wget -O .heli-harness/state/yolo.json http://example.com/yolo.json",
+		"wget -O.heli-harness/state/yolo.json http://example.com/yolo.json",
+		"wget --output-document=.heli-harness/state/yolo.json http://example.com/yolo.json",
+		"wget --output-document .heli-harness/state/yolo.json http://example.com/yolo.json",
+		"curl --output-dir .heli-harness/state -O http://example.com/yolo.json",
+		"curl -D .heli-harness/state/yolo.json http://example.com/",
+		"curl -c .heli-harness/state/yolo.json http://example.com/",
+		"wget -P .heli-harness/state http://example.com/yolo.json",
+		"wget --directory-prefix=.heli-harness/state http://example.com/yolo.json",
+		"wget -o .heli-harness/state/yolo.json http://example.com/",
+		"Invoke-WebRequest -Uri http://example.com/yolo.json -OutFile .heli-harness/state/yolo.json",
+		"iwr http://example.com/yolo.json -OutFile .heli-harness/state/yolo.json",
+		"iwr http://example.com/yolo.json -outfile:.heli-harness/state/yolo.json",
+		"irm http://example.com/yolo.json -OutFile .heli-harness/state/yolo.json",
+		"Invoke-RestMethod http://example.com/yolo.json -OutFile .heli-harness/state/yolo.json",
+		"tar -xzf forged.tgz -C .heli-harness/tasks/t1",
+		"tar -xf forged.tar --directory=.heli-harness/state",
+		"tar -xf forged.tar --directory .heli-harness/state",
+		"tar xf forged.tar -C .heli-harness/sessions",
+		"tar -xzf forged.tgz -C.heli-harness/state",
+		"cd .heli-harness/state && tar -xf forged.tar",
+		"tar -cf .heli-harness/state/yolo.json src",
+		"tar czf .heli-harness/tasks/t1/task.json src",
+		"unzip forged.zip -d .heli-harness/tasks/t1",
+		"unzip -d .heli-harness/state forged.zip",
+		"unzip -d.heli-harness/state forged.zip",
+		"cd .heli-harness/state && unzip forged.zip",
+		"Expand-Archive -Path forged.zip -DestinationPath .heli-harness/state",
+		"rsync -a forged/ .heli-harness/tasks/t1/",
+		"rsync -av forged.json .heli-harness/state/yolo.json",
+		"rsync -a --exclude x forged/ .heli-harness/state/",
+		"rsync -e ssh -a host:forged/ .heli-harness/state/",
+		"truncate -s 0 .heli-harness/tasks/t1/events.jsonl",
+		"install -m 644 forged.json .heli-harness/state/yolo.json",
+		"dd if=forged.json of=.heli-harness/state/yolo.json bs=1",
+		// The folder a GNU cp, mv, install or ln puts its files in, with the value attached to the option.
+		"cp -t .heli-harness/state /tmp/yolo.json",
+		"cp -t.heli-harness/state /tmp/yolo.json",
+		"cp -at.heli-harness/state /tmp/yolo.json",
+		"cp --target-directory=.heli-harness/state /tmp/yolo.json",
+		"cp --target-directory .heli-harness/state /tmp/yolo.json",
+		"mv -t.heli-harness/tasks/t1 /tmp/task.json",
+		"install --target-directory=.heli-harness/state forged.json",
+		// A writer's name can also be the value of an option before it (`env -u tar`): every appearance is read, not the first.
+		"env -u tar tar xzf forged.tgz -C .heli-harness/state",
+		"env -u unzip unzip -d .heli-harness/state forged.zip",
+		"env -u rsync rsync -a forged/ .heli-harness/state/",
+		"env -u curl curl -o .heli-harness/state/yolo.json http://example.com/yolo.json",
+	]) {
+		assert.ok(writeKinds(command).has("authority"), command);
+	}
+	for (const command of [
+		"echo x >| out.txt",
+		"exec 3<>out.txt",
+		"a=>out.txt",
+		"sort -o sorted.txt in.txt",
+		"sort in.txt",
+		"curl -o out.json http://example.com/x.json",
+		"curl -o - http://example.com/x.json",
+		"curl http://example.com/x.json",
+		"curl -O http://example.com/x.json",
+		"wget -O notes.txt http://example.com/x.txt",
+		"wget -O - http://example.com/x.txt",
+		"wget http://example.com/x.txt",
+		"iwr http://example.com/x.txt -OutFile notes.txt",
+		"iwr http://example.com/x.txt",
+		"tar -xzf a.tgz -C build",
+		"tar -xf a.tar",
+		"tar -tf a.tar",
+		"tar -cf out.tar src",
+		"unzip a.zip -d out",
+		"unzip a.zip",
+		"unzip -l a.zip",
+		"rsync -a src/ dest/",
+		"rsync -a .heli-harness/tasks/t1/plan.md /tmp/plan.bak",
+		"rsync src",
+		"Expand-Archive -Path a.zip -DestinationPath out",
+	]) {
+		assert.ok(!writeKinds(command).has("authority"), command);
+	}
+	// What the reader takes for a target, one operator or writer at a time.
+	for (const [command, expected] of [
+		["echo x >| a", ["a"]],
+		["echo x 2>| a", ["a"]],
+		["echo x >|a", ["a"]],
+		["echo x >| \"a b\"", ["a b"]],
+		["x=>a", ["a"]],
+		["echo x=>a", ["a"]],
+		["echo x =>a", ["a"]],
+		["exec 3<>a", ["a"]],
+		["cat <>a", ["a"]],
+		["cat 3<> a", ["a"]],
+		["echo x >&3", []],
+		["echo x 3>&1", []],
+		["echo x <in", []],
+		["cat <<EOF", []],
+		["sort -o out in", ["out"]],
+		["sort -ro out in", ["out"]],
+		["sort -oout in", ["out"]],
+		["sort --output=out in", ["out"]],
+		["sort --output out in", ["out"]],
+		["sort in", []],
+		["curl -o out http://x", ["out"]],
+		["curl --output out http://x", ["out"]],
+		["curl --output=out http://x", ["out"]],
+		["curl -sSLo out http://x", ["out"]],
+		["curl -o - http://x", []],
+		["curl -O http://x/f", []],
+		["curl --output-dir dir -O http://x/f", ["dir"]],
+		["curl -D headers.txt http://x", ["headers.txt"]],
+		["curl -c jar.txt http://x", ["jar.txt"]],
+		["curl -XDELETE http://x", ["ELETE"]], // an over-approximation: the reader does not know that -X takes a value, so it reads -D
+		["curl -XPOST http://x", []],
+		["wget -P dir http://x", ["dir"]],
+		["wget --directory-prefix=dir http://x", ["dir"]],
+		["wget -o log.txt http://x", ["log.txt"]],
+		["wget -a log.txt http://x", ["log.txt"]],
+		["wget -qO- http://x", []],
+		["wget -O out http://x", ["out"]],
+		["wget -Oout http://x", ["out"]],
+		["wget --output-document=out http://x", ["out"]],
+		["wget --output-document out http://x", ["out"]],
+		["wget -O - http://x", []],
+		["wget http://x", []],
+		["iwr http://x -OutFile out", ["out"]],
+		["Invoke-WebRequest -Uri http://x -OutFile out", ["out"]],
+		["Invoke-RestMethod http://x -outfile out", ["out"]],
+		["irm http://x -OutFile:out", ["out"]],
+		["iwr http://x", []],
+		["tar -xzf a.tgz -C dir", ["dir"]],
+		["tar -xf a.tar --directory dir", ["dir"]],
+		["tar -xf a.tar --directory=dir", ["dir"]],
+		["tar xzf a.tgz -C dir", ["dir"]],
+		["env -u tar tar xzf a.tgz -C dir", ["dir"]],
+		["cp -t d f", ["d", "f"]],
+		["cp -td f", ["d", "f"]],
+		["cp -atd f", ["d", "f"]],
+		["cp --target-directory=d f", ["d", "f"]],
+		["cp --preserve=all a b", ["a", "b"]],
+		["tar -xzf a.tgz -Cdir", ["dir"]],
+		["tar -xf a.tar", ["."]],
+		["tar -cf out.tar src", ["out.tar"]],
+		["tar czf out.tgz src", ["out.tgz"]],
+		["tar --create --file=out.tar src", ["out.tar"]],
+		["tar -tf a.tar", []],
+		["unzip a.zip -d dir", ["dir"]],
+		["unzip -d dir a.zip", ["dir"]],
+		["unzip -ddir a.zip", ["dir"]],
+		["unzip a.zip", ["."]],
+		["unzip -l a.zip", []],
+		["Expand-Archive -Path a.zip -DestinationPath dir", ["dir"]],
+		["rsync -av src/ dest/", ["dest/"]],
+		["rsync -a a b c dest", ["dest"]],
+		["rsync -a --exclude x src dest", ["dest"]],
+		["rsync -e ssh src dest", ["dest"]],
+		["rsync src", []],
+		["dd if=a of=b bs=1", ["b"]],
+	]) {
+		assert.deepEqual(targetsOf(command), [...expected].sort(), command);
+	}
+	// Through the whole hook: the legacy workspace, and the lease holder of a concurrent one.
+	for (const command of ["printf '{\"enabled\":true}' x=>.heli-harness/state/yolo.json", "echo x >| .heli-harness/state/yolo.json", "exec 3<>.heli-harness/state/yolo.json; echo '{\"enabled\":true}' >&3", "curl -o .heli-harness/state/yolo.json http://example.com/y.json", "tar -xf forged.tar -C .heli-harness/state"]) {
+		assert.equal(shell(command).code, "HELI_STATE_PROTECTED", command);
+		assert.equal(evaluate(ws, "Bash", { command }, asOwner).code, "HELI_STATE_PROTECTED", `${command} (lease holder)`);
+	}
+	// A `>|` is not a pipe: what follows it is a file, not a command the rules read.
+	assert.equal(analyzeCommand("echo x >| notes.txt").segments.length, 2, "one segment per dialect");
+	// A `cd` behind a shell keyword, a wrapper of the builtin or an assignment is a `cd` all the same, and a redirect target
+	// is the word as the shell reads it: `yol''o.json`, `yolo\.json` and `$'yolo.json'` all name yolo.json.
+	for (const command of [
+		"{ cd .heli-harness/state; echo x > yolo.json; }",
+		"if true; then cd .heli-harness/state; echo x > yolo.json; fi",
+		"if true; then cd .heli-harness/state\necho x > yolo.json\nfi",
+		"for i in 1; do cd .heli-harness/state; echo x > yolo.json; done",
+		"while true; do cd .heli-harness/state; echo x > yolo.json; break; done",
+		"if false; then :; else cd .heli-harness/state; echo x > yolo.json; fi",
+		"builtin cd .heli-harness/state && echo x > yolo.json",
+		"command cd .heli-harness/state && echo x > yolo.json",
+		"command -- cd .heli-harness/state && echo x > yolo.json",
+		"time cd .heli-harness/state && echo x > yolo.json",
+		"! cd .heli-harness/state && echo x > yolo.json",
+		"CDPATH= cd .heli-harness/state && echo x > yolo.json",
+		"f() { cd .heli-harness/state; echo x > yolo.json; }; f",
+		"cd .heli-harness/state && echo x > yolo\\.json",
+		"cd .heli-harness/state && echo x > yol''o.json",
+		"cd .heli-harness/state && echo x > yolo.js\"\"on",
+		"cd .heli-harness/state && echo x > \"yolo\".json",
+		"cd .heli-harness/state && echo x > $'yolo.json'",
+		"cd .heli-harness/state && echo x > $\"yolo.json\"",
+		"echo x > .heli-harness/state/yol''o.json",
+		"echo x > .heli-harness/state/\"yolo\".json",
+		"echo x > '.heli-harness/state/'yolo.json",
+		"echo x > $'.heli-harness/state/yolo.json'",
+		"echo x >| .heli-harness/state/yol\\o.json",
+		"exec 3<>.heli-harness/state/yol\"\"o.json",
+	]) {
+		assert.equal(shell(command).code, "HELI_STATE_PROTECTED", command);
+	}
+	for (const command of [
+		"if true; then cd src; echo x > out.txt; fi",
+		"builtin cd docs && echo x > notes.txt",
+		"! cd docs && echo x > yolo.json",
+		"echo x > 'my notes.txt'",
+		"echo x > \"my\"' notes'.txt",
+	]) {
+		assert.equal(shell(command).deny, false, command);
+	}
+	for (const [command, expected] of [
+		["echo x > yol''o.json", ["yolo.json"]],
+		["echo x > \"yo\"lo.json", ["yolo.json"]],
+		["echo x > 'a b'c", ["a bc"]],
+		["echo x > $'a.json'", ["a.json"]],
+		["echo x > \"a b\"", ["a b"]],
+		["echo x >| \"a b\"", ["a b"]],
+		["echo x > \"\"", []],
+	]) {
+		assert.deepEqual(targetsOf(command), expected, command);
+	}
+	// The option readers stay linear on hostile words: one long cluster of letters, one program named over and over.
+	for (const command of [
+		`tar -${"x".repeat(nearLimit - 8)}f`,
+		`tar ${"x".repeat(nearLimit - 8)}`,
+		`unzip -${"d".repeat(nearLimit - 10)}`,
+		`unzip -${"l".repeat(nearLimit - 10)}!`,
+		`curl -${"s".repeat(nearLimit - 10)}o`,
+		`sort -${"o".repeat(nearLimit - 10)}`,
+		`rsync -${"a".repeat(nearLimit - 10)}e`,
+		`iwr -${"o".repeat(nearLimit - 10)}`,
+		`${"tar ".repeat(60)}-xf a`,
+		`${"rsync ".repeat(40)}${Array.from({ length: 200 }, (_, i) => `a${i}`).join(" ")}`,
+		// Every appearance of a program is read to the end of its segment: many appearances, then one very long word.
+		`${"tar ".repeat(120)}-${"x".repeat(nearLimit - 600)}f`,
+		`${"curl ".repeat(120)}-${"s".repeat(nearLimit - 700)}o`,
+		`${"rsync ".repeat(120)}-${"a".repeat(nearLimit - 900)}e`,
+		`cp -${"a".repeat(nearLimit - 8)}`,
+		`cp -${"a".repeat(nearLimit - 8)}t`,
+		`${"cp ".repeat(120)}${Array.from({ length: 100 }, () => `-${"a".repeat(400)}`).join(" ")}`,
+		`${"echo x >|a ".repeat(3000)}`,
+		`${"echo x <>a ".repeat(3000)}`,
+		`x${"=>".repeat(20000)}`,
+	]) {
+		within(400, `option readers on ${command.slice(0, 24)}...`, () => shellWriteTargets(analyzeCommand(command)));
+	}
+	// The settings checks stay linear on hostile text too: a file tool's content is not limited by the command budget, so
+	// these are far past it: long runs of whitespace after a key, one name repeated, a quote-and-bracket run.
+	const hostileSize = 100000;
+	for (const text of [
+		`disableAllHooks${" ".repeat(hostileSize)}x`,
+		`"disableAllHooks"${" ".repeat(hostileSize)}x`,
+		`disableAllHooks -Value${" ".repeat(hostileSize)}x`,
+		"disableAllHooks = ".repeat(hostileSize / 18),
+		"heli-harness@".repeat(hostileSize / 13),
+		`heli-harness@x"]${" ".repeat(hostileSize)}y`,
+		"HELI_A ".repeat(hostileSize / 7),
+		`"HELI_A"${" ".repeat(hostileSize)}x`,
+	]) {
+		within(400, `settings checks on ${text.slice(0, 24)}...`, () => [
+			disablesClaudeHooks(text),
+			disablesClaudeHooks(text, { loose: true }),
+			heliEnvironmentKeys(text),
+			heliEnvironmentKeys(text, { loose: true }),
+		]);
+	}
+
+	// 18. Fix round 1. The `env` block of a Claude settings file can reach Heli's hook processes, so a settings write that
+	// sets a HELI_ variable (YOLO, GUARDS, ALLOW_*, or the data/config dir that holds the grants) is refused, whatever tool
+	// or spelling carries it. Other settings, and other env variables, stay writable.
+	const envBlock = (variables) => JSON.stringify({ env: variables });
+	const yoloEnv = envBlock({ HELI_YOLO: "1" });
+	for (const content of [
+		yoloEnv,
+		envBlock({ HELI_GUARDS: "off" }),
+		envBlock({ HELI_ALLOW_GIT_PUSH: "1", HELI_ALLOW_ENV_WRITE: "1" }),
+		envBlock({ HELI_DATA_DIR: join(scratch, "forged-data") }),
+		envBlock({ HELI_CONFIG_DIR: join(scratch, "forged-config") }),
+		envBlock({ HELI_SESSION_ID: "heli-ses-owner" }),
+		envBlock({ FOO: "1", HELI_YOLO: "1" }),
+		"{\"env\":{\"heli_yolo\":\"1\"}}",
+		"{\n  \"env\": {\n    \"HELI_YOLO\"\n    :\n    \"1\"\n  }\n}",
+		"{\"env\":{\"HELI\\u005fYOLO\":\"1\"}}",
+		"{\"env\":{\"\\u0048ELI_YOLO\":\"1\"}}",
+	]) {
+		const result = settings(".claude/settings.json", content);
+		assert.equal(result.deny, true, `env block: ${content}`);
+		assert.equal(result.code, "HELI_STATE_PROTECTED", `${content}: ${result.reason}`);
+		assert.match(result.reason, /Heli-Harness protects its own authority state/, content);
+	}
+	// Every settings file: project, user, CLAUDE_CONFIG_DIR, and the local variants.
+	for (const filePath of [".claude/settings.local.json", "sub/.claude/settings.json", join(hostHome, ".claude", "settings.json"), join(hostHome, ".claude", "settings.local.json")]) {
+		assert.equal(settings(filePath, yoloEnv).code, "HELI_STATE_PROTECTED", filePath);
+	}
+	assert.equal(evaluate(ws, "Write", { file_path: join(claudeConfigDir, "settings.json"), content: yoloEnv }, { ...asOwner, CLAUDE_CONFIG_DIR: claudeConfigDir }).code, "HELI_STATE_PROTECTED", "CLAUDE_CONFIG_DIR");
+	assert.equal(evaluate(dotfiles, "Write", { file_path: ".claude/settings.json", content: yoloEnv }).code, "HELI_STATE_PROTECTED", "a linked .claude");
+	// Every tool that can write it.
+	const envEdit = { old_string: "\"env\": {}", new_string: "\"env\": {\"HELI_YOLO\": \"1\"}" };
+	for (const [toolName, toolInput] of [
+		["Edit", { file_path: ".claude/settings.json", ...envEdit }],
+		["MultiEdit", { file_path: ".claude/settings.json", edits: [{ old_string: "a", new_string: "b" }, envEdit] }],
+		["NotebookEdit", { notebook_path: ".claude/settings.json", new_source: yoloEnv, edit_mode: "replace" }],
+		["str_replace_editor", { command: "str_replace", path: ".claude/settings.json", old_str: "{}", new_str: yoloEnv }],
+		["mcp__filesystem__write_file", { path: ".claude/settings.json", content: yoloEnv }],
+		["mcp__filesystem__edit_file", { path: ".claude/settings.json", edits: [{ oldText: "{}", newText: yoloEnv }] }],
+		["apply_patch", { command: `*** Begin Patch\n*** Update File: .claude/settings.json\n@@\n-{}\n+${yoloEnv}\n*** End Patch\n` }],
+		["apply_patch", { command: `*** Begin Patch\n*** Add File: .claude/settings.local.json\n+${yoloEnv}\n*** End Patch\n` }],
+	]) {
+		const result = evaluate(ws, toolName, toolInput, asOwner);
+		assert.equal(result.code, "HELI_STATE_PROTECTED", `${toolName}: ${result.reason}`);
+		assert.match(result.reason, /protects its own authority state/, toolName);
+	}
+	// A shell edit may not spell the setting as JSON: jq and PowerShell assign it, so a shell command that writes a settings
+	// file is read for the variable's name wherever it appears (a file tool is read for JSON keys, so a value that only
+	// mentions one is fine there).
+	for (const command of [
+		"jq '.env.HELI_YOLO=\"1\"' .claude/settings.json > /tmp/settings.json && mv /tmp/settings.json .claude/settings.json",
+		"jq '.env += {\"HELI_DATA_DIR\": \"/forged\"}' .claude/settings.json | tee .claude/settings.local.json",
+		"$s = Get-Content .claude/settings.json | ConvertFrom-Json; $s.env.HELI_YOLO = '1'; $s | ConvertTo-Json | Set-Content .claude/settings.json",
+		"sed -i 's/{}/{\"env\":{\"HELI_GUARDS\":\"off\"}}/' .claude/settings.json",
+		"printf '%s' \"$JSON\" > .claude/settings.json # sets HELI_ALLOW_GIT_PUSH",
+	]) {
+		const result = evaluate(legacy, "Bash", { command });
+		assert.equal(result.code, "HELI_STATE_PROTECTED", `${command}: ${result.reason}`);
+	}
+	assert.equal(evaluate(legacy, "Bash", { command: "jq '.model=\"opus\"' .claude/settings.json > /tmp/settings.json" }).deny, false, "a jq edit of something else");
+	assert.equal(evaluate(legacy, "Bash", { command: "echo HELI_YOLO > notes.txt" }).deny, false, "mentioning a variable is not writing settings");
+	// Shell writes, from the project and from the user's home.
+	for (const [command, extraEnv] of [
+		[`echo '${yoloEnv}' > .claude/settings.local.json`, {}],
+		[`printf '${yoloEnv}' | tee .claude/settings.json`, {}],
+		[`cat > .claude/settings.json <<'EOF'\n${envBlock({ HELI_DATA_DIR: "/forged" })}\nEOF`, {}],
+		[`echo '${yoloEnv}' > ~/.claude/settings.json`, homeEnv],
+		[`sed -i 's/{}/${yoloEnv}/' .claude/settings.json`, {}],
+		[`echo '${yoloEnv}' >> "${join(claudeConfigDir, "settings.json")}"`, { CLAUDE_CONFIG_DIR: claudeConfigDir }],
+	]) {
+		const result = evaluate(legacy, "Bash", { command }, extraEnv);
+		assert.equal(result.code, "HELI_STATE_PROTECTED", `${command}: ${result.reason}`);
+	}
+	// What stays allowed: other env variables and settings, values that merely mention HELI_, and files that are not settings.
+	for (const content of [
+		envBlock({ FOO: "1" }),
+		envBlock({ NODE_OPTIONS: "--max-old-space-size=4096" }),
+		envBlock({ NOT_HELI_YOLO: "1", MYHELI_X: "1" }),
+		JSON.stringify({ permissions: { allow: ["Bash(HELI_YOLO=1 npm test)"] } }),
+		JSON.stringify({ model: "HELI_YOLO" }),
+	]) {
+		assert.equal(settings(".claude/settings.json", content).deny, false, content);
+	}
+	for (const filePath of ["docs/config.json", ".claude/notes.json", "docs/settings.json", ".claude-backup/settings.json"]) {
+		assert.equal(settings(filePath, yoloEnv).deny, false, filePath);
+	}
+	assert.equal(evaluate(legacy, "Bash", { command: "echo HELI_YOLO=1 > notes.txt" }).deny, false);
+	assert.equal(evaluate(legacy, "Bash", { command: "export HELI_YOLO=1" }).deny, false);
+	// Claude's MultiEdit and NotebookEdit are file writers like Edit and Write: an observer may not use them on source, and the
+	// lease holder may.
+	for (const [toolName, toolInput] of [
+		["MultiEdit", { file_path: "src/app.js", edits: [{ old_string: "a", new_string: "b" }] }],
+		["NotebookEdit", { notebook_path: "src/analysis.ipynb", new_source: "print(1)", edit_mode: "replace" }],
+	]) {
+		assert.equal(evaluate(ws, toolName, toolInput, asObserver).code, "NOT_WRITE_MODE", `${toolName} needs write authority`);
+		assert.equal(evaluate(ws, toolName, toolInput, asOwner).deny, false, `${toolName} by the lease holder`);
+		assert.equal(evaluate(ws, toolName, { ...toolInput, [toolName === "MultiEdit" ? "file_path" : "notebook_path"]: ".heli-harness/tasks/t1/yolo.json" }, asOwner).code, "HELI_STATE_PROTECTED", `${toolName} on Heli state`);
+	}
+
+	// 19. Fix round 1. Turning hooks back on, or taking an injected variable out, is not the attack: only the text a write puts
+	// in the file is read (the new string of an edit, the content of a write, the added lines of a patch), never the text it
+	// replaces. The same tools writing the disabling text are still refused.
+	const hooksOff = "\"disableAllHooks\": true";
+	const hooksOn = "\"disableAllHooks\": false";
+	const pluginOff = "\"enabledPlugins\": {\"heli-harness@heli-harness\": false}";
+	const pluginOn = "\"enabledPlugins\": {\"heli-harness@heli-harness\": true}";
+	const injected = "\"env\": {\"HELI_YOLO\": \"1\"}";
+	const clean = "\"env\": {}";
+	const patchOf = (removed, added) => `*** Begin Patch\n*** Update File: .claude/settings.json\n@@\n-  ${removed}\n+  ${added}\n*** End Patch\n`;
+	// [how the tool spells an edit, the tool call for (old text, new text)]
+	const editForms = [
+		["Edit", (oldText, newText) => ["Edit", { file_path: ".claude/settings.json", old_string: oldText, new_string: newText }]],
+		["Edit (replace_all)", (oldText, newText) => ["Edit", { file_path: ".claude/settings.json", old_string: oldText, new_string: newText, replace_all: true }]],
+		["MultiEdit", (oldText, newText) => ["MultiEdit", { file_path: ".claude/settings.json", edits: [{ old_string: oldText, new_string: newText }] }]],
+		["MultiEdit, second edit", (oldText, newText) => ["MultiEdit", { file_path: ".claude/settings.json", edits: [{ old_string: "a", new_string: "b" }, { old_string: oldText, new_string: newText }] }]],
+		["str_replace_editor", (oldText, newText) => ["str_replace_editor", { command: "str_replace", path: ".claude/settings.json", old_str: oldText, new_str: newText }]],
+		["camelCase fields", (oldText, newText) => ["Edit", { file_path: ".claude/settings.json", oldString: oldText, newString: newText }]],
+		["MCP edit_file", (oldText, newText) => ["mcp__filesystem__edit_file", { path: ".claude/settings.json", edits: [{ oldText, newText }] }]],
+		["apply_patch", (oldText, newText) => ["apply_patch", { command: patchOf(oldText, newText) }]],
+	];
+	for (const [label, form] of editForms) {
+		for (const [oldText, newText, what] of [[hooksOff, hooksOn, "hooks back on"], [pluginOff, pluginOn, "plugin back on"], [injected, clean, "injected variable removed"]]) {
+			const [toolName, toolInput] = form(oldText, newText);
+			const result = evaluate(ws, toolName, toolInput, asOwner);
+			assert.equal(result.deny, false, `${label}, ${what}: ${result.code} ${result.reason}`);
+		}
+		for (const [oldText, newText, code, what] of [
+			[hooksOn, hooksOff, "HELI_HOOKS_PROTECTED", "hooks off"],
+			[pluginOn, pluginOff, "HELI_HOOKS_PROTECTED", "plugin off"],
+			[clean, injected, "HELI_STATE_PROTECTED", "variable injected"],
+			[hooksOff, `${hooksOff}, "x": 1`, "HELI_HOOKS_PROTECTED", "hooks still off after a reformat"],
+		]) {
+			const [toolName, toolInput] = form(oldText, newText);
+			assert.equal(evaluate(ws, toolName, toolInput, asOwner).code, code, `${label}, ${what}`);
+		}
+	}
+	assert.equal(settings(".claude/settings.json", `{${hooksOn}}`).deny, false, "a Write that says hooks are on");
+	// A shell command is read whole, as before, and its assignment spellings (jq, PowerShell) count as JSON does.
+	assert.equal(evaluate(legacy, "Bash", { command: `echo '{${hooksOff}}' > .claude/settings.json` }).code, "HELI_HOOKS_PROTECTED");
+	for (const command of [
+		"jq '.disableAllHooks=true' .claude/settings.json > /tmp/s.json && mv /tmp/s.json .claude/settings.json",
+		"jq '.disableAllHooks = true' .claude/settings.json | tee .claude/settings.local.json",
+		"$s = Get-Content .claude/settings.json | ConvertFrom-Json; $s | Add-Member disableAllHooks $true -Force; $s.disableAllHooks = $true; $s | ConvertTo-Json | Set-Content .claude/settings.json",
+		"jq '.enabledPlugins[\"heli-harness@heli-harness\"]=false' .claude/settings.json | tee .claude/settings.json",
+		"$s.enabledPlugins.'heli-harness@heli-harness' = $false; $s | ConvertTo-Json | Set-Content .claude/settings.json",
+	]) {
+		assert.equal(evaluate(legacy, "Bash", { command }).code, "HELI_HOOKS_PROTECTED", command);
+	}
+	for (const command of ["jq '.disableAllHooks=false' .claude/settings.json | tee .claude/settings.json", "$s.disableAllHooks = $false; $s | ConvertTo-Json | Set-Content .claude/settings.json"]) {
+		assert.equal(evaluate(legacy, "Bash", { command }).deny, false, command);
+	}
+
+	// 20. Fix round 1. This test is part of `npm run check`, and the chain that runs it is well formed: every step is a `node`
+	// command joined to the next by ` && ` (an edit once left `&&node`), with this test right after the command-rules test.
+	const checkChain = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts.check;
+	assert.ok(!/&&(?! )|(?<! )&&/.test(checkChain), "every && in scripts.check has a space on both sides");
+	for (const step of checkChain.split(" && ")) {
+		assert.match(step, /^node (?:--check )?[\w./-]+\.m?js(?: --check)?$/, `a well-formed step: ${step}`);
+	}
+	assert.ok(checkChain.includes("node scripts/smoke-command-rules.mjs && node scripts/smoke-self-protection.mjs && node scripts/smoke-concurrency-foundation.mjs"), "smoke-self-protection runs right after smoke-command-rules");
 
 	console.log("self-protection smoke ok");
 } finally {
