@@ -303,10 +303,12 @@ The sync server is treated as untrusted for governance purposes:
   commands in a pseudo-terminal is out of their reach. When changes are accepted, the pull
   prints the list it applied.
 - **No aliased paths:** bundle entry names must be canonical (empty or `.` segments, `:`,
-  control characters and 8.3 `~1` names are refused) and governance
-  files are matched case-insensitively, so a spelling such as `tasks/x/./yolo.json` or
-  `tasks/x/Yolo.json` cannot reach `tasks/<id>/yolo.json` unlisted. A bundle with any
-  refused entry writes nothing.
+  control characters and 8.3 `~1` names are refused) and governance files are matched
+  without regard to case and after Unicode normalization (NFKC, with Unicode case
+  folding: a long s or the Kelvin sign is read as the s or k it imitates), so a spelling
+  such as `tasks/x/./yolo.json`, `tasks/x/Yolo.json` or `tasks/x/yolo.jſon` cannot reach
+  `tasks/<id>/yolo.json` unlisted. Only those mechanisms are modeled, not every file
+  system's own folding table. A bundle with any refused entry writes nothing.
 - **No option injection:** `heli init --clone` skips repo entries whose path is
   absolute, contains `..` or starts with `-`, or whose remote starts with `-`, and runs
   `git clone -- <remote> <path>`.

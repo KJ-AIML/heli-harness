@@ -759,6 +759,27 @@ try {
 			"matched case-insensitively",
 		);
 
+		// Look-alike spellings a file system that folds Unicode reads as the governance name they imitate: APFS folds
+		// U+017F (long s) to s and U+212A (the Kelvin sign) to k, and NFKC reads fullwidth forms as ASCII. `/i` alone
+		// does not fold either of the first two, so the match has to be Unicode-aware and compare the normalized name.
+		for (const rel of [
+			"tasks/x/yolo.jſon",
+			"tasks/x/diagnoſis.json",
+			"tasks/x/eventſ.jsonl",
+			"workspace/ſchema.json",
+			"ſafety/rules.json",
+			"tasks/x/ｙｏｌｏ．ｊｓｏｎ",
+		]) {
+			assert.deepEqual(policyBearingChanges({}, { [rel]: "{}\n" }), [{ rel, change: "added" }], `${JSON.stringify(rel)} reads as a governance file`);
+		}
+		assert.deepEqual(
+			policyBearingChanges({}, { "tasks/x/tasK.json": taskJson({ mode: "yolo" }) }),
+			[{ rel: "tasks/x/tasK.json", change: "enables YOLO" }],
+			"the Kelvin sign in task.json",
+		);
+		assert.throws(() => restoreTaskFilesForWorkspace(wsB, { "tasks/x/tasK.json": "{" }), /not valid JSON/, "a Kelvin-sign task.json still goes through restore");
+		assert.deepEqual(policyBearingChanges({}, { "tasks/x/yolo.jsonx": "{}\n", "tasks/x/y0lo.json": "{}\n", "profiles/ſafety.md": "x\n" }), [], "names that only look similar stay ordinary");
+
 		// A bundle entry name must be the name it will be written under. join() and the filesystem resolve
 		// dot/empty segments, case, NTFS streams and 8.3 short names to another file, so a spelling that
 		// merely looks unlike tasks/<id>/yolo.json must not slip past the governance list or the writer.
