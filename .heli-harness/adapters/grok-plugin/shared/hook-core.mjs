@@ -584,9 +584,10 @@ export function evaluatePreToolUse({
 	const settingsEntry = [...structuredEntries, ...shellEntries].find((entry) => entry.kind === "claude-settings");
 	if (settingsEntry) {
 		// A shell command is read whole, and for the assignments jq and PowerShell make; a file tool by the text it puts in the
-		// file (not the text it replaces).
+		// file (not the text it replaces). An MCP tool that carries a command is read both ways: the assignments in its command
+		// and every string the call carries (its content, too).
 		const loose = isShellTool(name) || runsCommand;
-		const written = loose ? rawCommand : settingsContentOf(toolInput);
+		const written = isShellTool(name) ? rawCommand : settingsContentOf(toolInput);
 		if (disablesClaudeHooks(written, { loose })) {
 			return {
 				deny: true,

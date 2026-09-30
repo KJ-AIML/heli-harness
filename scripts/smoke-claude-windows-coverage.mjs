@@ -289,6 +289,10 @@ try {
 		assert.equal(evaluate(ws, "mcp__shell__run", { command }).deny, false, command);
 	}
 	assert.equal(evaluate(conc, "mcp__shell__run", { command: "echo x > src/app.js" }, asObserver).deny, false, "an MCP tool's command is not guessed at as a write");
+	// A call that carries a command and also the text it writes to Claude settings is read for both.
+	assert.equal(evaluate(ws, "mcp__shell__run", { command: "noop", path: ".claude/settings.json", content: "{\"disableAllHooks\": true}" }).code, "HELI_HOOKS_PROTECTED");
+	assert.equal(evaluate(ws, "mcp__shell__run", { command: "noop", path: ".claude/settings.json", content: "{\"env\": {\"HELI_YOLO\": \"1\"}}" }).code, "HELI_STATE_PROTECTED");
+	assert.equal(evaluate(ws, "mcp__shell__run", { command: "noop", path: ".claude/settings.json", content: "{\"model\": \"x\"}" }).deny, false);
 	assert.equal(evaluate(ws, "mcp__shell__run", { description: "rm -rf build; git push origin main" }).deny, false);
 	assert.equal(evaluate(ws, "Bash", { description: "rm -rf build" }).code, "TIER_BLOCKED", "the description fallback is unchanged for shell tools");
 	// Yolo and the lease holder cannot pass the protected-state check through an MCP tool either.
