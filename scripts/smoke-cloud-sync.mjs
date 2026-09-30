@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createApi } from "../cloud/core.mjs";
 import { runCloud } from "../lib/cli/cloud.mjs";
-import { canonicalizePath } from "../lib/concurrency/index.mjs";
+import { canonicalizePath, isConcurrentMode } from "../lib/concurrency/index.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const heliPath = join(packageRoot, "bin", "heli.mjs");
@@ -501,6 +501,17 @@ try {
 		})}\n`,
 	);
 	ok(await cli(["push", "--force"], { ...cfgA, ...passphrase }, { cwd: wsA }), "push repo index");
+
+	// The repo map is governance too: task targets and `init --clone` resolve against it, so a plain pull refuses a changed one.
+	const indexFile = join(wsB, ".heli-harness", "workspace", "index.json");
+	assert.equal(JSON.parse(readFileSync(indexFile, "utf8")).repos.length, 1);
+	const indexPull = await cli(["pull", "--force"], { ...cfgB, ...passphrase }, { cwd: wsB });
+	assert.equal(indexPull.status, 1, "a changed repo map must not apply silently");
+	assert.match(indexPull.stderr, /workspace\/index\.json \(modified\)/);
+	assert.equal(JSON.parse(readFileSync(indexFile, "utf8")).repos.length, 1, "a refused pull writes nothing");
+	ok(await asHuman("pull", [wsB, "--force", "--accept-policy-changes"], { ...cfgB, ...passphrase }), "accept the repo map");
+	assert.equal(JSON.parse(readFileSync(indexFile, "utf8")).repos.length, 4);
+
 	const wsD = join(root, "ws-d");
 	const initRefused = await cli(["init", "lab", "--dir", wsD, "--clone", "--accept-policy-changes"], { ...cfgA, ...passphrase });
 	assert.equal(initRefused.status, 1, "init --accept-policy-changes needs a human terminal");
@@ -514,6 +525,22 @@ try {
 	assert.match(initOutput, /unsafe path "\.\.\/escaped"/);
 	assert.match(initOutput, /unsafe remote "--upload-pack=touch pwned"/);
 	assert.match(initOutput, /unsafe path "-rf"/);
+
+	// workspace/schema.json decides whether the ownership and lease gate runs at all: a workspace whose mode is not
+	// "concurrent" skips it. A pulled bundle that flips the mode is refused and writes nothing; a human applies it.
+	const schemaFile = (workspace) => join(workspace, ".heli-harness", "workspace", "schema.json");
+	const schemaA = JSON.parse(readFileSync(schemaFile(wsA), "utf8"));
+	assert.equal(schemaA.mode, "concurrent", "an install is concurrent");
+	assert.equal(isConcurrentMode(wsB), true);
+	writeFileSync(schemaFile(wsA), `${JSON.stringify({ ...schemaA, mode: "legacy" }, null, 2)}\n`);
+	ok(await cli(["push", "--force"], { ...cfgA, ...passphrase }, { cwd: wsA }), "push a schema that turns the ownership gate off");
+	const flip = await cli(["pull", "--force"], { ...cfgB, ...passphrase }, { cwd: wsB });
+	assert.equal(flip.status, 1, "a schema that turns the ownership gate off must not apply silently");
+	assert.match(flip.stderr, /workspace\/schema\.json \(modified\)/);
+	assert.equal(isConcurrentMode(wsB), true, "a refused pull leaves the ownership gate on");
+	assert.equal(JSON.parse(readFileSync(schemaFile(wsB), "utf8")).mode, "concurrent", "a refused pull writes nothing");
+	ok(await asHuman("pull", [wsB, "--force", "--accept-policy-changes"], { ...cfgB, ...passphrase }), "accept the schema change");
+	assert.equal(isConcurrentMode(wsB), false, "with the human-gated flag the schema applies");
 
 	// Browser activation: a link cannot approve a device in one click, and the
 	// OAuth state is random, single-use and bound to the confirming browser.
@@ -670,6 +697,37 @@ try {
 			"the event log and diagnosis of a task are governance, its narrative files and nested evidence are not",
 		);
 
+		// The workspace's own mode and repo map are governance too: schema.json's mode decides whether the ownership and
+		// lease gate runs at all (a workspace that is not concurrent skips it), index.json is what task targets resolve against.
+		const workspaceFiles = {
+			"workspace/schema.json": '{"schemaVersion":1,"mode":"concurrent"}\n',
+			"workspace/index.json": '{"schemaVersion":1,"repos":[]}\n',
+			"state/current-task.md": "# task\n",
+		};
+		assert.deepEqual(policyBearingChanges(workspaceFiles, { ...workspaceFiles }), [], "an unchanged schema and repo map are not changes");
+		assert.deepEqual(policyBearingChanges(workspaceFiles, { ...workspaceFiles, "workspace/schema.json": '{"schemaVersion":1,"mode":"concurrent"}\r\n' }), [], "a CRLF-only difference is not a change");
+		assert.deepEqual(
+			policyBearingChanges(workspaceFiles, {
+				"workspace/schema.json": '{"schemaVersion":1,"mode":"legacy"}\n',
+				"workspace/index.json": '{"schemaVersion":1,"repos":[{"name":"x","path":"repos/x"}]}\n',
+				"state/current-task.md": "# another task\n",
+				"state/decisions.md": "# decisions\n",
+			}),
+			[
+				{ rel: "workspace/index.json", change: "modified" },
+				{ rel: "workspace/schema.json", change: "modified" },
+			],
+			"the mode and the repo map are governance, the narrative state files are not",
+		);
+		assert.deepEqual(
+			policyBearingChanges({}, { "Workspace/Schema.JSON": "{}\n", "workspace/INDEX.json": "{}\n" }),
+			[
+				{ rel: "Workspace/Schema.JSON", change: "added" },
+				{ rel: "workspace/INDEX.json", change: "added" },
+			],
+			"matched case-insensitively",
+		);
+
 		// A bundle entry name must be the name it will be written under. join() and the filesystem resolve
 		// dot/empty segments, case, NTFS streams and 8.3 short names to another file, so a spelling that
 		// merely looks unlike tasks/<id>/yolo.json must not slip past the governance list or the writer.
@@ -696,6 +754,10 @@ try {
 			"tasks/x//diagnosis.json",
 			"tasks/x/events.jsonl::$DATA",
 			"tasks/x/DIAGNO~1.JSO",
+			"workspace/./schema.json",
+			"workspace//index.json",
+			"workspace/schema.json::$DATA",
+			"workspace/SCHEMA~1.JSO",
 			"profiles/a:b.md",
 			"profiles/\u0001.md",
 			"tasks/x/",

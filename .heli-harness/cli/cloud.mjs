@@ -5,8 +5,8 @@
  * Talks to the heli sync service (cloud/core.mjs contract). Strictly optional:
  * no governance path imports this module — a workspace works fully offline and
  * unauthenticated. Design: docs/architecture/cloud-sync.md. A pull never applies
- * governance changes (safety/, policies/, task YOLO/diagnosis/event files) unless a
- * human passes --accept-policy-changes in an interactive terminal.
+ * governance changes (safety/, policies/, workspace mode/repo map, task YOLO/diagnosis/event
+ * files) unless a human passes --accept-policy-changes in an interactive terminal.
  *
  * Local files:
  *   <config dir>/credentials.json          { url, token, login }   (per device;
@@ -35,7 +35,7 @@ import {
 } from "./cloud-bundle.mjs";
 
 const POLL_TIMEOUT_MS = 15 * 60 * 1000;
-// Applies governance changes a sync server sent (safety/, policies/, task YOLO/diagnosis/event files).
+// Applies governance changes a sync server sent (safety/, policies/, workspace mode/repo map, task YOLO/diagnosis/event files).
 // A human decision, like a grant: needs an interactive terminal, and is a hard deny for an agent's shell.
 const ACCEPT_POLICY_FLAG = "--accept-policy-changes";
 
@@ -420,7 +420,7 @@ async function runPull(args) {
 	if (policyChanges.length && !args.includes(ACCEPT_POLICY_FLAG)) {
 		for (const change of policyChanges) console.error(`  governance change: ${change.rel} (${change.change})`);
 		throw new Error(
-			`Pull refused: v${version} changes ${policyChanges.length} governance file(s) (safety/, policies/, or a task's YOLO, diagnosis or event files). ` +
+			`Pull refused: v${version} changes ${policyChanges.length} governance file(s) (safety/, policies/, the workspace mode or repo map, or a task's YOLO, diagnosis or event files). ` +
 				`Nothing was written. Review the list above, then run it again with ${ACCEPT_POLICY_FLAG} in your own terminal to apply it (an agent cannot accept it for you).`,
 		);
 	}

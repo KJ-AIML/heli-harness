@@ -218,6 +218,9 @@ const POLICY_DIRS = ["safety/", "policies/"];
 // Case-insensitive on purpose: Windows and macOS filesystems fold case, so tasks/x/Yolo.json is tasks/x/yolo.json there.
 const TASK_AUTHORITY_FILE_RE = /^tasks\/[^/]+\/(?:yolo\.json|diagnosis\.json|events\.jsonl)$/i;
 const TASK_FILE_RE = /^tasks\/[^/]+\/task\.json$/i;
+// The workspace's own settings, both in the bundle: index.json is the repo map that task targets and `init --clone`
+// resolve against, and schema.json's mode decides whether the ownership and lease gate runs at all.
+const WORKSPACE_AUTHORITY_FILE_RE = /^workspace\/(?:schema|index)\.json$/i;
 
 function taskEnablesYolo(text) {
 	try {
@@ -233,7 +236,8 @@ const sameText = (a, b) => String(a).replace(/\r\n/g, "\n") === String(b).replac
 /**
  * Governance-bearing differences an incoming bundle would apply: any added or
  * modified file under safety/ or policies/, any tasks/<id>/yolo.json, diagnosis.json
- * or events.jsonl, and any task.json that turns YOLO on.
+ * or events.jsonl, workspace/schema.json or workspace/index.json, and any task.json
+ * that turns YOLO on.
  * @returns {Array<{ rel: string, change: string }>}
  */
 export function policyBearingChanges(localFiles, incomingFiles) {
@@ -243,7 +247,7 @@ export function policyBearingChanges(localFiles, incomingFiles) {
 		if (local !== undefined && sameText(local, content)) continue;
 		const change = local === undefined ? "added" : "modified";
 		const lower = rel.toLowerCase();
-		if (POLICY_DIRS.some((dir) => lower.startsWith(dir)) || TASK_AUTHORITY_FILE_RE.test(rel)) {
+		if (POLICY_DIRS.some((dir) => lower.startsWith(dir)) || TASK_AUTHORITY_FILE_RE.test(rel) || WORKSPACE_AUTHORITY_FILE_RE.test(rel)) {
 			changes.push({ rel, change });
 		} else if (TASK_FILE_RE.test(rel) && taskEnablesYolo(content) && !(local !== undefined && taskEnablesYolo(local))) {
 			changes.push({ rel, change: "enables YOLO" });

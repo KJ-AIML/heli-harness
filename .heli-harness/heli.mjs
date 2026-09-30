@@ -80,7 +80,7 @@ Experimental cloud sync (optional; see docs/architecture/cloud-sync.md):
   ws create|link|unlink|list|versions|delete  (unlink = back to local-only)
   push | pull [--version N] [--accept-policy-changes] | sync [auto|e2e on|off]
   init <name> [--dir p] [--clone] [--accept-policy-changes]  (full device restore)
-  --accept-policy-changes applies governance and task-history changes from the server; interactive terminal only
+  --accept-policy-changes applies governance, workspace-mode and task-history changes from the server; interactive terminal only
 
   heli yolo on|off|status [path] [--hours N]
 `);
