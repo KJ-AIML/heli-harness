@@ -292,11 +292,15 @@ The sync server is treated as untrusted for governance purposes:
   flag. The event log grows whenever a task moves, so pulling another device's task
   progress needs the flag every time; so does the first pull onto a freshly installed
   device, because `schema.json` records the install time and two installs always differ.
-- **Accepting is a human action:** `--accept-policy-changes` is refused unless stdin and
-  stdout are an interactive terminal (checked first, before any credential is read or
-  request made), and an agent-run Heli invocation that carries it is a T6 hard deny in the
-  Heli hook, the same built-in rule as `heli grant issue` (YOLO and `HELI_ALLOW_COMMAND`
-  do not lift it). A plain `heli pull` stays allowed for an agent; it just cannot accept.
+- **Accepting is meant to be a human action:** `--accept-policy-changes` is refused unless
+  stdin and stdout are an interactive terminal (checked first, before any credential is
+  read or request made), and the Heli hook refuses agent-run commands that spell it, as a
+  T6 hard deny by the same built-in rule as `heli grant issue` (YOLO and
+  `HELI_ALLOW_COMMAND` do not lift it). A plain `heli pull` stays allowed for an agent.
+  It is a guardrail, not a guarantee: the hook reads command text and the CLI reads the
+  terminal, so code an agent runs itself, a flag built at run time, or a host that runs
+  commands in a pseudo-terminal is out of their reach. When changes are accepted, the pull
+  prints the list it applied.
 - **No aliased paths:** bundle entry names must be canonical (empty or `.` segments, `:`,
   control characters and 8.3 `~1` names are refused) and governance
   files are matched case-insensitively, so a spelling such as `tasks/x/./yolo.json` or

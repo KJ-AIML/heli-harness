@@ -452,6 +452,8 @@ try {
 	assert.match(policyPull.stderr, /safety\/command-rules\.json \(modified\)/);
 	assert.match(policyPull.stderr, /tasks\/portable-restore\/yolo\.json \(added\)/);
 	assert.match(policyPull.stderr, /--accept-policy-changes/);
+	assert.match(policyPull.stderr, /in your own terminal/);
+	assert.doesNotMatch(policyPull.stderr, /cannot accept|can't accept/i, "the message says what to do, not what an agent cannot do");
 	assert.equal(existsSync(join(wsB, ".heli-harness", "tasks", "portable-restore", "yolo.json")), false, "a refused pull writes nothing");
 	// Accepting them is a human decision: without a terminal the flag is refused before anything else runs,
 	// and no environment variable stands in for one (an agent's shell has neither).
@@ -473,7 +475,13 @@ try {
 	const pushRefusal = await cli(["push", "--accept-policy-changes"], { ...cfgB, ...passphrase }, { cwd: wsB });
 	assert.equal(pushRefusal.status, 1, "the flag is human-only whichever command carries it");
 	assert.match(pushRefusal.stderr, /`heli push --accept-policy-changes` must be run by a human/);
-	ok(await asHuman("pull", [wsB, "--force", "--accept-policy-changes"], { ...cfgB, ...passphrase }), "accept governance changes");
+	// Accepting is not blind: the changes that are applied are printed, so the human sees what they accepted.
+	const accepted = ok(await asHuman("pull", [wsB, "--force", "--accept-policy-changes"], { ...cfgB, ...passphrase }), "accept governance changes");
+	assert.match(accepted.stdout, /Accepting 2 governance change\(s\)/);
+	assert.match(accepted.stdout, /governance change: safety\/command-rules\.json \(modified\)/);
+	assert.match(accepted.stdout, /governance change: tasks\/portable-restore\/yolo\.json \(added\)/);
+	const nothingToAccept = ok(await asHuman("pull", [wsB, "--force", "--accept-policy-changes"], { ...cfgB, ...passphrase }), "the flag with nothing to accept");
+	assert.doesNotMatch(nothingToAccept.stdout, /Accepting|governance change/, "no list when there is nothing to accept");
 	assert.deepEqual(JSON.parse(readFileSync(join(wsB, ".heli-harness", "safety", "command-rules.json"), "utf8")).rules, []);
 
 	// init --clone: index.json paths/remotes from the server cannot escape the

@@ -4,9 +4,9 @@
  *
  * Talks to the heli sync service (cloud/core.mjs contract). Strictly optional:
  * no governance path imports this module — a workspace works fully offline and
- * unauthenticated. Design: docs/architecture/cloud-sync.md. A pull never applies
- * governance changes (safety/, policies/, workspace mode/repo map, task YOLO/diagnosis/event
- * files) unless a human passes --accept-policy-changes in an interactive terminal.
+ * unauthenticated. Design: docs/architecture/cloud-sync.md. A pull refuses governance
+ * changes (safety/, policies/, workspace mode/repo map, task YOLO/diagnosis/event files)
+ * unless --accept-policy-changes is passed, and that flag needs an interactive terminal.
  *
  * Local files:
  *   <config dir>/credentials.json          { url, token, login }   (per device;
@@ -36,7 +36,8 @@ import {
 
 const POLL_TIMEOUT_MS = 15 * 60 * 1000;
 // Applies governance changes a sync server sent (safety/, policies/, workspace mode/repo map, task YOLO/diagnosis/event files).
-// A human decision, like a grant: needs an interactive terminal, and is a hard deny for an agent's shell.
+// Meant as a human decision, like a grant: it needs an interactive terminal, and the Heli hook refuses agent-run
+// commands that spell it. A guardrail, not a guarantee (code an agent runs itself is out of reach of both).
 const ACCEPT_POLICY_FLAG = "--accept-policy-changes";
 
 function configDir() {
@@ -421,8 +422,13 @@ async function runPull(args) {
 		for (const change of policyChanges) console.error(`  governance change: ${change.rel} (${change.change})`);
 		throw new Error(
 			`Pull refused: v${version} changes ${policyChanges.length} governance file(s) (safety/, policies/, the workspace mode or repo map, or a task's YOLO, diagnosis or event files). ` +
-				`Nothing was written. Review the list above, then run it again with ${ACCEPT_POLICY_FLAG} in your own terminal to apply it (an agent cannot accept it for you).`,
+				`Nothing was written. Review the list above, then run it again with ${ACCEPT_POLICY_FLAG} in your own terminal to apply it.`,
 		);
+	}
+	if (policyChanges.length) {
+		// Accepting is not blind: say what is being applied, before anything is written.
+		console.log(`Accepting ${policyChanges.length} governance change(s) (${ACCEPT_POLICY_FLAG}):`);
+		for (const change of policyChanges) console.log(`  governance change: ${change.rel} (${change.change})`);
 	}
 	// If the server bundle was encrypted, latch e2e on locally so this machine's
 	// next push cannot silently downgrade the workspace to plaintext.
@@ -560,9 +566,10 @@ async function runInit(args, packageRoot) {
  *   terminal: test seam only; the CLI entry never passes it, so the real TTY state decides.
  */
 export async function runCloud(command, args, packageRoot = null, { terminal } = {}) {
-	// Applying governance changes a sync server sent is a human decision, like a grant or YOLO. Refuse
-	// before any credential is read, any request is made or any file is written. (For an agent's shell the
-	// Heli hook already hard-denies the flag, command-policy.mjs; this is the second layer.)
+	// Applying governance changes a sync server sent is meant to be a human decision, like a grant or YOLO.
+	// Refuse before any credential is read, any request is made or any file is written. (The Heli hook already
+	// refuses agent-run commands that spell the flag, command-policy.mjs; this is the second layer. Neither
+	// reaches code an agent runs itself, or a host that runs commands in a pseudo-terminal.)
 	if (args.includes(ACCEPT_POLICY_FLAG)) assertHumanTerminal(`heli ${command} ${ACCEPT_POLICY_FLAG}`, terminal);
 	switch (command) {
 		case "auth":
