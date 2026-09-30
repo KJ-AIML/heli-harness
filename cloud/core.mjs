@@ -47,6 +47,22 @@ function escapeHtml(value) {
 	return String(value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[ch]);
 }
 
+/**
+ * The activation cookie for the scheme a request arrived on. Over https it carries the `__Host-` prefix, so a
+ * browser stores it only from a secure origin, with Path=/ and no Domain: a sibling host under the same parent
+ * domain cannot plant one for the callback to read. Plain http (local development) keeps the bare name,
+ * scoped to the callback path.
+ */
+function activateCookie(url) {
+	const secure = url.protocol === "https:";
+	const name = secure ? `__Host-${ACTIVATE_COOKIE}` : ACTIVATE_COOKIE;
+	return {
+		name,
+		header: (value, maxAge) =>
+			`${name}=${value}; Path=${secure ? "/" : "/auth/github/callback"}; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? "; Secure" : ""}`,
+	};
+}
+
 function readCookie(request, name) {
 	for (const part of (request.headers.get("cookie") || "").split(";")) {
 		const [key, ...value] = part.trim().split("=");
@@ -244,12 +260,11 @@ export function createApi(store, options = {}) {
 			redirect.searchParams.set("scope", "read:user");
 			redirect.searchParams.set("state", state);
 			redirect.searchParams.set("redirect_uri", `${url.origin}/auth/github/callback`);
-			const secure = url.protocol === "https:" ? "; Secure" : "";
 			return new Response(null, {
 				status: 303,
 				headers: {
 					location: redirect.toString(),
-					"set-cookie": `${ACTIVATE_COOKIE}=${browserNonce}; Path=/auth/github/callback; HttpOnly; SameSite=Lax; Max-Age=${ACTIVATION_STATE_TTL_MS / 1000}${secure}`,
+					"set-cookie": activateCookie(url).header(browserNonce, ACTIVATION_STATE_TTL_MS / 1000),
 					"cache-control": "no-store",
 				},
 			});
@@ -266,7 +281,8 @@ export function createApi(store, options = {}) {
 			// browser's cookie. It is single-use: consumed before anything else.
 			const activation = await store.get(`oauthstate:${state}`);
 			await store.delete(`oauthstate:${state}`);
-			const browserNonce = readCookie(request, ACTIVATE_COOKIE);
+			const cookie = activateCookie(url);
+			const browserNonce = readCookie(request, cookie.name);
 			if (!activation || activation.expiresAt < now() || !browserNonce || (await sha256Hex(browserNonce)) !== activation.browserHash) {
 				return new Response("Activation session invalid or expired. Open the link printed by heli auth login and confirm the code again.", {
 					status: 400,
@@ -299,7 +315,7 @@ export function createApi(store, options = {}) {
 					status: ok ? 200 : 400,
 					headers: {
 						"content-type": "text/plain; charset=utf-8",
-						"set-cookie": `${ACTIVATE_COOKIE}=; Path=/auth/github/callback; HttpOnly; SameSite=Lax; Max-Age=0`,
+						"set-cookie": cookie.header("", 0),
 					},
 				},
 			);

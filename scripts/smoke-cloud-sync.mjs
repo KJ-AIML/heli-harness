@@ -572,7 +572,7 @@ try {
 		});
 		const issued = (response) => ({
 			state: new URL(response.headers.get("location")).searchParams.get("state"),
-			cookie: /heli_activate=([0-9a-f]+)/.exec(response.headers.get("set-cookie") || "")?.[1],
+			cookie: /__Host-heli_activate=([0-9a-f]+)/.exec(response.headers.get("set-cookie") || "")?.[1],
 		});
 
 		const page = await call(`/activate?code=${device.user_code}`);
@@ -593,19 +593,26 @@ try {
 		assert.notEqual(unbound.state, device.user_code);
 		assert.match(first.headers.get("set-cookie"), /HttpOnly/);
 		assert.match(first.headers.get("set-cookie"), /SameSite=Lax/);
+		// Over https the cookie carries the __Host- prefix: a browser stores it only from a secure origin, with Path=/ and
+		// no Domain, so a sibling host under the same parent domain cannot plant one for the callback to read.
+		assert.match(first.headers.get("set-cookie"), /^__Host-heli_activate=[0-9a-f]{64}; Path=\/; HttpOnly; SameSite=Lax; Max-Age=600; Secure$/);
+		assert.doesNotMatch(first.headers.get("set-cookie"), /Domain=/i);
 		assert.equal((await call(`/auth/github/callback?code=gh&state=${unbound.state}`)).status, 400, "no cookie -> refused");
 		const wrong = issued(await confirm());
-		assert.equal((await call(`/auth/github/callback?code=gh&state=${wrong.state}`, { headers: { cookie: `heli_activate=${"0".repeat(64)}` } })).status, 400, "wrong cookie -> refused");
+		assert.equal((await call(`/auth/github/callback?code=gh&state=${wrong.state}`, { headers: { cookie: `__Host-heli_activate=${"0".repeat(64)}` } })).status, 400, "wrong cookie -> refused");
+		const bare = issued(await confirm());
+		assert.equal((await call(`/auth/github/callback?code=gh&state=${bare.state}`, { headers: { cookie: `heli_activate=${bare.cookie}` } })).status, 400, "over https only the __Host- cookie counts");
 		assert.equal(githubCalls.length, 0, "unbound states never reach GitHub");
 		assert.equal((await pollToken()).error, "authorization_pending");
 
 		const good = issued(await confirm());
-		const callback = await call(`/auth/github/callback?code=gh&state=${good.state}`, { headers: { cookie: `heli_activate=${good.cookie}` } });
+		const callback = await call(`/auth/github/callback?code=gh&state=${good.state}`, { headers: { cookie: `__Host-heli_activate=${good.cookie}` } });
 		assert.equal(callback.status, 200, await callback.text());
+		assert.match(callback.headers.get("set-cookie"), /^__Host-heli_activate=; Path=\/; HttpOnly; SameSite=Lax; Max-Age=0; Secure$/, "the cookie is cleared with the attributes it was set with");
 		const token = await pollToken();
 		assert.equal(token.login, "octo");
 		assert.ok(token.token);
-		assert.equal((await call(`/auth/github/callback?code=gh&state=${good.state}`, { headers: { cookie: `heli_activate=${good.cookie}` } })).status, 400, "a state is single-use");
+		assert.equal((await call(`/auth/github/callback?code=gh&state=${good.state}`, { headers: { cookie: `__Host-heli_activate=${good.cookie}` } })).status, 400, "a state is single-use");
 	}
 
 	// ---- Direct checks of guards the runs above only reach indirectly or not at all ----
@@ -811,9 +818,9 @@ try {
 		});
 		const issued = (response) => ({
 			state: new URL(response.headers.get("location")).searchParams.get("state"),
-			cookie: /heli_activate=([0-9a-f]+)/.exec(response.headers.get("set-cookie") || "")?.[1],
+			cookie: /__Host-heli_activate=([0-9a-f]+)/.exec(response.headers.get("set-cookie") || "")?.[1],
 		});
-		const callbackFor = ({ state, cookie }, githubCode = "gh") => call(`/auth/github/callback?code=${githubCode}&state=${state}`, { headers: { cookie: `heli_activate=${cookie}` } });
+		const callbackFor = ({ state, cookie }, githubCode = "gh") => call(`/auth/github/callback?code=${githubCode}&state=${state}`, { headers: { cookie: `__Host-heli_activate=${cookie}` } });
 		const pollFor = async (deviceCode) => (await call("/auth/device/token", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
@@ -847,6 +854,23 @@ try {
 		assert.equal((await callbackFor(firstBrowser, "gh-octo")).status, 200);
 		assert.equal((await callbackFor(secondBrowser, "gh-mallory")).status, 400, "an approved request is not approved again by another state");
 		assert.equal((await pollFor(contested.device_code)).login, "octo", "the device belongs to the user who approved it first");
+
+		// Plain http (local development) keeps the bare cookie name, scoped to the callback path, without Secure.
+		const httpOrigin = "http://localhost";
+		const httpCall = (path, init = {}) => edgeApi.fetch(new Request(`${httpOrigin}${path}`, init));
+		const localDev = await start("local-dev");
+		const localConfirm = await httpCall("/activate/confirm", {
+			method: "POST",
+			headers: { origin: httpOrigin, "content-type": "application/x-www-form-urlencoded" },
+			body: `code=${localDev.user_code}`,
+		});
+		assert.equal(localConfirm.status, 303);
+		assert.match(localConfirm.headers.get("set-cookie"), /^heli_activate=[0-9a-f]{64}; Path=\/auth\/github\/callback; HttpOnly; SameSite=Lax; Max-Age=600$/);
+		const localState = new URL(localConfirm.headers.get("location")).searchParams.get("state");
+		const localCookie = /^heli_activate=([0-9a-f]+)/.exec(localConfirm.headers.get("set-cookie"))[1];
+		const localCallback = await httpCall(`/auth/github/callback?code=gh&state=${localState}`, { headers: { cookie: `heli_activate=${localCookie}` } });
+		assert.equal(localCallback.status, 200, "over plain http the bare cookie name still binds the state");
+		assert.match(localCallback.headers.get("set-cookie"), /^heli_activate=; Path=\/auth\/github\/callback; HttpOnly; SameSite=Lax; Max-Age=0$/);
 
 		const old = await start("old");
 		clock += 15 * 60 * 1000 + 1;

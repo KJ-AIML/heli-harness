@@ -112,7 +112,10 @@ Durable Object — API core (cloud/core.mjs, portable Request/Response)
   requesting device name; it never redirects. The user must press **Authorize**, a
   same-origin `POST /activate/confirm` (cross-origin posts are refused), which
   stores a random single-use OAuth `state` (10 min TTL) bound to the user code and to
-  an `HttpOnly; SameSite=Lax` cookie in that browser. The GitHub callback approves the
+  an `HttpOnly; SameSite=Lax` cookie in that browser (over https it is named
+  `__Host-heli_activate`, so it is `Secure`, `Path=/` and has no `Domain`: a sibling host
+  under the same parent domain cannot plant one; plain http, for local tests, keeps
+  `heli_activate` scoped to the callback). The GitHub callback approves the
   device only when the state exists, is unexpired and matches that cookie, and only
   while the device request is still waiting: an approved request is never approved again
   by a second outstanding state.
