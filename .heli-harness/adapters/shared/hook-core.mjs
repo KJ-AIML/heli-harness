@@ -7,6 +7,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
 	resolveExecutionContext,
@@ -22,7 +23,14 @@ import { findWorkspaceRoot } from "./concurrency/paths.mjs";
 import { consumeApplicableGrant, findUsableGrants } from "./concurrency/grant.mjs";
 import { resourceIdForWorktree } from "./concurrency/resource-authority.mjs";
 import { evaluateDiagnosisWriteGate, readActionPolicy, readDiagnosis } from "./concurrency/diagnosis.mjs";
-import { approvalReason, evaluateCommandRules, hardDenyReason, shellWriteTargets } from "./command-policy.mjs";
+import {
+	analyzeCommand,
+	approvalReason,
+	evaluateCommandRules,
+	hardDenyReason,
+	programName,
+	shellWriteTargets,
+} from "./command-policy.mjs";
 import { COMMAND_ANALYSIS_LIMITS, argvCommandText } from "./command-policy.mjs";
 import {
 	classifyShellWriteTargets,
@@ -198,6 +206,35 @@ export function patchPathsFrom(commandText, out = []) {
 	return out;
 }
 
+const PATH_KEY_RE = /path|file|dir|dest|target|source|uri|location/i;
+
+/**
+ * MCP tool inputs are server-defined, so any string that looks like a
+ * filesystem path is a candidate: values under path-like keys (a list inherits
+ * its key), and whitespace-free values that contain a separator or start with `~`.
+ * There is no length limit: `x/../x/../...` padded past any limit names the same file,
+ * and classifying a long string costs a scan of it, not a walk of its directories.
+ */
+function pathLikeValues(value, key = "", out = []) {
+	if (typeof value === "string") {
+		let text = value.trim();
+		// A file: URI names the file its decoded path names (`file:///C:/a%2Fb`, `file:/C:/a`).
+		if (/^file:/i.test(text)) {
+			try {
+				text = fileURLToPath(text);
+			} catch {
+				/* keep the raw text */
+			}
+		}
+		const underPathKey = PATH_KEY_RE.test(key) && text.length > 0 && !text.includes("\n");
+		const looksLikePath = !/\s/.test(text) && (/[\\/]/.test(text) || text.startsWith("~"));
+		if (underPathKey || looksLikePath) out.push(text);
+	} else if (value && typeof value === "object") {
+		for (const [childKey, child] of Object.entries(value)) pathLikeValues(child, Array.isArray(value) ? key : childKey, out);
+	}
+	return out;
+}
+
 /**
  * Host adapters may use different names for file tools, but planning tools
  * such as `todo_write` are not repository mutations. Keep the known writer
@@ -272,13 +309,31 @@ export function isFileMutationTool(
 	return hasMutationVerb(normalizedToolNameTokens(name));
 }
 
-const SHELL_TOOL_NAME_RE = /(^|[_\-.])(bash|shell|terminal|exec|run_command|run-command)($|[_\-.])/;
+// Claude Code on Windows runs commands through `PowerShell` (no Bash tool without
+// Git Bash) and `Monitor` runs a background command; both carry `command`.
+const SHELL_TOOL_NAME_RE = /(^|[_\-.])(bash|shell|terminal|exec|run_command|run-command|powershell|pwsh|monitor)($|[_\-.])/;
+const POWERSHELL_WRITE_CMDLETS = /\b(set-content|add-content|out-file|new-item|remove-item|move-item|copy-item|rename-item|clear-content|tee-object)\b/;
+// PowerShell/cmd aliases that are also common words only count at command position.
+const WRITE_ALIASES = new Set(["sc", "ac", "ni", "ri", "mi", "cpi", "rni", "clc", "md", "del", "erase", "rd", "rmdir", "move", "copy", "ren"]);
+
+/** MCP tools are named mcp__<server>__<tool>. */
+export function isMcpTool(toolName) {
+	return String(toolName ?? "").toLowerCase().startsWith("mcp__");
+}
 
 /** Tools whose `command` is executed by a shell (MCP tools never are). */
 export function isShellTool(toolName) {
-	const name = String(toolName ?? "").toLowerCase();
-	if (name.startsWith("mcp__")) return false;
-	return SHELL_TOOL_NAME_RE.test(name);
+	if (isMcpTool(toolName)) return false;
+	return SHELL_TOOL_NAME_RE.test(String(toolName ?? "").toLowerCase());
+}
+
+/**
+ * Tools whose `description` is prose about the call, never a stand-in for a missing `command` (on the shell tools of some
+ * hosts a lone `description` is read as the command): an MCP tool's, since issue trackers and calendars have one, and Monitor's,
+ * which labels the watch (a `ws` source has no command at all). Text there that mentions `rm -rf` or `git push` is not a command.
+ */
+function hasProseDescription(toolName) {
+	return isMcpTool(toolName) || String(toolName ?? "").toLowerCase() === "monitor";
 }
 
 // The sed/perl in-place regexes below backtrack quadratically on a long run of
@@ -297,6 +352,7 @@ export function isLikelyShellMutation(toolName, commandText) {
 	// Best-effort common mutation detection only; this is not a sandbox.
 	if (/(^|[^<])>>?\s*[^&|]/m.test(command)) return true;
 	if (/\b(tee|touch|mkdir|rmdir|rm|mv|cp|truncate)\b/.test(command)) return true;
+	if (POWERSHELL_WRITE_CMDLETS.test(command)) return true;
 	if (command.length > IN_PLACE_REGEX_MAX_CHARS) {
 		// Too long for the exact check: any sed or perl invocation counts as an in-place edit.
 		if (/\b(sed|perl)\s/.test(command)) return true;
@@ -306,7 +362,8 @@ export function isLikelyShellMutation(toolName, commandText) {
 	}
 	if (/\bgit\s+(add|commit|checkout|switch|restore|reset|clean|rm|mv)\b/.test(command)) return true;
 	if (/\b(npm|pnpm|yarn|bun)\s+(install|add|remove|uninstall|update|upgrade)\b/.test(command)) return true;
-	return false;
+	// The aliases are read last and by position (a segment's command word), which takes a parse: `echo sc` is not a write.
+	return analyzeCommand(text).segments.some((segment) => WRITE_ALIASES.has(programName(segment.rawTokens[0])));
 }
 
 export function readTaskGate(cwd) {
@@ -451,7 +508,7 @@ export function evaluatePreToolUse({
 	if (argv && !argv.error) toolInput = { ...toolInput, command: argv.text };
 
 	const baseCwd = cwd || process.cwd();
-	const rawCommand = String(toolInput?.command ?? toolInput?.description ?? "");
+	const rawCommand = String(toolInput?.command ?? (hasProseDescription(toolName) ? undefined : toolInput?.description) ?? "");
 	const rawPaths = [...pathsFrom(toolInput), ...patchPathsFrom(rawCommand)];
 	const paths = rawPaths.map((path) => path.replaceAll("\\", "/").toLowerCase());
 	const name = String(toolName);
@@ -508,7 +565,12 @@ export function evaluatePreToolUse({
 	// holder, not under YOLO. Structured writes are checked by their paths,
 	// shell commands by the paths they write, move or delete.
 	const pathScope = { workspaceRoot: ctx.workspaceRoot, cwd: baseCwd, env };
-	const structuredEntries = isWrite ? classifyToolPaths(rawPaths, pathScope) : [];
+	// MCP tools: server-defined inputs, so every path-like value is checked.
+	const structuredEntries = isMcpTool(name)
+		? classifyToolPaths([...new Set([...rawPaths, ...pathLikeValues(toolInput)])], pathScope)
+		: isWrite
+			? classifyToolPaths(rawPaths, pathScope)
+			: [];
 	const shellEntries = commandPolicy && isShellTool(name)
 		? classifyShellWriteTargets(shellWriteTargets(commandPolicy.analysis), pathScope)
 		: [];
