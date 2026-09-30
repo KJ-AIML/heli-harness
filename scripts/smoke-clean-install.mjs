@@ -111,6 +111,12 @@ try {
 	const schema = JSON.parse(readFileSync(join(installed, "workspace", "schema.json"), "utf8"));
 	assert.equal(schema.mode, "concurrent", "fresh install must default to concurrent mode");
 
+	// `claude plugin marketplace add ./.heli-harness` needs the directory marketplace in the workspace.
+	assert.ok(existsSync(join(installed, ".claude-plugin", "marketplace.json")), "embedded install must ship the Claude marketplace");
+	const embeddedMarketplace = JSON.parse(readFileSync(join(installed, ".claude-plugin", "marketplace.json"), "utf8"));
+	const embeddedClaude = embeddedMarketplace.plugins.find((plugin) => plugin.name === "heli-harness");
+	assert.ok(existsSync(join(installed, embeddedClaude.source, "hooks", "hooks.json")), "embedded Claude marketplace must resolve to the installed plugin");
+
 	// SessionStart must not inject pollution markers; concurrent empty bootstrap OK
 	const ctx = buildSessionContext(dest, { host: "test", createIfMissing: false });
 	for (const m of MARKERS) {

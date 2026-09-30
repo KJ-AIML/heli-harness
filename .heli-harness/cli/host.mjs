@@ -19,6 +19,7 @@ const HOSTS = Object.freeze({
 	generic: { label: "Generic adapter", runtime: "documented", cli: null, automatic: false, installRequiresCli: false },
 });
 
+const CLAUDE_PLUGIN_ID = "heli-harness@heli-harness";
 const KIMI_START = "# --- heli-harness hooks ---";
 const KIMI_END = "# --- end heli-harness hooks ---";
 
@@ -152,12 +153,27 @@ function hostInstalledVersion(id, env = process.env) {
 	return receipt && receipt.heliVersion ? receipt.heliVersion : null;
 }
 
+// Reads `claude plugin list --json`. Only the managed user-scope install counts:
+// project-scoped or differently-sourced heli-harness plugins are someone else's.
+export function claudePluginState(stdout) {
+	let plugins;
+	try {
+		plugins = JSON.parse(stdout);
+	} catch {
+		return { state: "absent", version: null };
+	}
+	const entry = Array.isArray(plugins) ? plugins.find((plugin) => plugin?.id === CLAUDE_PLUGIN_ID && plugin.scope === "user") : null;
+	if (!entry) return { state: "absent", version: null };
+	return { state: entry.enabled ? "enabled" : "disabled", version: entry.version || null };
+}
+
 export function inspectHost(packageRoot, id, { env = process.env } = {}) {
 	const spec = HOSTS[id];
 	if (!spec) throw new Error("unknown host: " + id);
 	const cliPresent = commandPresent(spec.cli, env);
 	const paths = hostOwnedPaths(id, env);
 	let installed = false;
+	let listedVersion = null;
 	let detail = "";
 
 	if (id === "codex" && cliPresent) {
@@ -169,9 +185,14 @@ export function inspectHost(packageRoot, id, { env = process.env } = {}) {
 		installed = result.status === 0 && /heli-harness/i.test(textOf(result));
 		detail = installed ? "Heli package listed by host" : "Heli package not detected";
 	} else if (id === "claude" && cliPresent) {
-		const result = run("claude", ["plugin", "list"]);
-		installed = result.status === 0 && /heli-harness/i.test(textOf(result));
-		detail = installed ? "plugin listed by Claude" : "plugin not detected";
+		const plugin = claudePluginState(run("claude", ["plugin", "list", "--json"]).stdout);
+		installed = plugin.state === "enabled";
+		listedVersion = plugin.version;
+		detail = {
+			enabled: CLAUDE_PLUGIN_ID + " enabled (user scope)",
+			disabled: CLAUDE_PLUGIN_ID + " is disabled; enable it with: claude plugin enable " + CLAUDE_PLUGIN_ID,
+			absent: CLAUDE_PLUGIN_ID + " not installed at user scope",
+		}[plugin.state];
 	} else if (id === "grok") {
 		installed = Boolean(paths.hookFile && existsSync(paths.hookFile));
 		detail = installed ? "user hooks present: " + paths.hookFile : "user hooks not detected";
@@ -195,7 +216,7 @@ export function inspectHost(packageRoot, id, { env = process.env } = {}) {
 	}
 
 	const currentVersion = packageVersion(packageRoot);
-	const installedVersion = installed ? hostInstalledVersion(id, env) : null;
+	const installedVersion = installed ? listedVersion || hostInstalledVersion(id, env) : null;
 	const stale = Boolean(installed && installedVersion && currentVersion !== "unknown" && installedVersion !== currentVersion);
 	let lifecycleState = installed ? (stale ? "stale" : installedVersion ? "current" : "unknown-version") : "absent";
 	if (!installed && !cliPresent && spec.installRequiresCli) lifecycleState = "host-unavailable";
@@ -306,7 +327,14 @@ export function planHostInstall(packageRoot, id, { env = process.env } = {}) {
 		case "axga":
 			return [["axga", "install", "git:github.com/KJ-AIML/heli-harness@v" + version]];
 		case "claude":
-			return [["claude", "plugin", "install", asset(packageRoot, "claude-plugin")]];
+			// `plugin install` resolves marketplace ids only, so register the packaged
+			// directory marketplace first. It loads in place; `update` re-records the
+			// version after the global package changes.
+			return [
+				["claude", "plugin", "marketplace", "add", join(packageRoot, ".heli-harness")],
+				["claude", "plugin", "install", CLAUDE_PLUGIN_ID],
+				["claude", "plugin", "update", CLAUDE_PLUGIN_ID],
+			];
 		case "grok":
 			return [
 				[process.execPath, asset(packageRoot, "grok-plugin", "install-user-hooks.mjs")],
@@ -340,7 +368,11 @@ export function planHostRemove(packageRoot, id, { env = process.env } = {}) {
 			];
 		case "pi": return [["pi", "remove", "heli-harness"]];
 		case "axga": return [["axga", "remove", "heli-harness"]];
-		case "claude": return [["claude", "plugin", "uninstall", "heli-harness"]];
+		case "claude":
+			return [
+				["claude", "plugin", "uninstall", CLAUDE_PLUGIN_ID],
+				["claude", "plugin", "marketplace", "remove", "heli-harness"],
+			];
 		case "grok":
 			return [
 				["remove-file", paths.hookFile],
@@ -438,12 +470,24 @@ function selectedIds(requested) {
 	return requested;
 }
 
-function renderOperation(items, verb) {
+// The failing command's last output line, or the host's own detail when every step passed.
+function failureReason(item) {
+	const failed = (item.steps || []).find((step) => !step.ok);
+	if (!failed) return item.after?.detail || "";
+	const lines = String(failed.output || "").split("\n").map((line) => line.trim()).filter(Boolean);
+	return lines.at(-1) || failed.error || "exit code " + failed.code;
+}
+
+export function renderOperation(items, verb) {
 	for (const item of items) {
 		if (item.skipped) console.log("- " + item.id + ": skipped — " + item.reason);
 		else if (item.dryRun) console.log("- " + item.id + ": dry-run — " + item.plan.map((p) => p.join(" ")).join(" ; "));
 		else if (item.already) console.log("- " + item.id + ": already current");
-		else console.log("- " + item.id + ": " + (item.ok ? verb : "FAILED"));
+		else if (item.ok) console.log("- " + item.id + ": " + verb);
+		else {
+			const reason = failureReason(item);
+			console.log("- " + item.id + ": FAILED" + (reason ? " — " + reason : ""));
+		}
 	}
 }
 

@@ -20,10 +20,11 @@ heli host install claude
 heli host status
 ```
 
-For embedded/local compatibility, the packaged plugin tree can still be installed directly:
+For embedded/local compatibility, register the packaged directory marketplace, then install from it (`claude plugin install` takes a marketplace plugin id, not a directory path):
 
 ```bash
-claude plugin install .heli-harness/adapters/claude-plugin
+claude plugin marketplace add ./.heli-harness
+claude plugin install heli-harness@heli-harness
 ```
 
 Project binding does not by itself prove plugin activation. Use `heli explain capabilities` and the current support matrix to distinguish documented/loaded/observed/tested enforcement.

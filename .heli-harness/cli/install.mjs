@@ -86,7 +86,8 @@ Host-native skills require host plugin activation (workspace install alone does 
   - Codex (workspace-local dogfood after this install; not upgradeable):
             codex plugin marketplace add ./.heli-harness/adapters/codex-plugin
             codex plugin add heli-harness@heli-harness
-  - Claude: claude plugin install .heli-harness/adapters/claude-plugin
+  - Claude: claude plugin marketplace add ./.heli-harness
+            claude plugin install heli-harness@heli-harness
   - Grok:   grok plugin install .heli-harness/adapters/grok-plugin --trust
             (hooks: node .heli-harness/adapters/grok-plugin/install-user-hooks.mjs)
 

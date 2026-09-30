@@ -1,0 +1,14 @@
+{
+  "name": "heli-harness",
+  "owner": {
+    "name": "KJ-AIML"
+  },
+  "description": "Heli-Harness governance plugin for Claude Code, served from the installed Heli package.",
+  "plugins": [
+    {
+      "name": "heli-harness",
+      "source": "./adapters/claude-plugin",
+      "description": "Heli-Harness workspace governance for Claude Code."
+    }
+  ]
+}
