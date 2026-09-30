@@ -316,7 +316,10 @@ The sync server is treated as untrusted for governance purposes:
   hidden folder) or with `-`, or when the folder it resolves to (junctions, symlinks and
   8.3 names followed) is, holds or lies inside Heli's operational root, `.heli`, `.git` or
   `.claude`; a clone there would bypass the governance check a pull applies. A remote
-  that starts with `-` is skipped too, and the clone runs `git clone -- <remote> <path>`.
+  that starts with `-` is skipped too, and the clone runs
+  `git -c protocol.ext.allow=never -c protocol.file.allow=user clone -- <remote> <path>`:
+  the `ext::` transport (it runs a command) stays off whatever the user's git config
+  says, and a local path is cloned only because the user asked for this clone.
 
 Limits: without E2E the bundle version comes from the server's response, so the rollback
 check only catches a server that admits to serving an older version, and a device with no

@@ -581,6 +581,39 @@ try {
 		"a different workspace starts over",
 	);
 
+	// The clone must not depend on the user's git config. One that allows the ext:: transport (it runs a command) or
+	// forbids local clones changes nothing about what `heli init --clone` does with a remote the sync server named.
+	const hostileGitConfig = join(root, "hostile-gitconfig");
+	writeFileSync(hostileGitConfig, '[protocol "ext"]\n\tallow = always\n[protocol "file"]\n\tallow = never\n');
+	const extMarker = join(root, "ext-ran");
+	const extHelper = join(root, "ext-helper.mjs");
+	writeFileSync(extHelper, `import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(extMarker)}, "ran"); process.exit(1);\n`);
+	const indexBefore = JSON.parse(readFileSync(join(wsA, ".heli-harness", "workspace", "index.json"), "utf8"));
+	writeFileSync(
+		join(wsA, ".heli-harness", "workspace", "index.json"),
+		`${JSON.stringify({
+			...indexBefore,
+			repos: [
+				{ name: "viaext", path: "repos/viaext", remote: `ext::node ${extHelper}` },
+				{ name: "local", path: "repos/local", remote: remoteRepo },
+			],
+		})}\n`,
+	);
+	ok(await cli(["push", "--force"], { ...cfgA, ...passphrase }, { cwd: wsA }), "push a repo map with an ext:: remote");
+	const wsG = join(root, "ws-g");
+	ok(
+		await asHuman("init", ["lab", "--dir", wsG, "--clone", "--accept-policy-changes"], { ...cfgA, ...passphrase, GIT_CONFIG_GLOBAL: hostileGitConfig }),
+		"init --clone under a hostile git config",
+	);
+	assert.equal(existsSync(extMarker), false, "the ext:: transport must not run a command");
+	assert.ok(existsSync(join(wsG, "repos", "local", "README.md")), "a local clone still works when the user's git config forbids the file transport");
+	const { gitCloneArgs } = await import("../lib/cli/cloud.mjs");
+	assert.deepEqual(
+		gitCloneArgs("https://example.invalid/r.git", "/t/r"),
+		["-c", "protocol.ext.allow=never", "-c", "protocol.file.allow=user", "clone", "--", "https://example.invalid/r.git", "/t/r"],
+		'"--" still comes right before the remote',
+	);
+
 	// Browser activation: a link cannot approve a device in one click, and the
 	// OAuth state is random, single-use and bound to the confirming browser.
 	{
