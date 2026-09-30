@@ -108,9 +108,9 @@ A task can still be created for durable handoff, multi-session work, investigati
 
 ## Scoped approvals
 
-Broad bypass is no longer the preferred temporary-approval path.
+Broad bypass is no longer the preferred temporary-approval path. Approvals come from a **human**: `heli grant issue` and `heli yolo on` only run in an interactive terminal, and the Heli hooks hard-deny them when a coding agent tries to run them itself.
 
-Example:
+Example (run in your own terminal):
 
 ```bash
 heli grant issue --action git.push --scope once
@@ -118,7 +118,7 @@ heli grant list
 heli grant revoke <grant-id>
 ```
 
-Grants are bounded by action/resource/execution and may also be bounded by host session, time, and usage count. T6 hard-deny rules remain non-grantable.
+Grants are bounded by action/resource/execution and may also be bounded by host session, time, and usage count. Each matched T5 rule needs its own grant, and a grant is used up only when the call is finally allowed. T6 hard-deny rules — including Heli's built-in floor — remain non-grantable.
 
 Project-controlled files may narrow trusted policy, but cannot silently elevate the built-in/user ceiling.
 

@@ -154,7 +154,7 @@ Pi exposes this distinction directly:
 
 ## Scoped grants
 
-For actions that require temporary approval, prefer scoped grants:
+For actions that require temporary approval, prefer scoped grants. A human issues them in an interactive terminal; Heli refuses `heli grant issue` without a TTY and its hooks deny it when an agent runs it:
 
 ```bash
 heli grant issue --action git.push --scope once
