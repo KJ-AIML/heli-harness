@@ -790,9 +790,11 @@ try {
 			githubClientId: "client-id",
 			githubClientSecret: "client-secret",
 			now: () => clock,
-			fetchImpl: async (target) => {
+			// The GitHub user follows the code the callback presents: "gh-mallory" is a second person, anything else is octo.
+			fetchImpl: async (target, init = {}) => {
 				githubCalls.push(String(target));
-				return String(target).startsWith("https://github.com/login/oauth/access_token") ? Response.json({ access_token: "gho_fake" }) : Response.json({ id: 7, login: "octo" });
+				if (String(target).startsWith("https://github.com/login/oauth/access_token")) return Response.json({ access_token: `gho_${JSON.parse(init.body).code}` });
+				return Response.json(String(init.headers.authorization).endsWith("_gh-mallory") ? { id: 8, login: "mallory" } : { id: 7, login: "octo" });
 			},
 		});
 		const origin = "https://sync.example";
@@ -811,7 +813,12 @@ try {
 			state: new URL(response.headers.get("location")).searchParams.get("state"),
 			cookie: /heli_activate=([0-9a-f]+)/.exec(response.headers.get("set-cookie") || "")?.[1],
 		});
-		const callbackFor = ({ state, cookie }) => call(`/auth/github/callback?code=gh&state=${state}`, { headers: { cookie: `heli_activate=${cookie}` } });
+		const callbackFor = ({ state, cookie }, githubCode = "gh") => call(`/auth/github/callback?code=${githubCode}&state=${state}`, { headers: { cookie: `heli_activate=${cookie}` } });
+		const pollFor = async (deviceCode) => (await call("/auth/device/token", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ device_code: deviceCode }),
+		})).json();
 
 		const hostile = await start("<img src=x onerror=alert(1)>");
 		const hostileHtml = await (await call(`/activate?code=${hostile.user_code}`)).text();
@@ -832,6 +839,14 @@ try {
 		assert.equal((await callbackFor(retry)).status, 200, "the same code can be confirmed again while it is still pending");
 		assert.equal((await confirm(device.user_code)).status, 400, "an approved code cannot be confirmed again");
 		assert.equal((await call(`/activate?code=${device.user_code}`)).status, 400, "an approved code shows no confirm page");
+
+		// Two browsers confirmed the same code: the second outstanding state cannot replace the user who approved it.
+		const contested = await start("contested");
+		const firstBrowser = issued(await confirm(contested.user_code));
+		const secondBrowser = issued(await confirm(contested.user_code));
+		assert.equal((await callbackFor(firstBrowser, "gh-octo")).status, 200);
+		assert.equal((await callbackFor(secondBrowser, "gh-mallory")).status, 400, "an approved request is not approved again by another state");
+		assert.equal((await pollFor(contested.device_code)).login, "octo", "the device belongs to the user who approved it first");
 
 		const old = await start("old");
 		clock += 15 * 60 * 1000 + 1;

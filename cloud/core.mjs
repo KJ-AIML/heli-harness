@@ -97,10 +97,11 @@ export function createApi(store, options = {}) {
 	}
 
 	async function approvePending(userCode, user) {
+		// Only a live request nobody has approved yet: a second outstanding state (another browser confirmed
+		// the same code) must not replace the user who approved it first.
+		if (!(await activatablePending(userCode))) return false;
 		const deviceCode = await store.get(`usercode:${userCode}`);
-		if (!deviceCode) return false;
 		const pending = await store.get(`pending:${deviceCode}`);
-		if (!pending || pending.expiresAt < now()) return false;
 		await store.put(`pending:${deviceCode}`, { ...pending, approved: true, user });
 		return true;
 	}

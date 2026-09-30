@@ -113,7 +113,9 @@ Durable Object — API core (cloud/core.mjs, portable Request/Response)
   same-origin `POST /activate/confirm` (cross-origin posts are refused), which
   stores a random single-use OAuth `state` (10 min TTL) bound to the user code and to
   an `HttpOnly; SameSite=Lax` cookie in that browser. The GitHub callback approves the
-  device only when the state exists, is unexpired and matches that cookie.
+  device only when the state exists, is unexpired and matches that cookie, and only
+  while the device request is still waiting: an approved request is never approved again
+  by a second outstanding state.
 - The activation page authenticates the user via **GitHub OAuth** (identity provider
   only — no passwords stored, no GitHub repo scopes requested; `read:user` only).
 - On approval the Worker mints a **heli token** (random 256-bit, stored hashed in DO
