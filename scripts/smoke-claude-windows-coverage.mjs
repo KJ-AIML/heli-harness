@@ -243,6 +243,8 @@ try {
 		["a 2 MB string of names", { text: "ab/".repeat(700000) }],
 		["a 2 MB string under a path key", { path: "a/".repeat(1000000) }],
 		["5,000 paths", { files: Array.from({ length: 5000 }, (_, i) => `docs/d${i % 50}/f${i}.md`) }],
+		// A directory that does not exist has nothing below it, so 500 missing levels are not 500 lookups (they were 45 ms of them on Windows).
+		["500 paths of 500 missing directories each", { files: Array.from({ length: 500 }, (_, i) => `q${i}/${"a/".repeat(500)}f.md`) }],
 	]) {
 		const started = Date.now();
 		const result = mcp(toolInput);

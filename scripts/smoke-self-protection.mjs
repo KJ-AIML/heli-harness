@@ -1260,6 +1260,30 @@ try {
 	}
 	assert.ok(checkChain.includes("node scripts/smoke-command-rules.mjs && node scripts/smoke-self-protection.mjs && node scripts/smoke-concurrency-foundation.mjs"), "smoke-self-protection runs right after smoke-command-rules");
 
+	// 21. A path with hundreds of missing directories is resolved like a short one, and does not cost a lookup per directory
+	// (one call can carry hundreds of them, and hosts treat a hook that times out as an allow): once the walk up to the nearest
+	// directory that exists has gone eight levels without finding one, it is bisected, and the tail is joined in one step.
+	const junction = join(ws, "innocent-dir");
+	for (const levels of [1, 7, 8, 9, 10, 12, 40, 300]) {
+		const tail = `${"m/".repeat(levels)}f.json`;
+		const viaLink = normalizePolicyPath(join(junction, tail), { cwd: ws, env });
+		const direct = normalizePolicyPath(join(ws, ".heli-harness", "tasks", "t1", tail), { cwd: ws, env });
+		assert.equal(viaLink.path, direct.path, `the link above ${levels} missing directories is followed`);
+		assert.ok(viaLink.path.includes("/.heli-harness/tasks/t1/m/"), viaLink.path);
+	}
+	// Below a file that exists (nothing lives under it), and from a working directory that is itself missing.
+	const harnessFile = join(ws, ".heli-harness", "HARNESS.md");
+	const belowFile = normalizePolicyPath(join(harnessFile, "m/".repeat(20), "x"), { cwd: ws, env }).path;
+	assert.equal(belowFile, `${normalizePolicyPath(join(harnessFile, "m"), { cwd: ws, env }).path}${"/m".repeat(19)}/x`);
+	const missingCwd = join(scratch, "does", "not", "exist");
+	const shortFromMissing = normalizePolicyPath("m/x", { cwd: missingCwd, env }).path;
+	assert.equal(normalizePolicyPath(`${"m/".repeat(30)}x`, { cwd: missingCwd, env }).path, `${shortFromMissing.slice(0, -"m/x".length)}${"m/".repeat(30)}x`);
+	// Siblings that share the missing directories resolve as they do one at a time (they share what the first one found).
+	const siblings = [`${"m/".repeat(300)}a.json`, `${"m/".repeat(300)}b.json`, `${"m/".repeat(299)}c.json`, `${"m/".repeat(9)}d.json`, `${"m/".repeat(8)}e.json`, "m/f.json", "m/m/g.json"].map((tail) => join(junction, tail));
+	const together = classifyToolPaths(siblings, { workspaceRoot: ws, cwd: ws, env }).map((entry) => entry.normalized);
+	assert.deepEqual(together, siblings.map((sibling) => classifyToolPaths([sibling], { workspaceRoot: ws, cwd: ws, env })[0].normalized));
+	within(5000, "500 paths of 500 missing directories each", () => classifyToolPaths(Array.from({ length: 500 }, (_, index) => `q${index}/${"a/".repeat(500)}f.md`), { workspaceRoot: ws, cwd: ws, env }));
+
 	console.log("self-protection smoke ok");
 } finally {
 	rmSync(scratch, { recursive: true, force: true });

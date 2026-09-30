@@ -35,7 +35,7 @@
  */
 import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, parse, resolve } from "node:path";
 import { globalConfigDir, globalDataDir } from "./project-binding.mjs";
 import { isWindows, pathsFor } from "./paths.mjs";
 
@@ -104,6 +104,33 @@ function nativeRealpath(path) {
 	}
 }
 
+// A path is walked up one level at a time (a lookup each) only this far. Nothing exists below a directory that does not,
+// so past it the nearest ancestor that exists is found by bisection over the text of the path: hundreds of missing levels
+// cost about as many lookups as a few, and no work per level (a path of 500 levels took 45 ms of lookups on Windows, and a
+// call can carry hundreds of them).
+const LINEAR_WALK_LEVELS = 8;
+
+/**
+ * The deepest ancestor of `start` (itself included) that exists, by bisection; the root when none does.
+ * The ancestors of a resolved path are its prefixes that end before a separator.
+ */
+function nearestExistingAncestor(start) {
+	const rootLength = parse(start).root.length;
+	const cuts = [rootLength];
+	for (let i = rootLength; i < start.length; i += 1) {
+		if (start[i] === "/" || (start[i] === "\\" && isWindows())) cuts.push(i);
+	}
+	cuts.push(start.length);
+	let low = 0;
+	let high = cuts.length - 1;
+	while (low < high) {
+		const middle = (low + high + 1) >> 1;
+		if (existsSync(start.slice(0, cuts[middle]))) low = middle;
+		else high = middle - 1;
+	}
+	return start.slice(0, cuts[low]);
+}
+
 /**
  * Real path of `path`: the nearest existing ancestor is realpath'd (symlinks, junctions, 8.3
  * names, on-disk case) and the missing tail re-appended. `cache` (path -> result) is shared by
@@ -115,6 +142,7 @@ function realpathNearestAncestor(path, cache) {
 	const missing = [];
 	let current = path;
 	let base;
+	let jumped = false;
 	for (;;) {
 		const hit = cache.get(current);
 		if (hit !== undefined) {
@@ -133,6 +161,15 @@ function realpathNearestAncestor(path, cache) {
 		}
 		missing.push(current);
 		current = parent;
+		if (missing.length === LINEAR_WALK_LEVELS) {
+			current = nearestExistingAncestor(current);
+			jumped = true;
+		}
+	}
+	if (jumped) {
+		// Everything below `current` is missing, so each missing directory is the real base plus the rest of its text.
+		for (const node of missing) cache.set(node, join(base, node.slice(current.length)));
+		return cache.get(path);
 	}
 	for (let i = missing.length - 1; i >= 0; i -= 1) {
 		base = join(base, basename(missing[i]));
