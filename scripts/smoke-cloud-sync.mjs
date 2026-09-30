@@ -935,9 +935,9 @@ try {
 		assert.deepEqual(policyBearingChanges({}, { "tasks/x/yolo.jsonx": "{}\n", "tasks/x/y0lo.json": "{}\n", "profiles/ſafety.md": "x\n" }), [], "names that only look similar stay ordinary");
 
 		// A bundle entry name must be the name it will be written under. join() and the filesystem resolve
-		// dot/empty segments, case, NTFS streams and 8.3 short names to another file, so a spelling that
-		// merely looks unlike tasks/<id>/yolo.json must not slip past the governance list or the writer.
-		// (A trailing dot or space is NOT refused: Node writes it literally, and a task id may end with a dot.)
+		// dot/empty segments, case, NTFS streams, 8.3 short names, and Windows trailing-dot/space aliases
+		// to another file, so a spelling that merely looks unlike tasks/<id>/yolo.json must not slip
+		// past the governance list or the writer.
 		const yoloOn = '{"enabled":true}\n';
 		assert.deepEqual(
 			policyBearingChanges({}, { "tasks/x/Task.json": taskJson({ mode: "yolo" }), "Tasks/x/yolo.json": yoloOn, "SAFETY/x.json": "{}\n", "tasks/x/YOLO.JSON": yoloOn }),
@@ -964,8 +964,13 @@ try {
 			"workspace//index.json",
 			"workspace/schema.json::$DATA",
 			"workspace/SCHEMA~1.JSO",
+			"tasks/x/yolo.json.",
+			"tasks/x/yolo.json ",
+			"safety./command-rules.json",
+			"tasks/fix-the-login-bug./events.jsonl",
 			"profiles/a:b.md",
 			"profiles/\u0001.md",
+			"profiles/notes.md.",
 			"tasks/x/",
 		];
 		for (const rel of shadyNames) {
@@ -982,9 +987,8 @@ try {
 				"profiles/notes v2 (draft).md": "n\n",
 				"profiles/a.b.c.md.example": "e\n",
 				"tasks/legit/evidence/log 1.txt": "l\n",
-				"tasks/fix-the-login-bug./events.jsonl": "{}\n", // slugTaskId keeps dots: "Fix the login bug." is a valid task id
 			}),
-			4,
+			3,
 			"ordinary names still write",
 		);
 
