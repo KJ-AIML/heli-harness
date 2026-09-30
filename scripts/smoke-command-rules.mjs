@@ -210,6 +210,14 @@ const T6_TABLE = [
 	["ssh host '/bin/rm -rf /'", ["destructive-delete"]],
 	["wsl -e 'rm -rf /'", ["destructive-delete"]],
 	["xterm -e 'git reset --hard'", ["git-reset-hard"]],
+	// A shell or wrapper the analysis unwraps also starts a command line: bash -c, cmd /c, powershell -Command, eval.
+	["ssh host 'bash -c \"rm -rf /\"'", ["destructive-delete"]],
+	["ssh host 'sudo sh -c \"git reset --hard\"'", ["git-reset-hard"]],
+	["watch 'sh -c \"rm -rf /\"'", ["destructive-delete"]],
+	["su -c 'bash -lc \"find . -delete\"'", ["find-delete"]],
+	["ssh host 'cmd /c rd /s /q x'", ["windows-rmdir"]],
+	["ssh host 'powershell -Command \"Remove-Item -Recurse -Force x\"'", ["powershell-remove-item-recurse-force"]],
+	["ssh host 'eval rm -rf x'", ["destructive-delete"]],
 	["ssh host 'git status'", []],
 	// ...but a quoted word that is text stays text: it does not start with a rule program, it follows
 	// a program that only prints or searches, it is the value of a message or pattern flag, or it sits
@@ -228,6 +236,10 @@ const T6_TABLE = [
 	["grep -rn 'rm -rf' scripts", []],
 	["grep -e 'git reset --hard' docs", []],
 	["git grep -e 'rm -rf' docs", []],
+	["echo 'bash -c \"rm -rf /\"'", []],
+	["git commit -m 'bash -c \"rm -rf x\" example'", []],
+	["notes 'bash scripts are fine'", []],
+	["ssh host 'bash script.sh'", []],
 	["rg 'git push --force' docs", []],
 	["findstr \"rm -rf\" notes.txt", []],
 	["Select-String -Pattern 'git reset --hard' notes.txt", []],
@@ -335,6 +347,8 @@ const PUSH_TABLE = [
 	["su -c 'git push origin main'", true],
 	["watch 'git push'", true],
 	["ssh host 'FOO=1 git push'", true],
+	["ssh host 'bash -c \"git push\"'", true],
+	["ssh host 'bash script.sh'", false],
 	["echo 'git push is blocked'", false],
 	["git commit -m 'git push wrapper notes'", false],
 	["grep -rn 'git push' docs", false],
@@ -361,7 +375,9 @@ assert.equal(shipped.status, "ok");
 for (const rule of BUILTIN_COMMAND_RULES) {
 	assert.ok(Array.isArray(rule.programs) && rule.programs.length > 0, `built-in rule ${rule.id} lists no programs; add them so quoted command lines are checked against it`);
 }
-assert.deepEqual([...commandProgramNames()].sort(), ["del", "erase", "find", "git", "rd", "remove-item", "ri", "rm", "rmdir"]);
+assert.deepEqual([...commandProgramNames()].sort(), [
+	"bash", "cmd", "dash", "del", "erase", "eval", "find", "fish", "git", "ksh", "powershell", "pwsh", "rd", "remove-item", "ri", "rm", "rmdir", "sh", "zsh",
+]);
 for (const program of ["npm", "pnpm", "yarn", "git", "heli", "heli.mjs", "rm"]) {
 	assert.ok(commandProgramNames(shipped.projectRules).has(program), `${program} is a rule program`);
 }

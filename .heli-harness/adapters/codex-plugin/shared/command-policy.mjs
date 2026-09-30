@@ -11,8 +11,9 @@
  *   are skipped, and sh/bash/cmd/pwsh/powershell/eval payloads are unwrapped.
  *   Each segment is read in a POSIX and a Windows dialect; a rule matches if
  *   ANY plausible reading matches.
- * - A quoted word that starts with a program some rule targets is analyzed as a
- *   command line too (`ssh host 'rm -rf /'`, `su -c '...'`, `watch '...'`), unless
+ * - A quoted word that starts with a program some rule targets, or with a shell or
+ *   wrapper unwrapped here, is analyzed as a command line too (`ssh host 'rm -rf /'`,
+ *   `su -c '...'`, `watch 'bash -c "..."'`), unless
  *   it is text or data: after echo/grep/..., after -m/--title/..., after `key:` or
  *   `x =`, or in a line of prose. Interpreters (`python -c`) are not read.
  * - Program names are compared without their directory and a trailing
@@ -590,7 +591,7 @@ function findDelete(tokens) {
  * `summary` in the deny reason. `kind` (optional) replaces "destructive command".
  * `programs` are the program names the rule looks at: a quoted word that starts
  * with one of them is analyzed as a command line (`ssh host 'rm -rf /'`). A rule
- * that lists none is not consulted for that.
+ * that lists none is not consulted for that, so every rule must list its own.
  */
 export const BUILTIN_COMMAND_RULES = Object.freeze([
 	Object.freeze({ id: "destructive-delete", tier: "T6", programs: ["rm"], summary: "rm -rf", reason: "Recursive forced delete is destructive", test: rmRecursiveForce }),
@@ -604,11 +605,14 @@ export const BUILTIN_COMMAND_RULES = Object.freeze([
 ]);
 
 const BUILTIN_IDS = new Set(BUILTIN_COMMAND_RULES.map((rule) => rule.id));
-const BUILTIN_COMMAND_PROGRAMS = new Set(BUILTIN_COMMAND_RULES.flatMap((rule) => rule.programs ?? []));
+// The shells and wrappers unwrapPayloads reads (sh -c, cmd /c, powershell -Command, eval) count as targets too:
+// a quoted word that starts with one of them (`bash -c "rm -rf x"`) hands its payload to the rules.
+const UNWRAPPED_PROGRAMS = [...POSIX_SHELLS, "cmd", "powershell", "pwsh", "eval"];
+const BUILTIN_COMMAND_PROGRAMS = new Set([...UNWRAPPED_PROGRAMS, ...BUILTIN_COMMAND_RULES.flatMap((rule) => rule.programs ?? [])]);
 
 /**
- * The program names some rule targets: the built-in rules' `programs` plus the program each
- * rules-file rule starts with. A quoted word starting with one of them is analyzed as a command line.
+ * The program names a quoted word may start with to be analyzed as a command line: the built-in rules'
+ * `programs`, the shells and wrappers the analysis unwraps, and the program each rules-file rule starts with.
  */
 export function commandProgramNames(projectRules = []) {
 	const names = new Set(BUILTIN_COMMAND_PROGRAMS);
