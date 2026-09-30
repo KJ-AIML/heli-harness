@@ -21,6 +21,10 @@
  *   rules and by the rules file alike.
  * - Analysis runs inside a deterministic budget (COMMAND_ANALYSIS_LIMITS). A
  *   command over it is refused fail-closed, never analyzed in part and allowed.
+ * - Heli's own privilege commands (`heli grant issue`, `heli yolo on`, takeovers, write
+ *   transfers, removing Heli or its host plugins) are built-in T6 rules: the agent Heli
+ *   governs may never run them, in any invocation form. shellWriteTargets lists the paths
+ *   a command writes, for the protected-state check in hook-core.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -95,7 +99,9 @@ function precedesData(word) {
  * Sizing (scripts/smoke-command-rules.mjs pins it): the slowest adversarial input
  * that fits these limits takes about 0.5 s through the whole hook (the host's hook
  * timeout is 30 s), while a 200-line prose heredoc uses about a third of the word
- * and character limits.
+ * and character limits. The protected-state check that follows (shellWriteTargets and
+ * classifyShellWriteTargets; scripts/smoke-self-protection.mjs pins it) adds about 0.6 s
+ * for the worst fit, a thousand paths each in its own chain of missing directories.
  */
 export const COMMAND_ANALYSIS_LIMITS = Object.freeze({
 	maxCommandChars: 49152,
@@ -380,7 +386,9 @@ export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS, comm
 					return;
 				}
 				const tokens = normalizeGitTokens(rawTokens.map((token) => token.toLowerCase()));
-				const key = `${dialect}\u0000${tokens.join("\u0000")}`;
+				// Keyed on the words as written: on a case-sensitive file system `rm .HELI-HARNESS/x` and
+				// `rm .heli-harness/x` name different files, and the write-target check reads both.
+				const key = `${dialect}\u0000${rawTokens.join("\u0000")}`;
 				if (!seen.has(key)) {
 					seen.add(key);
 					segments.push({ tokens, rawTokens, text, dialect });
@@ -584,6 +592,76 @@ function findDelete(tokens) {
 	});
 }
 
+const YOLO_TASK_MODES = new Set(["yolo", "unguarded", "dangerous"]);
+
+/** Argument lists that follow each Heli CLI entry point in a segment. */
+function heliCliInvocations(tokens) {
+	const invocations = [];
+	tokens.forEach((token, index) => {
+		const program = programName(token);
+		const isEntry = program === "heli" || program === "heli.mjs" || program === "heli-harness" ||
+			token.startsWith("heli-harness@") || /(^|[/:])heli-harness(@|#|$)/.test(token);
+		if (!isEntry) return;
+		const args = tokens.slice(index + 1).filter((arg) => arg !== "--json" && arg !== "--output-json");
+		if (args[0] === "--") args.shift();
+		invocations.push(args);
+	});
+	return invocations;
+}
+
+/** `--mode yolo` or `--mode=yolo`, anywhere in the arguments (the last `--mode` wins in the CLI, so every one counts). */
+function yoloTaskMode(args) {
+	return args.some((arg, index) =>
+		(arg === "--mode" && YOLO_TASK_MODES.has(args[index + 1])) ||
+		(arg.startsWith("--mode=") && YOLO_TASK_MODES.has(arg.slice("--mode=".length))),
+	);
+}
+
+/** Heli subcommands that grant authority, bypass guards or remove Heli. */
+function privilegedHeliCommand(args) {
+	const [command, sub] = args;
+	const rest = args.slice(2);
+	if (command === "grant" && sub === "issue") return "heli grant issue";
+	if (command === "yolo" && (sub === "on" || sub === "enable")) return "heli yolo on";
+	if (command === "task" && sub === "takeover") return "heli task takeover";
+	if (command === "task" && sub === "release" && (rest.includes("--force") || rest.includes("--confirm"))) return "heli task release --force";
+	if (command === "task" && sub === "create" && (rest.includes("--yolo") || yoloTaskMode(rest))) return "heli task create --yolo";
+	if (command === "session" && (sub === "start" || sub === "attach") && rest.includes("--yolo")) return `heli session ${sub} --yolo`;
+	if (command === "session" && sub === "transfer-write") return "heli session transfer-write";
+	if (command === "host" && (sub === "remove" || sub === "uninstall")) return `heli host ${sub}`;
+	if (command === "uninstall") return "heli uninstall";
+	return null;
+}
+
+function heliPrivilegeCommand(tokens) {
+	for (const args of heliCliInvocations(tokens)) {
+		const found = privilegedHeliCommand(args);
+		if (found) return found;
+	}
+	return false;
+}
+
+/** `<host> plugin uninstall|remove|disable heli-harness...`, `pi|axga remove heli-harness`. */
+function hostIntegrationRemoval(tokens) {
+	for (const index of indexesOfProgram(tokens, ["claude", "codex", "grok", "cursor", "opencode", "kimi"])) {
+		const args = tokens.slice(index + 1);
+		if (args.includes("plugin") && args.some((arg) => ["uninstall", "remove", "rm", "disable"].includes(arg)) &&
+			args.some((arg) => arg.startsWith("heli-harness"))) {
+			return `${programName(tokens[index])} plugin removal of heli-harness`;
+		}
+	}
+	for (const index of indexesOfProgram(tokens, ["pi", "axga"])) {
+		const args = tokens.slice(index + 1);
+		if ((args[0] === "remove" || args[0] === "uninstall") && args.some((arg) => arg.includes("heli-harness"))) {
+			return `${programName(tokens[index])} ${args[0]} heli-harness`;
+		}
+	}
+	return false;
+}
+
+const HUMAN_ONLY_REASON =
+	"approvals, YOLO, takeovers, write transfers and removing Heli must be done by a human in their own terminal, never by the agent Heli governs; ask the user to run it themselves";
+
 /**
  * Non-removable built-in rules. Ids that also appear in the shipped
  * command-rules.json are intentional: the built-in wins over the file copy.
@@ -602,6 +680,10 @@ export const BUILTIN_COMMAND_RULES = Object.freeze([
 	Object.freeze({ id: "powershell-remove-item-recurse-force", tier: "T6", programs: ["remove-item", "ri", "rm", "rmdir", "rd", "del", "erase"], summary: "Remove-Item -Recurse -Force", reason: "Recursive forced delete is destructive", test: removeItemRecurseForce }),
 	Object.freeze({ id: "find-delete", tier: "T6", programs: ["find"], summary: "find ... -delete", reason: "find -delete is destructive", test: findDelete }),
 	Object.freeze({ id: "git-push-force", tier: "T5", programs: ["git"], summary: "git push --force", reason: "Force-pushing rewrites remote history", test: gitPushForce }),
+	// `programs` lists every way to start the Heli CLI (`heli`, `heli-harness`, `node .../heli.mjs`, the package runners)
+	// and the host CLIs, so `ssh host 'heli grant issue'` and `su -c 'claude plugin uninstall ...'` are read too.
+	Object.freeze({ id: "heli-privileged-command", tier: "T6", programs: ["heli", "heli.mjs", "heli-harness", "node", "npx", "npm", "pnpm", "pnpx", "yarn", "bun", "bunx", "deno"], kind: "agent-run Heli privilege command", summary: "heli grant issue", reason: HUMAN_ONLY_REASON, test: heliPrivilegeCommand }),
+	Object.freeze({ id: "heli-host-integration-removal", tier: "T6", programs: ["claude", "codex", "grok", "cursor", "opencode", "kimi", "pi", "axga"], kind: "removal of the Heli host integration", summary: "host plugin removal", reason: HUMAN_ONLY_REASON, test: hostIntegrationRemoval }),
 ]);
 
 const BUILTIN_IDS = new Set(BUILTIN_COMMAND_RULES.map((rule) => rule.id));
@@ -690,6 +772,112 @@ export function commandRunsGitPush(analysis) {
 
 export function hardDenyReason(match) {
 	return `Heli-Harness blocks ${match.kind || "destructive command"} "${match.summary}" (rule ${match.id}, tier T6): ${match.reason}. This is a hard deny; scoped grants, YOLO and HELI_ALLOW_COMMAND do not override it.`;
+}
+
+const WRITE_PROGRAMS = new Set([
+	"tee", "touch", "rm", "mv", "cp", "truncate", "mkdir", "rmdir", "ln", "install", "unlink", "shred", "chmod", "chown",
+	"set-content", "sc", "add-content", "ac", "out-file", "new-item", "ni", "remove-item", "ri", "del", "erase", "rd",
+	"move-item", "mi", "move", "copy-item", "cpi", "copy", "rename-item", "rni", "ren", "clear-content", "clc",
+	// Links (a hard link is a second name for the same file), tree copies, PowerShell's tee and the rename spellings.
+	"mklink", "md", "xcopy", "robocopy", "tee-object", "rename",
+]);
+// These name the new file relative to the old one's directory (`ren a\b\plan.md yolo.json` makes a\b\yolo.json).
+const RENAME_PROGRAMS = new Set(["rename-item", "rni", "ren", "rename"]);
+const EDITOR_PROGRAMS = new Set(["sed", "perl"]);
+const IN_PLACE_FLAG = /^(?:-[a-z]*i|--in-place)/i;
+const CD_PROGRAMS = new Set(["cd", "pushd", "chdir", "set-location", "sl", "push-location"]);
+// Groups: (1) the `&` of `>&word`, (2) the target. The file-descriptor prefix has at most three
+// digits: `\d+` would be super-linear on a long run of digits.
+const REDIRECT_RE = /(?:^|[^<>&=])(?:\d{1,3}|&|\*)?>>?(&?)\s*("[^"]*"|'[^']*'|[^\s;&|<>]+)/g;
+const NULL_SINKS = /^(\/dev\/(null|stdout|stderr)|nul|\$null)$/i;
+
+/** The file a redirect writes, or null for a null sink or a file-descriptor copy (`2>&1`, `>&2`, `>&-`). */
+function redirectTarget(copy, word) {
+	const target = word.replace(/^["']|["']$/g, "");
+	if (copy && /^(?:\d+|-)$/.test(target)) return null;
+	return target && !NULL_SINKS.test(target) ? target : null;
+}
+
+function isOptionWord(word) {
+	return word.startsWith("-") || /^\/[a-z?]+$/i.test(word);
+}
+
+/** The directory a `cd`-like command changes to: its first argument that is not an option (bare POSIX `cd` goes home). */
+function cdArgument(tokens, dialect) {
+	let index = 1;
+	for (; index < tokens.length; index += 1) {
+		if (tokens[index] === "--") {
+			index += 1;
+			break;
+		}
+		if (!tokens[index].startsWith("-") && !(dialect === "windows" && /^\/[a-z]$/i.test(tokens[index]))) break;
+	}
+	return tokens[index] || (dialect === "posix" ? "~" : null);
+}
+
+/** `name` next to `existing` (in the same directory), or null when `name` is itself a path or `existing` has none. */
+function siblingPath(existing, name) {
+	const cut = Math.max(existing.lastIndexOf("/"), existing.lastIndexOf("\\"));
+	return cut >= 0 && !/[\\/]/.test(name) ? `${existing.slice(0, cut + 1)}${name}` : null;
+}
+
+/**
+ * Best-effort list of paths a shell command writes, moves or deletes:
+ * redirection targets, arguments of file-mutating programs (POSIX and
+ * PowerShell/cmd), `dd of=`, and `sed -i`/`perl -i` files. Each target carries
+ * the `cd` arguments seen earlier in the same dialect so callers can resolve it
+ * both against the original cwd and against the changed directory. Targets are
+ * de-duplicated, and `cdPath` arrays are shared between targets, never modified.
+ * @returns {Array<{ path: string, cdPath: string[] }>}
+ */
+export function shellWriteTargets(analysis) {
+	const targets = [];
+	const seen = new Set();
+	const chains = { posix: { id: 0, dirs: [] }, windows: { id: 0, dirs: [] } };
+	const add = (path, dialect) => {
+		const key = `${dialect}\u0000${chains[dialect].id}\u0000${path}`;
+		if (seen.has(key)) return;
+		seen.add(key);
+		targets.push({ path, cdPath: chains[dialect].dirs });
+	};
+	for (const segment of analysis.segments) {
+		const { dialect } = segment;
+		for (const match of segment.text.matchAll(REDIRECT_RE)) {
+			const target = redirectTarget(match[1], match[2]);
+			if (target) add(target, dialect);
+		}
+		const tokens = segment.rawTokens;
+		if (CD_PROGRAMS.has(programName(tokens[0]))) {
+			const dir = cdArgument(tokens, dialect);
+			if (dir) chains[dialect] = { id: chains[dialect].id + 1, dirs: [...chains[dialect].dirs, dir] };
+			continue;
+		}
+		// One pass: a token is a target when a file-mutating program came before it in the same command.
+		const editorAt = tokens.findIndex((token) => EDITOR_PROGRAMS.has(programName(token)));
+		const editsInPlace = editorAt >= 0 && tokens.some((token, index) => index > editorAt && IN_PLACE_FLAG.test(token));
+		let renameAt = -1;
+		let writing = false;
+		let afterDd = false;
+		for (let index = 0; index < tokens.length; index += 1) {
+			const token = tokens[index];
+			const program = programName(token);
+			if (writing && !isOptionWord(token)) add(token, dialect);
+			if (afterDd && token.toLowerCase().startsWith("of=")) add(token.slice(3), dialect);
+			if (editsInPlace && index > editorAt && !token.startsWith("-")) add(token, dialect);
+			if (WRITE_PROGRAMS.has(program)) writing = true;
+			if (program === "dd") afterDd = true;
+			if (renameAt < 0 && RENAME_PROGRAMS.has(program)) renameAt = index;
+		}
+		if (renameAt >= 0) {
+			const names = tokens.slice(renameAt + 1).filter((token) => !isOptionWord(token)).slice(0, 2);
+			if (names.length === 2) {
+				for (const sibling of [siblingPath(names[0], names[1]), siblingPath(names[1], names[0])]) {
+					if (sibling) add(sibling, dialect);
+				}
+			}
+		}
+	}
+	return targets;
 }
 
 export function approvalReason(match) {

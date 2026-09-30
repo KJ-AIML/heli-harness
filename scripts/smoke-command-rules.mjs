@@ -375,8 +375,10 @@ assert.equal(shipped.status, "ok");
 for (const rule of BUILTIN_COMMAND_RULES) {
 	assert.ok(Array.isArray(rule.programs) && rule.programs.length > 0, `built-in rule ${rule.id} lists no programs; add them so quoted command lines are checked against it`);
 }
+// The unwrapped shells and destructive-command programs, then the self-protection rules' programs: every way to start
+// the Heli CLI (heli, heli-harness, node .../heli.mjs, the package runners) and the host CLIs whose plugin removal is denied.
 assert.deepEqual([...commandProgramNames()].sort(), [
-	"bash", "cmd", "dash", "del", "erase", "eval", "find", "fish", "git", "ksh", "powershell", "pwsh", "rd", "remove-item", "ri", "rm", "rmdir", "sh", "zsh",
+	"axga", "bash", "bun", "bunx", "claude", "cmd", "codex", "cursor", "dash", "del", "deno", "erase", "eval", "find", "fish", "git", "grok", "heli", "heli-harness", "heli.mjs", "kimi", "ksh", "node", "npm", "npx", "opencode", "pi", "pnpm", "pnpx", "powershell", "pwsh", "rd", "remove-item", "ri", "rm", "rmdir", "sh", "yarn", "zsh",
 ]);
 for (const program of ["npm", "pnpm", "yarn", "git", "heli", "heli.mjs", "rm"]) {
 	assert.ok(commandProgramNames(shipped.projectRules).has(program), `${program} is a rule program`);

@@ -465,7 +465,7 @@ for (const [name, rel] of Object.entries(hooks)) {
 	});
 	for (const probe of controlPlaneProbes) {
 		hard(`${name}: control-plane write denied (${probe.label})`, () => {
-			expectDeny(rel, { tool_name: "Write", tool_input: { file_path: probe.file_path } }, /session/i, controlPlaneDir);
+			expectDeny(rel, { tool_name: "Write", tool_input: { file_path: probe.file_path } }, /protects its own authority state/i, controlPlaneDir);
 		});
 	}
 	hard(`${name}: zero-task bootstrap write still allowed`, () => {
@@ -678,11 +678,6 @@ for (const [name, rel] of Object.entries(hooks)) {
 gap(
 	"command-tier rules: variable-indirection evasion accepted",
 	"token-sequence matching closes whitespace/case evasion and substring false positives, but a command that never spells the rule literally (shell variable indirection like G=push; git $G, base64 -d | sh, or a shell alias) still evades every tier rule; accepted — the documented contract is best-effort command guarding, not a sandbox",
-);
-
-gap(
-	"lease holder can still write control-plane files",
-	"a bound write-mode session holding the lease passes the ownership gate and could hand-edit its own lease/schema; acceptable for the trusted writer, recorded for honesty",
 );
 
 // cleanup fixtures

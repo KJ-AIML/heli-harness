@@ -2,7 +2,7 @@
  * Scope-aware YOLO resolution.
  * Ownership/lease gates must NEVER be bypassed by YOLO.
  */
-import { pathExists, readJson, readText } from "./fs-atomic.mjs";
+import { pathExists, readJson } from "./fs-atomic.mjs";
 import { pathsFor, taskPaths } from "./paths.mjs";
 import { readSession } from "./session.mjs";
 import { readTask } from "./task.mjs";
@@ -14,11 +14,6 @@ function envTruthy(name, env = process.env) {
 
 function envGuardsOff(env = process.env) {
 	return /^(0|false|off|disabled|yolo|none)$/i.test(String(env.HELI_GUARDS ?? "").trim());
-}
-
-function field(text, label) {
-	const match = new RegExp(`^${label}:[ \\t]*(.*)$`, "m").exec(text || "");
-	return match ? match[1].trim() : "";
 }
 
 /**
@@ -78,7 +73,7 @@ export function resolveYolo({
 
 	// 5. Legacy workspace yolo.json — only in legacy mode
 	if (!concurrent && root) {
-		const { legacyYoloPath, legacyTaskPath } = pathsFor(root);
+		const { legacyYoloPath } = pathsFor(root);
 		if (pathExists(legacyYoloPath)) {
 			try {
 				const data = readJson(legacyYoloPath, null);
@@ -98,12 +93,8 @@ export function resolveYolo({
 				/* ignore */
 			}
 		}
-		if (pathExists(legacyTaskPath)) {
-			const mode = field(readText(legacyTaskPath, ""), "Mode").toLowerCase();
-			if (mode === "yolo" || mode === "unguarded" || mode === "dangerous") {
-				return { active: true, source: `current-task.md Mode: ${mode}`, safetyOnly: true };
-			}
-		}
+		// current-task.md is a narrative file the agent may edit, so its
+		// `Mode:` field is never a YOLO source (it used to be a self-approval path).
 	}
 
 	// Concurrent mode: global yolo.json must NOT bleed across tasks

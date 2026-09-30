@@ -22,8 +22,14 @@ import { findWorkspaceRoot } from "./concurrency/paths.mjs";
 import { consumeApplicableGrant, findUsableGrants } from "./concurrency/grant.mjs";
 import { resourceIdForWorktree } from "./concurrency/resource-authority.mjs";
 import { evaluateDiagnosisWriteGate, readActionPolicy, readDiagnosis } from "./concurrency/diagnosis.mjs";
-import { approvalReason, evaluateCommandRules, hardDenyReason } from "./command-policy.mjs";
+import { approvalReason, evaluateCommandRules, hardDenyReason, shellWriteTargets } from "./command-policy.mjs";
 import { COMMAND_ANALYSIS_LIMITS, argvCommandText } from "./command-policy.mjs";
+import {
+	classifyShellWriteTargets,
+	classifyToolPaths,
+	disablesClaudeHooks,
+	protectedWriteReason,
+} from "./concurrency/protected-paths.mjs";
 
 export { commandRuleTokens, commandMatchesRuleTokens } from "./command-policy.mjs";
 
@@ -139,7 +145,7 @@ export function buildSessionContext(cwd, { host = "unknown", hookPayload = null,
 				"Carried-over task state from .heli-harness/state/current-task.md:",
 				taskText,
 				"",
-				"Acknowledge this before your first edit this session: confirm with the user whether to resume, abandon, or reset it. If it shows a target-repo mismatch against workspace/target.json, or 2+ failed attempts on an incomplete task, the PreToolUse hook will block Edit/Write/apply_patch calls until you update current-task.md (or target.json) to resolve it.",
+				"Acknowledge this before your first edit this session: confirm with the user whether to resume, abandon, or reset it. If it shows a target-repo mismatch against workspace/target.json, or 2+ failed attempts on an incomplete task, the PreToolUse hook will block Edit/Write/apply_patch calls until you update current-task.md (or run `heli target set <repo>`) to resolve it.",
 			);
 			if (incomplete) {
 				lines.push(
@@ -321,18 +327,11 @@ export function withCliHint(reason) {
 	return `${reason}\n(heli not on PATH? Run: node .heli-harness/heli.mjs <command> from the workspace root.)`;
 }
 
-export function isTaskStateWrite(paths) {
-	// Exempt only when EVERY affected path is task/projection state. A mixed
-	// task-state + source patch must still face the ownership gate.
-	if (!Array.isArray(paths) || paths.length === 0) return false;
-	return paths.every(
-		(path) =>
-			path.endsWith(".heli-harness/state/current-task.md") ||
-			path.endsWith(".heli-harness/state/plan.md") ||
-			path.endsWith(".heli-harness/workspace/target.json") ||
-			path.endsWith(".heli-harness/state/yolo.json") ||
-			path.includes(".heli-harness/tasks/"),
-	);
+/** Every string inside a tool input, at any depth (the text a settings write would contain). */
+function stringLeaves(value, out = []) {
+	if (typeof value === "string") out.push(value);
+	else if (value && typeof value === "object") for (const item of Object.values(value)) stringLeaves(item, out);
+	return out;
 }
 
 function taskRiskTier(ctx) {
@@ -452,15 +451,16 @@ export function evaluatePreToolUse({
 	const argv = Array.isArray(toolInput?.command) ? argvCommandText(toolInput.command) : null;
 	if (argv && !argv.error) toolInput = { ...toolInput, command: argv.text };
 
+	const baseCwd = cwd || process.cwd();
 	const rawCommand = String(toolInput?.command ?? toolInput?.description ?? "");
-	const paths = [...pathsFrom(toolInput), ...patchPathsFrom(rawCommand)].map((path) =>
-		path.replaceAll("\\", "/").toLowerCase(),
-	);
+	const rawPaths = [...pathsFrom(toolInput), ...patchPathsFrom(rawCommand)];
+	const paths = rawPaths.map((path) => path.replaceAll("\\", "/").toLowerCase());
 	const name = String(toolName);
 
 	const shellMutation = isLikelyShellMutation(name, rawCommand);
 	const isWrite = isFileMutationTool(name, { paths, writeToolNames }) || shellMutation;
-	const taskStateOnly = isTaskStateWriteForContext(ctx, paths) || isTaskStateWrite(paths);
+	// Only narrative state files skip the ownership gate (see isTaskStateWriteForContext), and only a write needs it.
+	const taskStateOnly = isWrite && isTaskStateWriteForContext(ctx, rawPaths, { cwd: baseCwd, env });
 	let ownershipDecision = null;
 
 	// A command list that cannot be read as words could hide anything: refuse it, beyond YOLO.
@@ -501,6 +501,30 @@ export function evaluatePreToolUse({
 			ruleId: commandPolicy.hardDenies[0].id,
 			ruleIds: commandPolicy.hardDenies.map((match) => match.id),
 			reason: commandPolicy.hardDenies.map(hardDenyReason).join("\n"),
+			ctx,
+		};
+	}
+
+	// Heli's own authority state is never agent-writable: not by the lease
+	// holder, not under YOLO. Structured writes are checked by their paths,
+	// shell commands by the paths they write, move or delete.
+	const pathScope = { workspaceRoot: ctx.workspaceRoot, cwd: baseCwd, env };
+	const structuredEntries = isWrite ? classifyToolPaths(rawPaths, pathScope) : [];
+	const shellEntries = commandPolicy && isShellTool(name)
+		? classifyShellWriteTargets(shellWriteTargets(commandPolicy.analysis), pathScope)
+		: [];
+	const protectedEntry = [...structuredEntries, ...shellEntries].find((entry) => entry.kind === "authority");
+	if (protectedEntry) {
+		return { deny: true, hardDeny: true, code: "HELI_STATE_PROTECTED", reason: protectedWriteReason(protectedEntry), ctx };
+	}
+	const settingsWrite = [...structuredEntries, ...shellEntries].some((entry) => entry.kind === "claude-settings");
+	if (settingsWrite && disablesClaudeHooks(isShellTool(name) ? rawCommand : stringLeaves(toolInput).join("\n"))) {
+		return {
+			deny: true,
+			hardDeny: true,
+			code: "HELI_HOOKS_PROTECTED",
+			reason:
+				"Heli-Harness blocks settings changes that disable Claude Code hooks or the Heli plugin (disableAllHooks / enabledPlugins). Ask the user to change Claude settings themselves.",
 			ctx,
 		};
 	}
@@ -598,7 +622,10 @@ export function evaluatePreToolUse({
 				"Heli-Harness blocks git push without scoped authority. Ask the user to run `heli grant issue --action git.push --scope once` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_GIT_PUSH or YOLO.",
 		});
 	}
-	if (paths.some((path) => /(^|\/)\.env(\.|$)/.test(path)) && !allowEnvWriteScoped(scope)) {
+	const envFile = /(^|\/)\.env(\.|$)/;
+	const envWrite = paths.some((path) => envFile.test(path)) ||
+		[...structuredEntries, ...shellEntries].some((entry) => entry.normalized && envFile.test(entry.normalized.toLowerCase()));
+	if (envWrite && !allowEnvWriteScoped(scope)) {
 		requirements.push({
 			action: "env.write",
 			code: "ENV_WRITE_DENIED",
