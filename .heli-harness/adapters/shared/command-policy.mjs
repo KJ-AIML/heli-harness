@@ -11,6 +11,10 @@
  *   are skipped, and sh/bash/cmd/pwsh/powershell/eval payloads are unwrapped.
  *   Each segment is read in a POSIX and a Windows dialect; a rule matches if
  *   ANY plausible reading matches.
+ * - A quoted word that starts with a program some rule targets is analyzed as a
+ *   command line too (`ssh host 'rm -rf /'`, `su -c '...'`, `watch '...'`), unless
+ *   it is text or data: after echo/grep/..., after -m/--title/..., after `key:` or
+ *   `x =`, or in a line of prose. Interpreters (`python -c`) are not read.
  * - Program names are compared without their directory and a trailing
  *   .exe/.cmd/.bat/.com/.ps1, in any case (`git.exe`, `npm.cmd`), by the built-in
  *   rules and by the rules file alike.
@@ -42,6 +46,34 @@ const GIT_OPTIONS_WITH_VALUE = new Set([
 const SHELL_LONG_OPTIONS_WITH_VALUE = new Set(["--rcfile", "--init-file"]);
 // Words made only of these characters need no quoting in a shell (the set Python's shlex.quote uses).
 const UNQUOTED_ARGV_WORD = /^[A-Za-z0-9_@%+=:,./-]+$/;
+// Programs whose words are text, patterns or file names and never a command line to run, so a quoted
+// word after one of them is data (`echo 'git push is blocked'`, `grep 'rm -rf' scripts`).
+const TEXT_PROGRAMS = new Set([
+	"echo", "printf", "cat", "grep", "egrep", "fgrep", "rg", "ag", "ack", "sed", "awk", "gawk",
+	"findstr", "select-string", "sls", "write-host", "write-output", "set-content", "add-content",
+]);
+// Options whose next word is a message, a pattern or text to write: the short `-m`, `-am` (not `-e`, which
+// is `wsl -e` and `xterm -e`: grep and sed are text programs already), and by name, with one or two dashes
+// and in any case, `--message`, `--title`, `--body`, `--grep`, `-Subject`, `-Value`.
+const TEXT_OPTION_NAMES = new Set([
+	"message", "msg", "title", "body", "notes", "description", "subject", "comment", "reason", "summary", "text",
+	"value", "grep", "regexp", "pattern",
+]);
+const TEXT_SHORT_OPTION = /^-[A-Za-z]{0,2}m$/;
+function isTextOption(word) {
+	return word.length <= 32 && (TEXT_SHORT_OPTION.test(word) || TEXT_OPTION_NAMES.has(word.replace(/^--?/, "").toLowerCase()));
+}
+// Programs that run the command after them: skipped, with their options and numeric values, when the
+// first command word of a quoted word is looked for (`ssh host 'sudo rm -rf /'`).
+const TRANSPARENT_PREFIXES = new Set(["sudo", "doas", "env", "nohup", "time", "nice", "timeout", "exec", "command", "builtin", "busybox"]);
+const ASSIGNMENT_WORD = /^[A-Za-z_][A-Za-z0-9_]*=/;
+// The words after `for x in` are values to loop over, not programs.
+const DATA_HEADS = new Set(["for", "select", "case"]);
+// A quoted word right after `key:`, `x =` or `item,`, or an opening bracket, is a value in data or code
+// (JSON, YAML, a JS object or array, an assignment), not a command line handed to a program.
+function precedesData(word) {
+	return ":=,".includes(word.at(-1)) || (word.length <= 4 && /^[[{]+$/.test(word));
+}
 
 /**
  * Deterministic analysis budget: counts of work, never wall-clock. Hosts treat a
@@ -238,10 +270,59 @@ function unwrapPayloads(tokens) {
 	return payloads.filter((payload) => payload && payload.trim());
 }
 
+/** Spelled like a command, not like a capitalized word of prose: `rm`, `RD`, `Remove-Item`, not `Find`. */
+function spelledAsCommand(word) {
+	return word === word.toLowerCase() || word === word.toUpperCase() || /^[A-Z][a-z]+(?:-[A-Z][a-z]+)+$/.test(word);
+}
+
+/** First command word of a quoted word, past `VAR=value` words and transparent prefixes such as `sudo -E`. */
+function leadingCommandWord(word) {
+	const words = word.slice(0, 512).trim().split(/\s+/);
+	let i = 0;
+	while (i < words.length) {
+		const candidate = words[i];
+		if (ASSIGNMENT_WORD.test(candidate)) {
+			i += 1;
+		} else if (TRANSPARENT_PREFIXES.has(programName(candidate)) && spelledAsCommand(candidate)) {
+			i += 1;
+			while (i < words.length && (words[i].startsWith("-") || /^\d+$/.test(words[i]))) i += 1;
+		} else {
+			return candidate;
+		}
+	}
+	return "";
+}
+
+/**
+ * Quoted words (a word with whitespace inside) that read as a command line handed to some program,
+ * such as `ssh host 'rm -rf /'`, `su -c '...'`, `watch '...'`: the word's first command word is a
+ * program some rule targets (`programs`). Text and data stay text: nothing counts in a segment that
+ * reads as prose (its first word is a capitalized word, a bullet or a quoted word) or as a `for` list,
+ * after echo, printf, grep and the like, right after a message, pattern or text option (`-m`,
+ * `--title`, `--grep`), or right after `key:`, `x =`, `item,` or an opening bracket (JSON, JS, YAML).
+ */
+function quotedCommandWords(tokens, programs) {
+	const head = tokens[0];
+	if (!/^[A-Za-z_.\/~\\$][^\s]*$/.test(head) || /^[A-Z][a-z]+$/.test(head) || DATA_HEADS.has(head)) return [];
+	const words = [];
+	let printsText = false;
+	for (let i = 0; i < tokens.length; i += 1) {
+		const token = tokens[i];
+		if (TEXT_PROGRAMS.has(programName(token))) printsText = true;
+		if (printsText || i === 0 || !/\s/.test(token)) continue;
+		if (isTextOption(tokens[i - 1]) || precedesData(tokens[i - 1])) continue;
+		const first = leadingCommandWord(token);
+		if (first && spelledAsCommand(first) && programs.has(programName(first))) words.push(token);
+	}
+	return words;
+}
+
 /**
  * Parse command text into de-duplicated segments, within COMMAND_ANALYSIS_LIMITS.
  * @param {string} command
- * @param {{ limits?: typeof COMMAND_ANALYSIS_LIMITS }} [options] `limits` lets tests hit each limit with small input.
+ * @param {{ limits?: typeof COMMAND_ANALYSIS_LIMITS, commandPrograms?: Set<string> }} [options] `limits` lets tests hit
+ *   each limit with small input. `commandPrograms` are the programs rules target (see commandProgramNames): a quoted
+ *   word that starts with one is analyzed as a command line. Default: the built-in rules' programs.
  * @returns {{
  *   segments: Array<{ tokens: string[], rawTokens: string[], text: string, dialect: "posix"|"windows" }>,
  *   limitExceeded: null | { limit: string, max: number, message: string },
@@ -251,7 +332,7 @@ function unwrapPayloads(tokens) {
  *   When `limitExceeded` is set the analysis stopped early and `segments` is
  *   incomplete: callers must refuse the command instead of matching rules on it.
  */
-export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS } = {}) {
+export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS, commandPrograms = BUILTIN_COMMAND_PROGRAMS } = {}) {
 	const commandText = String(command ?? "");
 	const segments = [];
 	const seen = new Set();
@@ -303,7 +384,9 @@ export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS } = {
 					seen.add(key);
 					segments.push({ tokens, rawTokens, text, dialect });
 				}
-				for (const payload of unwrapPayloads(rawTokens)) {
+				// Wrapper payloads and quoted command lines are visited like the command itself, so they
+				// count against the same word, character and nesting limits.
+				for (const payload of new Set([...unwrapPayloads(rawTokens), ...quotedCommandWords(rawTokens, commandPrograms)])) {
 					visit(payload, depth + 1);
 					if (limitExceeded) return;
 				}
@@ -505,19 +588,35 @@ function findDelete(tokens) {
  * command-rules.json are intentional: the built-in wins over the file copy.
  * A rule's `test(tokens)` returns false, true, or a string that replaces
  * `summary` in the deny reason. `kind` (optional) replaces "destructive command".
+ * `programs` are the program names the rule looks at: a quoted word that starts
+ * with one of them is analyzed as a command line (`ssh host 'rm -rf /'`). A rule
+ * that lists none is not consulted for that.
  */
 export const BUILTIN_COMMAND_RULES = Object.freeze([
-	Object.freeze({ id: "destructive-delete", tier: "T6", summary: "rm -rf", reason: "Recursive forced delete is destructive", test: rmRecursiveForce }),
-	Object.freeze({ id: "git-clean-force", tier: "T6", summary: "git clean -f with -d/-x", reason: "git clean with force and -d/-x deletes untracked work", test: gitCleanForce }),
-	Object.freeze({ id: "git-reset-hard", tier: "T6", summary: "git reset --hard", reason: "git reset --hard discards local work", test: gitResetHard }),
-	Object.freeze({ id: "windows-rmdir", tier: "T6", summary: "rd/rmdir /s", reason: "Recursive delete is destructive", test: cmdRecursiveRmdir }),
-	Object.freeze({ id: "windows-del", tier: "T6", summary: "del/erase /s", reason: "Recursive delete is destructive", test: cmdRecursiveDel }),
-	Object.freeze({ id: "powershell-remove-item-recurse-force", tier: "T6", summary: "Remove-Item -Recurse -Force", reason: "Recursive forced delete is destructive", test: removeItemRecurseForce }),
-	Object.freeze({ id: "find-delete", tier: "T6", summary: "find ... -delete", reason: "find -delete is destructive", test: findDelete }),
-	Object.freeze({ id: "git-push-force", tier: "T5", summary: "git push --force", reason: "Force-pushing rewrites remote history", test: gitPushForce }),
+	Object.freeze({ id: "destructive-delete", tier: "T6", programs: ["rm"], summary: "rm -rf", reason: "Recursive forced delete is destructive", test: rmRecursiveForce }),
+	Object.freeze({ id: "git-clean-force", tier: "T6", programs: ["git"], summary: "git clean -f with -d/-x", reason: "git clean with force and -d/-x deletes untracked work", test: gitCleanForce }),
+	Object.freeze({ id: "git-reset-hard", tier: "T6", programs: ["git"], summary: "git reset --hard", reason: "git reset --hard discards local work", test: gitResetHard }),
+	Object.freeze({ id: "windows-rmdir", tier: "T6", programs: ["rd", "rmdir"], summary: "rd/rmdir /s", reason: "Recursive delete is destructive", test: cmdRecursiveRmdir }),
+	Object.freeze({ id: "windows-del", tier: "T6", programs: ["del", "erase"], summary: "del/erase /s", reason: "Recursive delete is destructive", test: cmdRecursiveDel }),
+	Object.freeze({ id: "powershell-remove-item-recurse-force", tier: "T6", programs: ["remove-item", "ri", "rm", "rmdir", "rd", "del", "erase"], summary: "Remove-Item -Recurse -Force", reason: "Recursive forced delete is destructive", test: removeItemRecurseForce }),
+	Object.freeze({ id: "find-delete", tier: "T6", programs: ["find"], summary: "find ... -delete", reason: "find -delete is destructive", test: findDelete }),
+	Object.freeze({ id: "git-push-force", tier: "T5", programs: ["git"], summary: "git push --force", reason: "Force-pushing rewrites remote history", test: gitPushForce }),
 ]);
 
 const BUILTIN_IDS = new Set(BUILTIN_COMMAND_RULES.map((rule) => rule.id));
+const BUILTIN_COMMAND_PROGRAMS = new Set(BUILTIN_COMMAND_RULES.flatMap((rule) => rule.programs ?? []));
+
+/**
+ * The program names some rule targets: the built-in rules' `programs` plus the program each
+ * rules-file rule starts with. A quoted word starting with one of them is analyzed as a command line.
+ */
+export function commandProgramNames(projectRules = []) {
+	const names = new Set(BUILTIN_COMMAND_PROGRAMS);
+	for (const rule of projectRules) {
+		if (rule.ruleTokens?.length) names.add(programName(rule.ruleTokens[0]));
+	}
+	return names;
+}
 
 /**
  * Load the workspace's command-rules.json.
@@ -639,7 +738,7 @@ function limitExceededReason(limitExceeded) {
  */
 export function evaluateCommandRules(workspaceRoot, command, env = process.env) {
 	const loaded = loadCommandRules(workspaceRoot);
-	const analysis = analyzeCommand(command);
+	const analysis = analyzeCommand(command, { commandPrograms: commandProgramNames(loaded.projectRules) });
 	if (analysis.limitExceeded) {
 		return {
 			status: loaded.status,

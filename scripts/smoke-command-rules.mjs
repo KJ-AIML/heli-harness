@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { COMMAND_ANALYSIS_LIMITS, analyzeCommand, argvCommandText, commandRunsGitPush, loadCommandRules, matchCommandRules } from "../.heli-harness/adapters/shared/command-policy.mjs";
+import { BUILTIN_COMMAND_RULES, COMMAND_ANALYSIS_LIMITS, analyzeCommand, argvCommandText, commandProgramNames, commandRunsGitPush, evaluateCommandRules, loadCommandRules, matchCommandRules } from "../.heli-harness/adapters/shared/command-policy.mjs";
 import { DEFAULT_FILE_WRITE_TOOL_NAMES, evaluatePreToolUse, isFileMutationTool, isFileWriteToolName, isLikelyShellMutation } from "../.heli-harness/adapters/shared/hook-core.mjs";
 import { issueGrant, listGrants } from "../lib/concurrency/grant.mjs";
 import { projectWorkspaceKey } from "../lib/concurrency/project-binding.mjs";
@@ -177,6 +177,90 @@ const T6_TABLE = [
 	["rd /tmp/s", []],
 	["del /tmp/s/file.txt", []],
 	["rmdir /s/tmp/s", []],
+	// A quoted command line handed to a program that runs it (su -c, sudo -s, env -S, ssh, watch,
+	// flock -c, script -c, docker/kubectl exec) is read as a command when its first command word is a
+	// program some rule targets: `VAR=value` and transparent prefixes such as sudo are skipped.
+	["su -c 'rm -rf /'", ["destructive-delete"]],
+	["su root -c 'rm -rf /'", ["destructive-delete"]],
+	["sudo -s 'rm -rf /'", ["destructive-delete"]],
+	["sudo -i 'rm -rf /'", ["destructive-delete"]],
+	["env -S 'rm -rf /'", ["destructive-delete"]],
+	["ssh host 'rm -rf /'", ["destructive-delete"]],
+	["ssh host \"rm -rf /\"", ["destructive-delete"]],
+	["ssh -o StrictHostKeyChecking=no host 'rm -rf /'", ["destructive-delete"]],
+	["ssh host 'git push --force origin main'", ["git-push-force"]],
+	["ssh host 'git reset --hard'", ["git-reset-hard"]],
+	["ssh host 'git clean -fdx'", ["git-clean-force"]],
+	["ssh host 'find . -delete'", ["find-delete"]],
+	["ssh host 'rd /s /q x'", ["windows-rmdir"]],
+	["ssh host 'Remove-Item -Recurse -Force x'", ["powershell-remove-item-recurse-force"]],
+	["watch 'rm -rf /'", ["destructive-delete"]],
+	["watch -n 5 'rm -rf /'", ["destructive-delete"]],
+	["flock f -c 'rm -rf /'", ["destructive-delete"]],
+	["script -c 'rm -rf /' out", ["destructive-delete"]],
+	["docker exec c sh -c 'rm -rf /'", ["destructive-delete"]],
+	["docker exec c 'rm -rf /'", ["destructive-delete"]],
+	["kubectl exec pod -- 'rm -rf /'", ["destructive-delete"]],
+	["ssh host 'sudo rm -rf /'", ["destructive-delete"]],
+	["ssh host 'FOO=1 git push --force origin main'", ["git-push-force"]],
+	["ssh host 'nohup rm -rf x'", ["destructive-delete"]],
+	["ssh host 'timeout 5 rm -rf x'", ["destructive-delete"]],
+	["ssh host 'nice -n 5 rm -rf x'", ["destructive-delete"]],
+	["ssh host 'env FOO=1 rm -rf x'", ["destructive-delete"]],
+	["ssh host '/bin/rm -rf /'", ["destructive-delete"]],
+	["wsl -e 'rm -rf /'", ["destructive-delete"]],
+	["xterm -e 'git reset --hard'", ["git-reset-hard"]],
+	["ssh host 'git status'", []],
+	// ...but a quoted word that is text stays text: it does not start with a rule program, it follows
+	// a program that only prints or searches, it is the value of a message or pattern flag, or it sits
+	// in a line of prose (a capitalized first word, a bullet).
+	["git commit -m \"fix: rm -rf handling\"", []],
+	["git commit -m \"Tighten the guard\n\nThe old matcher flagged rm -rf and git push --force anywhere in a message,\neven when the text only talked about them.\"", []],
+	["notes \"Tighten the guard\n\nThe old matcher flagged rm -rf and git push --force mid-sentence.\"", []],
+	["git commit -m 'git push wrapper notes'", []],
+	["git commit -am 'git push wrapper notes'", []],
+	["git commit --message 'rm -rf guard'", []],
+	["git tag -a v1 -m 'rm -rf docs'", []],
+	["echo 'git push is blocked'", []],
+	["echo \"rm -rf /\"", []],
+	["printf 'rm -rf /\\n'", []],
+	["Write-Host 'git push is blocked'", []],
+	["grep -rn 'rm -rf' scripts", []],
+	["grep -e 'git reset --hard' docs", []],
+	["git grep -e 'rm -rf' docs", []],
+	["rg 'git push --force' docs", []],
+	["findstr \"rm -rf\" notes.txt", []],
+	["Select-String -Pattern 'git reset --hard' notes.txt", []],
+	["git log --grep 'git push'", []],
+	["gh pr create --title \"git push gate\" --body \"rm -rf build notes\"", []],
+	["gh issue create --title 'rm -rf guard' --body 'git push --force is blocked'", []],
+	["gh release create v1 --notes 'git reset --hard removed'", []],
+	["Send-MailMessage -Subject 'rm -rf report' -Body 'git push --force report'", []],
+	["Set-Content -Path notes.txt -Value 'rm -rf build'", []],
+	["Add-Content notes.txt 'rm -rf build'", []],
+	["sed -e 's/rm -rf/x/' file", []],
+	["cat <<< 'rm -rf /'", []],
+	["notes 'Find rm -rf usage in docs'", []],
+	["notes 'Git push is blocked'", []],
+	["notes 'fix: rm -rf handling'", []],
+	["He said 'git push is blocked' twice.", []],
+	["- Use 'rm -rf build' with care", []],
+	// Data and code keep their strings too: a value after `key:` or `=`, a list item, a `for` list.
+	["reason: 'git reset --hard is destructive'", []],
+	["\"reason\": \"git reset --hard is destructive\",", []],
+	["toolInput: { command: \"git push --force origin main\" },", []],
+	["const cmd = \"rm -rf build\";", []],
+	["cmd = 'git reset --hard'", []],
+	["if [ \"$x\" = \"rm -rf x\" ]; then echo hi; fi", []],
+	["[[ $x == \"git reset --hard\"* ]]", []],
+	["for c in \"git reset --hard\" \"rm -rf x\"; do echo $c; done", []],
+	["for command of [\"git push --force\", \"rm -rf build\", \"git reset --hard\"]", []],
+	["cat > probe.mjs <<'EOF'\nfor (const command of [\"git push --force\", \"rm -rf build\", \"find . -delete\"]) {\n\tconst r = run({ command: \"git reset --hard\", reason: \"rm -rf build is destructive\" });\n}\nEOF", []],
+	// Known gaps of this heuristic (recorded, not fixed): python -c and other interpreters, a command
+	// word that is not the first (`cd x && rm -rf y`), and a prefix option that takes a value.
+	["python -c \"import os; os.system('rm -rf /')\"", []],
+	["ssh host 'cd /x && rm -rf y'", []],
+	["ssh host 'sudo -u root rm -rf /'", []],
 	// Legitimate, non-destructive commands must not match any built-in rule.
 	["rm -f build.log", []],
 	["rm -r build", []],
@@ -247,6 +331,21 @@ const PUSH_TABLE = [
 	["git --attr-source push status", false],
 	["git --config-env push status", false],
 	["git --exec-path=push status", false],
+	["ssh host 'git push'", true],
+	["su -c 'git push origin main'", true],
+	["watch 'git push'", true],
+	["ssh host 'FOO=1 git push'", true],
+	["echo 'git push is blocked'", false],
+	["git commit -m 'git push wrapper notes'", false],
+	["grep -rn 'git push' docs", false],
+	["notes 'Git push is blocked'", false],
+	["gh pr create --title 'git push gate' --body 'git push notes'", false],
+	["const cmd = \"git push origin main\";", false],
+	["toolInput: { command: \"git push origin main\" },", false],
+	["if [ \"$x\" = \"git push\" ]; then echo hi; fi", false],
+	["for c in \"git push\" \"git push --force\"; do echo $c; done", false],
+	["He said 'git push is blocked' twice.", false],
+	["- Use 'git push' with care", false],
 ];
 for (const [command, expected] of PUSH_TABLE) {
 	assert.equal(commandRunsGitPush(analyzeCommand(command)), expected, `git push detection for ${JSON.stringify(command)}`);
@@ -256,6 +355,17 @@ for (const [command, expected] of PUSH_TABLE) {
 // ones (npm is npm.cmd and git is git.exe on Windows), without loosening anything else.
 const shipped = loadCommandRules(root);
 assert.equal(shipped.status, "ok");
+// A quoted command line (`ssh host 'rm -rf /'`) is only read for the programs some rule targets: the
+// built-in rules name theirs in `programs` (a rule added later must too, or it is never checked there),
+// and each rules-file rule contributes the program it starts with.
+for (const rule of BUILTIN_COMMAND_RULES) {
+	assert.ok(Array.isArray(rule.programs) && rule.programs.length > 0, `built-in rule ${rule.id} lists no programs; add them so quoted command lines are checked against it`);
+}
+assert.deepEqual([...commandProgramNames()].sort(), ["del", "erase", "find", "git", "rd", "remove-item", "ri", "rm", "rmdir"]);
+for (const program of ["npm", "pnpm", "yarn", "git", "heli", "heli.mjs", "rm"]) {
+	assert.ok(commandProgramNames(shipped.projectRules).has(program), `${program} is a rule program`);
+}
+assert.ok(!commandProgramNames(shipped.projectRules).has("ssh"), "ssh runs commands but no rule targets it");
 const RULES_TABLE = [
 	["npm publish", ["npm-publish"]],
 	["npm.cmd publish", ["npm-publish"]],
@@ -278,9 +388,23 @@ const RULES_TABLE = [
 	["git.exe status", []],
 	["heli.cmd status", []],
 	["echo npm.cmd publisher", []],
+	// A quoted command line whose first command word is a program the rules file targets.
+	["ssh host 'npm publish'", ["npm-publish"]],
+	["ssh host 'npm.cmd publish'", ["npm-publish"]],
+	["ssh host 'heli push'", ["heli-cloud-push"]],
+	["su -c 'git tag v1.0.0'", ["git-tag"]],
+	["watch 'pnpm publish'", ["pnpm-publish"]],
+	["ssh host 'npm test'", []],
+	["echo 'npm publish is blocked'", []],
+	["git commit -m 'npm publish flow notes'", []],
+	["notes 'Npm publish is blocked'", []],
+	["\"reason\": \"npm publish is a release operation\",", []],
+	["const cmd = 'heli push';", []],
 ];
+// The programs the rules file names come from the loaded rules, so this goes through evaluateCommandRules.
 for (const [command, expected] of RULES_TABLE) {
-	const got = matchCommandRules(analyzeCommand(command), shipped.projectRules).map((match) => match.id).sort();
+	const evaluation = evaluateCommandRules(root, command, {});
+	const got = [...evaluation.hardDenies, ...evaluation.approvals].map((match) => match.id).sort();
 	assert.deepEqual(got, [...expected].sort(), `rules-file layer for ${JSON.stringify(command)}`);
 }
 
@@ -411,6 +535,7 @@ const PROSE_LINES = [
 	(n) => `Item ${n} says "check twice" and "commit once", which is the whole point of this note.`,
 	(n) => `Paragraph ${n}: this line keeps going for a while, mixing plain words with commas, a colon: like this, and a dash - like that, so words per line look like a real document instead of a list of short items.`,
 	() => "",
+	(n) => `Item ${n} reads "git push is blocked" in the log, and "rm -rf build" only in the docs.`,
 ];
 // Inside a double-quoted commit message only lines without double quotes or backticks are used.
 const QUOTE_FREE_LINES = [0, 1, 3, 4, 6, 7];
@@ -627,6 +752,46 @@ try {
 	assertTooComplex(argvDir, undefined, "a list of 200000 words", {}, { command: Array(200000).fill("x") });
 	assertTooComplex(argvDir, undefined, "a list with one word of twice the size limit", {}, { command: ["echo", "x".repeat(LIMITS.maxCommandChars * 2)] });
 	assertTooComplex(argvDir, undefined, "an over-limit list whose tail is malformed", {}, { command: [...Array(LIMITS.maxCommandChars).fill("xy"), 5] });
+	// A quoted command line handed to a program that runs it is analyzed through the whole hook.
+	const quotedDir = workspace("quoted");
+	for (const command of ["su -c 'rm -rf /'", "sudo -s 'rm -rf /'", "env -S 'rm -rf /'", "ssh host 'rm -rf /'", "watch 'rm -rf /'", "flock f -c 'rm -rf /'", "script -c 'rm -rf /' out", "docker exec c sh -c 'rm -rf /'"]) {
+		assert.equal(bash(quotedDir, command).code, "TIER_BLOCKED", command);
+	}
+	assert.deepEqual(bash(quotedDir, "ssh host 'git push --force origin main'").missingApprovals, ["git.push", "command.approval.git-push-force"]);
+	assert.deepEqual(bash(quotedDir, "ssh host 'git push origin main'").missingApprovals, ["git.push"]);
+	assert.deepEqual(bash(quotedDir, "ssh host 'npm publish'").missingApprovals, ["command.approval.npm-publish"]);
+	assert.equal(bash(quotedDir, "ssh host 'heli push'").code, "TIER_APPROVAL_REQUIRED");
+	// Text stays allowed: messages, printed lines, search patterns and prose, heredoc bodies included.
+	for (const text of [
+		"git commit -m \"fix: rm -rf handling\"",
+		"git commit -m \"Tighten the guard\n\nThe old matcher flagged rm -rf and git push --force anywhere in a message.\"",
+		"echo 'git push is blocked'",
+		"git commit -m 'git push wrapper notes'",
+		"grep -rn 'rm -rf' scripts",
+		"cat > notes.md <<'EOF'\nHe said \"git push is blocked\" twice.\n- Use \"rm -rf build\" with care.\nEOF",
+		"cat > rules.json <<'EOF'\n{ \"rules\": [ { \"id\": \"x\", \"match\": \"git reset --hard\", \"reason\": \"git reset --hard is destructive\" } ] }\nEOF",
+		"cat > probe.mjs <<'EOF'\nfor (const command of [\"git push --force\", \"rm -rf build\", \"npm publish\"]) {\n\tconst r = run({ command: \"git reset --hard\" });\n}\nEOF",
+		"ssh host 'git status'",
+	]) {
+		const result = bash(quotedDir, text);
+		assert.equal(result.deny, false, `${JSON.stringify(text)}: ${result.reason}`);
+	}
+	// The extra analysis runs on the same budget. 250 quoted words that start with a rule program are
+	// analyzed in full (the T6 in them is found, harmless ones stay allowed); a command line full of them
+	// that would take more words than the budget allows is refused, and both are quick.
+	const quotedWords = (count, program, salt = "") => Array.from({ length: count }, (_, i) => `'${program} d${salt}${i}'`).join(" ");
+	for (const [label, command, expected] of [
+		["250 quoted words starting with rm -rf", `wrap ${quotedWords(250, "rm -rf")}`, "TIER_BLOCKED"],
+		["250 harmless quoted words starting with git", `wrap ${quotedWords(250, "git status")}`, undefined],
+	]) {
+		const startedAt = Date.now();
+		const result = bash(quotedDir, command);
+		assert.equal(result.code, expected, `${label}: ${result.reason}`);
+		assert.ok(Date.now() - startedAt < 5000, `${label} took ${Date.now() - startedAt} ms`);
+	}
+	assertTooComplex(quotedDir, Array.from({ length: 12 }, (_, i) => `wrap ${quotedWords(250, "git status", String(i))}`).join("; "), "12 commands of 250 quoted words that start with rule programs");
+	assertTooComplex(quotedDir, Array.from({ length: 12 }, (_, i) => `wrap ${quotedWords(250, "rm -rf", String(i))}`).join("; "), "12 commands of 250 quoted words that start with rm -rf");
+
 	// A list is judged like the same command written as a string, mutation checks included.
 	for (const [list, text] of [[["git", "add", "."], "git add ."], [["npm", "install"], "npm install"], [["sed", "-i", "s/a/b/", "f"], "sed -i s/a/b/ f"], [["ls", "-la"], "ls -la"]]) {
 		assert.equal(tool(concurrentEditing, "Bash", { command: list }).code, tool(concurrentEditing, "Bash", { command: text }).code, `${JSON.stringify(list)} is judged like ${JSON.stringify(text)}`);
