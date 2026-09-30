@@ -281,8 +281,8 @@ The sync server is treated as untrusted for governance purposes:
   `safety/` or `policies/`, add or change a `tasks/*/yolo.json`, or turn a task's YOLO
   mode on is refused as a whole (nothing is written) and lists the files; re-run with
   `--accept-policy-changes` after reviewing them. `heli init` forwards the flag.
-- **No aliased paths:** bundle entry names must be canonical (empty segments, a trailing
-  dot or space, `:`, control characters and 8.3 `~1` names are refused) and governance
+- **No aliased paths:** bundle entry names must be canonical (empty or `.` segments, `:`,
+  control characters and 8.3 `~1` names are refused) and governance
   files are matched case-insensitively, so a spelling such as `tasks/x/./yolo.json` or
   `tasks/x/Yolo.json` cannot reach `tasks/<id>/yolo.json` unlisted. A bundle with any
   refused entry writes nothing.

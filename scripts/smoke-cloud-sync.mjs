@@ -567,6 +567,7 @@ try {
 		// A bundle entry name must be the name it will be written under. join() and the filesystem resolve
 		// dot/empty segments, case, NTFS streams and 8.3 short names to another file, so a spelling that
 		// merely looks unlike tasks/<id>/yolo.json must not slip past the governance list or the writer.
+		// (A trailing dot or space is NOT refused: Node writes it literally, and a task id may end with a dot.)
 		const yoloOn = '{"enabled":true}\n';
 		assert.deepEqual(
 			policyBearingChanges({}, { "tasks/x/Task.json": taskJson({ mode: "yolo" }), "Tasks/x/yolo.json": yoloOn, "SAFETY/x.json": "{}\n", "tasks/x/YOLO.JSON": yoloOn }),
@@ -584,8 +585,6 @@ try {
 			"tasks//x/yolo.json",
 			"tasks/x//yolo.json",
 			"tasks/x/yolo.json::$DATA",
-			"tasks/x/yolo.json.",
-			"tasks/x/yolo.json ",
 			"tasks/x/YOLO~1.JSO",
 			"profiles/a:b.md",
 			"profiles/\u0001.md",
@@ -601,8 +600,13 @@ try {
 		assert.equal(existsSync(join(wsB, ".heli-harness", "profiles", "canary.md")), false, "a refused bundle writes nothing, not even its valid entries");
 		assert.equal(existsSync(join(wsB, ".heli-harness", "tasks", "x")), false, "no aliased governance file was created");
 		assert.equal(
-			writeBundleFiles(wsB, { "profiles/notes v2 (draft).md": "n\n", "profiles/a.b.c.md.example": "e\n", "tasks/legit/evidence/log 1.txt": "l\n" }),
-			3,
+			writeBundleFiles(wsB, {
+				"profiles/notes v2 (draft).md": "n\n",
+				"profiles/a.b.c.md.example": "e\n",
+				"tasks/legit/evidence/log 1.txt": "l\n",
+				"tasks/fix-the-login-bug./events.jsonl": "{}\n", // slugTaskId keeps dots: "Fix the login bug." is a valid task id
+			}),
+			4,
 			"ordinary names still write",
 		);
 
