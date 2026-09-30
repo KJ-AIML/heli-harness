@@ -310,7 +310,8 @@ export function isFileMutationTool(
 }
 
 // Claude Code on Windows runs commands through `PowerShell` (no Bash tool without
-// Git Bash) and `Monitor` runs a background command; both carry `command`.
+// Git Bash) and `Monitor` runs a background command; both carry `command` (a Monitor
+// watching a WebSocket has a `ws` source instead).
 const SHELL_TOOL_NAME_RE = /(^|[_\-.])(bash|shell|terminal|exec|run_command|run-command|powershell|pwsh|monitor)($|[_\-.])/;
 const POWERSHELL_WRITE_CMDLETS = /\b(set-content|add-content|out-file|new-item|remove-item|move-item|copy-item|rename-item|clear-content|tee-object)\b/;
 // PowerShell/cmd aliases that are also common words only count at command position.
