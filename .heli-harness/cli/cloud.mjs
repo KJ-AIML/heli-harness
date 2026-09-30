@@ -597,6 +597,8 @@ async function runInit(args, packageRoot) {
 	const repos = Array.isArray(index.repos) ? index.repos : [];
 	for (const repo of repos) {
 		if (!repo.path) continue;
+		// `heli link` records the workspace itself as path ".": it is never cloned and is nothing to warn about.
+		if (String(repo.path).trim().replace(/[\\/]+$/, "") === ".") continue;
 		const repoPath = safeRepoPath(repo.path);
 		if (!repoPath) {
 			console.warn(`Skipping repo ${repo.name}: unsafe path ${JSON.stringify(repo.path)} in workspace/index.json (must be a plain folder inside the workspace: no "..", and no folder starting with "." or "-").`);

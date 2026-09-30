@@ -515,6 +515,7 @@ try {
 				{ name: "escape", path: "../escaped", remote: remoteRepo },
 				{ name: "option", path: "repos/option", remote: "--upload-pack=touch pwned" },
 				{ name: "dash", path: "-rf", remote: remoteRepo },
+				{ name: "self", path: ".", gitRoot: ".", remote: remoteRepo }, // the workspace itself: never cloned, never a warning
 				...HOSTILE_CLONE_TARGETS.map((path, index) => ({ name: `hostile-${index}`, path, remote: remoteRepo })),
 			],
 		})}\n`,
@@ -529,7 +530,7 @@ try {
 	assert.match(indexPull.stderr, /workspace\/index\.json \(modified\)/);
 	assert.equal(JSON.parse(readFileSync(indexFile, "utf8")).repos.length, 1, "a refused pull writes nothing");
 	ok(await asHuman("pull", [wsB, "--force", "--accept-policy-changes"], { ...cfgB, ...passphrase }), "accept the repo map");
-	assert.equal(JSON.parse(readFileSync(indexFile, "utf8")).repos.length, 4 + HOSTILE_CLONE_TARGETS.length);
+	assert.equal(JSON.parse(readFileSync(indexFile, "utf8")).repos.length, 5 + HOSTILE_CLONE_TARGETS.length);
 
 	const wsD = join(root, "ws-d");
 	const initRefused = await cli(["init", "lab", "--dir", wsD, "--clone", "--accept-policy-changes"], { ...cfgA, ...passphrase });
@@ -544,6 +545,7 @@ try {
 	assert.match(initOutput, /unsafe path "\.\.\/escaped"/);
 	assert.match(initOutput, /unsafe remote "--upload-pack=touch pwned"/);
 	assert.match(initOutput, /unsafe path "-rf"/);
+	assert.doesNotMatch(initOutput, /Skipping repo self|Cloning self|unsafe path "\."/, "the workspace itself is skipped silently");
 	for (const target of HOSTILE_CLONE_TARGETS) {
 		assert.equal(existsSync(join(wsD, ...target.split("/"))), false, `${target} must not be cloned into`);
 		assert.ok(initOutput.includes(`unsafe path ${JSON.stringify(target)}`), `${target} is reported`);
@@ -644,6 +646,8 @@ try {
 			schemaVersion: 1,
 			workspaceRoot: ".",
 			repos: [
+				// What `heli link` records: the workspace itself, which is never cloned and needs no warning.
+				{ name: "workspace", path: ".", gitRoot: ".", defaultTarget: true },
 				{ name: "plain", path: "repos/plain", remote: "https://example.invalid/plain.git" },
 				{ name: "scp", path: "repos/scp", remote: "git@example.invalid:org/scp.git" },
 				{ name: "shell", path: "repos/shell", remote: "https://example.invalid/x.git; touch pwned" },
@@ -660,6 +664,8 @@ try {
 	assert.match(hints.stdout, /Missing repo: scp at repos\/scp — clone with: git -c protocol\.ext\.allow=never clone -- git@example\.invalid:org\/scp\.git repos\/scp /);
 	assert.match(hints.stdout, /Missing repo: shell at repos\/shell — clone it manually/);
 	assert.match(hints.stdout, /Missing repo: spaced at repos\/sp aced — clone it manually/);
+	assert.doesNotMatch(hints.stderr, /unsafe path "\."/, "the workspace itself is skipped silently, not warned about");
+	assert.doesNotMatch(`${hints.stdout}${hints.stderr}`, /Missing repo: workspace|Skipping repo workspace/);
 	assert.doesNotMatch(hints.stdout, /touch pwned/, "no command line is built from a remote a shell would interpret");
 	assert.doesNotMatch(hints.stdout, /git clone --/, "the hint never prints the bare, unhardened command");
 
