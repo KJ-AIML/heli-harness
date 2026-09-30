@@ -516,19 +516,30 @@ function safeRepoPath(value) {
 
 const overlaps = (a, b) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
 
+const REFUSED_OUTSIDE = "resolves outside the workspace";
+const REFUSED_HIDDEN = "resolves into Heli's own state or a hidden folder";
+
 /**
- * Belt and braces for safeRepoPath: true when the folder `repoPath` resolves to inside workspace `dir` is, holds or
- * lies inside Heli's operational root, .heli (project config), .git or .claude. The target is resolved the way the
- * kernel resolves every path it protects (junctions, symlinks, 8.3 names and case are followed), so an innocent-looking
- * folder that leads into Heli's state is caught, not just a path that says so.
+ * Belt and braces for safeRepoPath: why a repo path the sync server named may not be cloned into workspace `dir`, or
+ * null. The target is resolved the way the kernel resolves every path it protects (nearest existing ancestor
+ * realpath'd: junctions, symlinks, 8.3 names and case followed), because a link, one an earlier clone of the same run
+ * checked out or one that was there before, can lead a plain-looking path anywhere. The real path must
+ *  - stay inside the workspace's own real path (a folder that is a link out of it is not a clone target),
+ *  - pass through no folder starting with "." below the workspace (Heli's .heli-harness, .heli, .git and .claude, and
+ *    any other hidden folder such as .vscode or .gemini), and
+ *  - not be, hold or lie inside Heli's operational root, .heli (project config), .git or .claude (a linked workspace
+ *    keeps its operational root elsewhere, possibly inside the workspace under a plain name).
+ * A folder such as `repos` that a user made a link to another disk is therefore not cloned into either: clone there by hand.
  */
-export function resolvesIntoHeliState(dir, repoPath) {
+export function cloneTargetRefusal(dir, repoPath) {
 	const cache = new Map();
 	const at = (path) => normalizePolicyPath(path, { cwd: dir, cache })?.path ?? null;
+	const workspace = at(dir);
 	const target = at(join(dir, repoPath));
-	if (!target) return true;
+	if (!workspace || !target || !target.startsWith(`${workspace}/`)) return REFUSED_OUTSIDE;
+	if (target.slice(workspace.length + 1).split("/").some((part) => part.startsWith("."))) return REFUSED_HIDDEN;
 	const roots = [protectedLocations(dir, { cwd: dir, cache }).operationalRoot, at(join(dir, ".heli")), at(join(dir, ".git")), at(join(dir, ".claude"))];
-	return roots.filter(Boolean).some((root) => overlaps(target, root));
+	return roots.filter(Boolean).some((root) => overlaps(target, root)) ? REFUSED_HIDDEN : null;
 }
 
 /**
@@ -605,8 +616,9 @@ async function runInit(args, packageRoot) {
 			continue;
 		}
 		if (existsSync(join(dir, repoPath))) continue;
-		if (resolvesIntoHeliState(dir, repoPath)) {
-			console.warn(`Skipping repo ${repo.name}: ${JSON.stringify(repo.path)} in workspace/index.json leads into Heli's own state (.heli-harness, .heli, .git or .claude), which a clone must never write into.`);
+		const refusal = cloneTargetRefusal(dir, repoPath);
+		if (refusal) {
+			console.warn(`Skipping repo ${repo.name}: ${JSON.stringify(repo.path)} in workspace/index.json ${refusal}, so a clone there is refused.`);
 			continue;
 		}
 		if (repo.remote && !safeRemote(repo.remote)) {

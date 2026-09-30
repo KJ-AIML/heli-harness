@@ -313,9 +313,14 @@ The sync server is treated as untrusted for governance purposes:
   server, so it may only name a plain folder inside the workspace, such as `repos/<name>`.
   An entry is skipped when its path is absolute, has any segment that starts with `.`
   (that covers `..`, Heli's own `.heli-harness`, and `.heli`, `.git`, `.claude` or any
-  hidden folder) or with `-`, or when the folder it resolves to (junctions, symlinks and
-  8.3 names followed) is, holds or lies inside Heli's operational root, `.heli`, `.git` or
-  `.claude`; a clone there would bypass the governance check a pull applies. A remote
+  hidden folder) or with `-`, or when the real path it resolves to (junctions, symlinks
+  and 8.3 names followed, so a link that an earlier clone of the same run checked out
+  counts) leaves the workspace, passes through any folder starting with `.` below it (so
+  `.vscode` or `.gemini` are out too), or is, holds or lies inside Heli's operational
+  root, `.heli`, `.git` or `.claude`; a clone there would bypass the governance check a
+  pull applies. A folder such as `repos` that you made a link to another disk is
+  therefore not cloned into either: clone there by hand. A path that is exactly `.`, the
+  workspace itself, which `heli link` records, is skipped without a word. A remote
   that starts with `-` is skipped too, and the clone runs
   `git -c protocol.ext.allow=never clone -- <remote> <path>` with `GIT_ALLOW_PROTOCOL`
   removed from its environment (git lets that variable override `-c`): the `ext::`

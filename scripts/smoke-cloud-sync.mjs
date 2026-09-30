@@ -71,7 +71,10 @@ function startServer(api) {
 				...(req.method === "GET" || req.method === "HEAD" ? {} : { body, duplex: "half" }),
 			});
 			const response = await api.fetch(request);
-			res.writeHead(response.status, Object.fromEntries(response.headers));
+			// One request per connection. This server shares a process with the in-process CLI runs (asHuman), whose
+			// synchronous work (an install, a git clone) can stall the event loop past the keep-alive timeout, and the
+			// client's pooled connection is then stale by the time it is reused (ECONNRESET on a slow disk).
+			res.writeHead(response.status, { ...Object.fromEntries(response.headers), connection: "close" });
 			res.end(Buffer.from(await response.arrayBuffer()));
 		});
 		server.listen(0, "127.0.0.1", () => {
@@ -618,7 +621,7 @@ try {
 	assert.equal(existsSync(extMarker), false, "the ext:: transport must not run a command");
 	assert.ok(existsSync(join(wsG, "repos", "local", "README.md")), "a local clone works under git's default policy");
 	assert.equal(existsSync(join(wsG, ".heli-harness", "profiles", "evil")), false, "a folder that leads into Heli's own state is not a clone target");
-	assert.match(initG.stderr, /"aliased\/profiles\/evil" in workspace\/index\.json leads into Heli's own state/);
+	assert.match(initG.stderr, /"aliased\/profiles\/evil" in workspace\/index\.json resolves into Heli's own state or a hidden folder/);
 	const wsI = join(root, "ws-i");
 	const strictInit = ok(
 		await asHuman("init", ["lab", "--dir", wsI, "--clone", "--accept-policy-changes"], { ...cfgA, ...passphrase, GIT_CONFIG_GLOBAL: strictGitConfig }),
@@ -637,6 +640,54 @@ try {
 		{ PATH: "p", GIT_CONFIG_GLOBAL: "g" },
 		"only the variable that beats -c is removed, in any case",
 	);
+
+	// A link that an earlier clone of the same run checked out (or that was there before) can lead a plain-looking path out of
+	// the workspace, or into a hidden folder the resolver does not list. The real path of a target must stay inside the
+	// workspace and below no hidden folder. A symlink cannot be checked out on Windows without a privilege, so there the links
+	// are planted by hand (junctions), which is what a first clone would have left behind; elsewhere a real first clone does it.
+	const wsH = join(root, "ws-h");
+	const escapeTo = join(root, "escape-h");
+	mkdirSync(wsH);
+	mkdirSync(escapeTo);
+	ok(await cli(["install", wsH], cfgA), "install ws-h");
+	mkdirSync(join(wsH, ".vscode"));
+	const firstClones = [];
+	if (process.platform === "win32") {
+		mkdirSync(join(wsH, "repos", "r1"), { recursive: true });
+		symlinkSync(escapeTo, join(wsH, "repos", "r1", "x"), "junction");
+		symlinkSync(join(wsH, ".vscode"), join(wsH, "repos", "r1", "y"), "junction");
+	} else {
+		const linkRepo = join(root, "link-repo");
+		git("init", "-q", linkRepo);
+		symlinkSync(escapeTo, join(linkRepo, "x"));
+		symlinkSync("../../.vscode", join(linkRepo, "y"));
+		git("-C", linkRepo, "add", "x", "y");
+		git("-C", linkRepo, "-c", "user.name=heli", "-c", "user.email=heli@example.invalid", "commit", "-q", "-m", "links");
+		firstClones.push({ name: "r1", path: "repos/r1", remote: linkRepo });
+	}
+	writeFileSync(
+		join(wsA, ".heli-harness", "workspace", "index.json"),
+		`${JSON.stringify({
+			schemaVersion: 1,
+			workspaceRoot: ".",
+			repos: [
+				...firstClones,
+				{ name: "leaks", path: "repos/r1/x/evil", remote: remoteRepo },
+				{ name: "hidden", path: "repos/r1/y/evil", remote: remoteRepo },
+				{ name: "fine", path: "repos/r1/fine", remote: remoteRepo },
+			],
+		})}\n`,
+	);
+	ok(await cli(["push", "--force"], { ...cfgA, ...passphrase }, { cwd: wsA }), "push a repo map whose later paths cross a link");
+	const linked = ok(
+		await asHuman("init", ["lab", "--dir", wsH, "--clone", "--accept-policy-changes"], { ...cfgA, ...passphrase }),
+		"init --clone across links",
+	);
+	assert.equal(existsSync(join(escapeTo, "evil")), false, "a clone must not leave the workspace through a link");
+	assert.equal(existsSync(join(wsH, ".vscode", "evil")), false, "a clone must not land in a hidden folder through a link");
+	assert.ok(existsSync(join(wsH, "repos", "r1", "fine", "README.md")), "an ordinary path in the same repo map is still cloned");
+	assert.match(linked.stderr, /"repos\/r1\/x\/evil" in workspace\/index\.json resolves outside the workspace/);
+	assert.match(linked.stderr, /"repos\/r1\/y\/evil" in workspace\/index\.json resolves into Heli's own state or a hidden folder/);
 
 	// Without --clone, init only prints how to clone what is missing: the same hardened command, and never a command line
 	// built from a remote or path that a shell would interpret (a server-chosen string the user is invited to paste).
@@ -937,17 +988,27 @@ try {
 			"ordinary names still write",
 		);
 
-		// Belt and braces for `init --clone`: whatever the path text says, the folder a repo path resolves to (junctions,
-		// symlinks, 8.3 names and case followed) may not be, hold or lie inside Heli's operational root, .heli, .git or .claude.
-		const { resolvesIntoHeliState } = await import("../lib/cli/cloud.mjs");
+		// The real path of a clone target (junctions, symlinks, 8.3 names and case followed) must stay inside the workspace
+		// and below no hidden folder, and may not be, hold or lie inside Heli's operational root, .heli, .git or .claude,
+		// whatever the path text says: a link can lead a plain-looking path anywhere.
+		const { cloneTargetRefusal } = await import("../lib/cli/cloud.mjs");
 		const layout = join(root, "layout");
+		const elsewhere = join(root, "elsewhere");
 		mkdirSync(join(layout, ".heli-harness", "profiles"), { recursive: true });
+		mkdirSync(join(layout, ".vscode"), { recursive: true });
+		mkdirSync(elsewhere, { recursive: true });
 		symlinkSync(join(layout, ".heli-harness"), join(layout, "aliased"), "junction"); // a junction on Windows, a symlink elsewhere
-		for (const path of ["aliased/profiles/evil", "aliased", "aliased/tasks/x", ".heli-harness/profiles/x", ".heli/x", ".git/x", ".claude/x", "."]) {
-			assert.equal(resolvesIntoHeliState(layout, path), true, `${path} leads into Heli's state`);
+		symlinkSync(elsewhere, join(layout, "out"), "junction");
+		symlinkSync(join(layout, ".vscode"), join(layout, "hidden-link"), "junction");
+		for (const path of ["aliased/profiles/evil", "aliased", "aliased/tasks/x", ".heli-harness/profiles/x", ".heli/x", ".git/x", ".claude/x", ".", "out", "out/evil", "hidden-link/evil", ".vscode/evil", ".gemini/x"]) {
+			assert.ok(cloneTargetRefusal(layout, path), `${path} is refused`);
 		}
+		assert.match(cloneTargetRefusal(layout, "out/evil"), /outside the workspace/);
+		assert.match(cloneTargetRefusal(layout, "aliased/profiles/evil"), /Heli's own state or a hidden folder/);
+		assert.match(cloneTargetRefusal(layout, "hidden-link/evil"), /Heli's own state or a hidden folder/);
+		assert.match(cloneTargetRefusal(layout, ".gemini/x"), /Heli's own state or a hidden folder/);
 		for (const path of ["repos/good", "repos/a/b/c", "aliasedx/y", "heli-harness/x"]) {
-			assert.equal(resolvesIntoHeliState(layout, path), false, `${path} is an ordinary folder`);
+			assert.equal(cloneTargetRefusal(layout, path), null, `${path} is an ordinary folder`);
 		}
 
 		// Activation edge cases: hostile device name, missing/null Origin, expired state, spent code.
