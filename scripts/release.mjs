@@ -1,16 +1,21 @@
 #!/usr/bin/env node
 
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolveNpmCheckInvocation } from "./lib/release-npm.mjs";
+import { releaseVersionFiles } from "./lib/release-version.mjs";
 
 const root = join(fileURLToPath(new URL("..", import.meta.url)));
 const args = process.argv.slice(2);
 const nextVersion = args.shift();
 const push = args.includes("--push");
-const summary = args.filter((arg) => arg !== "--push").join(" ") || "Release updates";
+// --prepare-only: rewrite versions + the CHANGELOG heading, then stop (no
+// check, commit or tag). For version bumps inside a PR: CI runs the checks and
+// the release workflow tags main.
+const prepareOnly = args.includes("--prepare-only");
+const summary = args.filter((arg) => arg !== "--push" && arg !== "--prepare-only").join(" ") || "Release updates";
 const semver = /^(\d+)\.(\d+)\.(\d+)$/;
 
 function fail(message) {
@@ -28,17 +33,7 @@ function git(...gitArgs) {
 	return spawnSync("git", ["-C", root, ...gitArgs], { encoding: "utf8" });
 }
 
-function walk(dir) {
-	const files = [];
-	for (const name of readdirSync(dir)) {
-		const path = join(dir, name);
-		if (statSync(path).isDirectory()) files.push(...walk(path));
-		else files.push(path);
-	}
-	return files;
-}
-
-if (!nextVersion || !semver.test(nextVersion)) fail("usage: npm run release -- <x.y.z> [summary] [--push]");
+if (!nextVersion || !semver.test(nextVersion)) fail("usage: npm run release -- <x.y.z> [summary] [--push] [--prepare-only]");
 
 const packagePath = join(root, "package.json");
 const current = JSON.parse(readFileSync(packagePath, "utf8")).version;
@@ -68,37 +63,8 @@ const isAllowed = (path) => allowed.some((prefix) => path === prefix || path.sta
 const unrelated = dirtyPaths.filter((path) => !isAllowed(path));
 if (unrelated.length) fail(`unrelated dirty paths: ${unrelated.join(", ")}`);
 
-const currentFacingVersionFiles = [
-	"package.json", "manifest.json", ".heli-harness/manifest.json", ".heli-harness/adapters/adapters.json",
-	"README.md", "ROADMAP.md", "INSTALL.md", "docs/INSTALL_MATRIX.md", "docs/ADAPTER_SUPPORT_MATRIX.md",
-	".heli-harness/README.md", ".heli-harness/INSTALL.md", ".heli-harness/HARNESS.md",
-	".heli-harness/state/README.md", ".heli-harness/workspace/README.md",
-	".heli-harness/adapters/pi/README.md",
-	".heli-harness/adapters/kimi/KIMI.md", ".heli-harness/adapters/grok/GROK.md",
-	".heli-harness/adapters/claude/CLAUDE.md", ".heli-harness/adapters/codex/AGENTS.md",
-	".heli-harness/adapters/opencode/OPENCODE.md", ".heli-harness/adapters/antigravity/ANTIGRAVITY.md",
-	"docs/architecture/README.md", "docs/architecture/governance-model.md",
-	"docs/ENFORCEMENT_MATRIX.md", "docs/superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md",
-	"scripts/smoke-claude-plugin.mjs", "scripts/smoke-codex-plugin.mjs", "scripts/smoke-cursor-plugin.mjs",
-];
-
-const adapterVersionFiles = walk(join(root, ".heli-harness", "adapters"))
-	.map((path) => relative(root, path).replaceAll("\\", "/"))
-	.filter((path) =>
-		path.endsWith("plugin.json") ||
-		path.endsWith("marketplace.json") ||
-		path.endsWith("/skills/heli-install/SKILL.md")
-	);
-
-const versionFiles = [
-	...currentFacingVersionFiles,
-	...adapterVersionFiles,
-	// Root Codex marketplace has no embedded version string today; keep it staged with releases when present.
-	...(existsSync(join(root, ".agents", "plugins", "marketplace.json"))
-		? [".agents/plugins/marketplace.json"]
-		: []),
-];
-for (const relativePath of [...new Set(versionFiles)]) {
+const versionFiles = releaseVersionFiles(root);
+for (const relativePath of versionFiles) {
 	const path = join(root, relativePath);
 	writeFileSync(path, readFileSync(path, "utf8").replaceAll(current, nextVersion));
 }
@@ -112,6 +78,11 @@ if (unreleasedHeading.test(changelogText)) {
 	writeFileSync(changelog, changelogText.replace(unreleasedHeading, `## v${nextVersion} - ${summary}`));
 } else {
 	writeFileSync(changelog, changelogText.replace(/^# Changelog\r?\n/, `# Changelog\n\n## v${nextVersion} - ${summary}\n\n### Changed\n\n- Release metadata and validation updated.\n`));
+}
+
+if (prepareOnly) {
+	console.log(`release: prepared v${nextVersion} in ${versionFiles.length} version files + CHANGELOG.md (not checked, committed or tagged)`);
+	process.exit(0);
 }
 
 // Decision lives in scripts/lib/release-npm.mjs so it stays unit-testable

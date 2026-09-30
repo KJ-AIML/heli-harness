@@ -71,7 +71,7 @@ jobs:
           test -f "$file"
           echo "file=$file" >> "$GITHUB_OUTPUT"
 
-      - name: Publish to npm when credentials are configured
+      - name: Publish to npm
         if: steps.npm_meta.outputs.exists != 'true'
         id: npm_publish
         shell: bash
@@ -82,9 +82,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "::warning::NPM_TOKEN is not configured; skipping npm registry publication."
-            echo "status=skipped-no-token" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::NPM_TOKEN is not configured, so heli-harness@${VERSION} was NOT published to npm. Add the NPM_TOKEN repository secret and re-run this workflow; no tag or GitHub release is created until publication succeeds."
+            exit 1
           fi
           npm publish "$PACKAGE_FILE" --access public --provenance
           echo "status=published" >> "$GITHUB_OUTPUT"
@@ -112,11 +111,7 @@ jobs:
             .trim();
           process.stdout.write(section + '\n');
           NODE
-          if [ "$NPM_EXISTS" = "true" ] || [ "$NPM_STATUS" = "published" ]; then
-            printf '\n**npm:** heli-harness@%s\n' "$VERSION" >> release-notes.md
-          else
-            printf '\n**npm:** registry publication not performed by this workflow (NPM_TOKEN unavailable).\n' >> release-notes.md
-          fi
+          printf '\n**npm:** heli-harness@%s\n' "$VERSION" >> release-notes.md
 
       - name: Create annotated tag and GitHub release
         if: steps.meta.outputs.tag_exists != 'true'

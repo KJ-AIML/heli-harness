@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveNpmCheckInvocation } from "./lib/release-npm.mjs";
+import { currentVersion, releaseVersionFiles } from "./lib/release-version.mjs";
 
 const root = join(fileURLToPath(new URL("..", import.meta.url)));
 const NODE = "/usr/bin/node";
@@ -108,6 +110,38 @@ for (const npmExecpath of [undefined, ""]) {
 		/"scripts\/lib\/release-npm\.mjs"/,
 		"release.mjs must stage scripts/lib/release-npm.mjs",
 	);
+}
+
+// Release workflow: a missing NPM_TOKEN must fail the run loudly, never skip
+// publication while still reporting success (0.10.x never reached npm that way).
+{
+	const workflow = readFileSync(join(root, ".github", "workflows", "release.yml"), "utf8").replace(/\r\n/g, "\n");
+	const start = workflow.indexOf("- name: Publish to npm");
+	const end = workflow.indexOf("- name: Build release notes");
+	assert.ok(start > 0 && end > start, "release.yml must keep a 'Publish to npm' step before 'Build release notes'");
+	const publishStep = workflow.slice(start, end);
+	assert.match(publishStep, /if \[ -z "\$\{NODE_AUTH_TOKEN:-\}" \]; then\n\s*echo "::error::[^\n]*"\n\s*exit 1/, "missing NPM_TOKEN must exit 1 with an ::error:: annotation");
+	assert.doesNotMatch(publishStep, /exit 0|skipped-no-token|::warning::/, "missing NPM_TOKEN must not be treated as success");
+}
+
+// Every tracked file that names the current version is rewritten by the release
+// script, except history and fixtures that pin a version on purpose.
+{
+	const version = currentVersion(root);
+	const grep = spawnSync("git", ["grep", "-l", "--fixed-strings", version], { cwd: root, encoding: "utf8" });
+	if (grep.status === 0 || grep.status === 1) {
+		const listed = new Set(releaseVersionFiles(root));
+		const intentional = (path) =>
+			path === "CHANGELOG.md" ||
+			path.startsWith("docs/reports/") ||
+			path.startsWith("docs/superpowers/plans/") ||
+			path === "scripts/smoke-host-manager.mjs";
+		const missing = grep.stdout.split(/\r?\n/).filter(Boolean).filter((path) => !intentional(path) && !listed.has(path));
+		assert.deepEqual(missing, [], `scripts/release.mjs would leave ${version} behind in: ${missing.join(", ")}`);
+	}
+	const releaseText = readFileSync(join(root, "scripts", "release.mjs"), "utf8");
+	assert.match(releaseText, /releaseVersionFiles\(root\)/, "release.mjs must use the shared version-file list");
+	assert.match(releaseText, /--prepare-only/, "release.mjs must support --prepare-only");
 }
 
 console.log("release npm invocation smoke ok");
