@@ -273,6 +273,22 @@ try {
 	// The command rules still read the `command` of an MCP tool; a `description` is never a command.
 	assert.equal(evaluate(ws, "mcp__shell__run", { command: "rm -rf build" }).code, "TIER_BLOCKED");
 	assert.equal(evaluate(ws, "mcp__shell__run", { command: "git push origin main" }).code, "REMOTE_PUSH_DENIED");
+	// So do the files it writes: a shell server (an MCP tool that carries a command) may not write Heli state or .env files
+	// any more than Bash may. The tool is still not a shell: it is not guessed at as a write (no ownership gate), and it is
+	// not refused for a missing rules file.
+	for (const [command, code] of [
+		["echo x > .heli-harness/state/yolo.json", "HELI_STATE_PROTECTED"],
+		["cd .heli-harness/state && echo x > yolo.json", "HELI_STATE_PROTECTED"],
+		["Set-Content -Path:.heli-harness/workspace/target.json x", "HELI_STATE_PROTECTED"],
+		["Set-Content .env x", "ENV_WRITE_DENIED"],
+		["jq '.disableAllHooks=true' .claude/settings.json | tee .claude/settings.json", "HELI_HOOKS_PROTECTED"],
+	]) {
+		assert.equal(evaluate(ws, "mcp__shell__run", { command }).code, code, command);
+	}
+	for (const command of ["ls -la", "npm test", "echo hi > out.txt", "cat .heli-harness/state/yolo.json", "Set-Content notes.txt hello"]) {
+		assert.equal(evaluate(ws, "mcp__shell__run", { command }).deny, false, command);
+	}
+	assert.equal(evaluate(conc, "mcp__shell__run", { command: "echo x > src/app.js" }, asObserver).deny, false, "an MCP tool's command is not guessed at as a write");
 	assert.equal(evaluate(ws, "mcp__shell__run", { description: "rm -rf build; git push origin main" }).deny, false);
 	assert.equal(evaluate(ws, "Bash", { description: "rm -rf build" }).code, "TIER_BLOCKED", "the description fallback is unchanged for shell tools");
 	// Yolo and the lease holder cannot pass the protected-state check through an MCP tool either.

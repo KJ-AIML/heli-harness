@@ -571,7 +571,10 @@ export function evaluatePreToolUse({
 		: isWrite
 			? classifyToolPaths(rawPaths, pathScope)
 			: [];
-	const shellEntries = commandPolicy && isShellTool(name)
+	// A command is read for the files it writes wherever it runs: in a shell tool, or in an MCP tool that carries one (a shell
+	// server). That MCP tool is still not a shell: it is not guessed at as a write, and not refused for a missing rules file.
+	const runsCommand = Boolean(commandPolicy) && (isShellTool(name) || isMcpTool(name));
+	const shellEntries = runsCommand
 		? classifyShellWriteTargets(shellWriteTargets(commandPolicy.analysis), pathScope)
 		: [];
 	const protectedEntry = [...structuredEntries, ...shellEntries].find((entry) => entry.kind === "authority");
@@ -582,7 +585,7 @@ export function evaluatePreToolUse({
 	if (settingsEntry) {
 		// A shell command is read whole, and for the assignments jq and PowerShell make; a file tool by the text it puts in the
 		// file (not the text it replaces).
-		const loose = isShellTool(name);
+		const loose = isShellTool(name) || runsCommand;
 		const written = loose ? rawCommand : settingsContentOf(toolInput);
 		if (disablesClaudeHooks(written, { loose })) {
 			return {
