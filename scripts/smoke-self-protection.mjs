@@ -2,7 +2,7 @@
 /**
  * Heli protects itself from the agent it governs:
  *  - agent-run privilege commands (grants, YOLO, takeovers, Heli removal, and the
- *    --accept-policy-changes flag of a sync pull) are hard-denied in every invocation form;
+ *    --accept-policy-changes flag of a sync pull) are hard-denied in every form the rule reads;
  *  - `heli grant issue` / `heli yolo on` refuse to run without a human terminal;
  *  - Heli authority state is never agent-writable, whatever the path spelling;
  *  - narrative task files stay writable by their owner;
@@ -63,9 +63,15 @@ function evaluate(cwd, toolName, toolInput, extraEnv = {}) {
 }
 
 try {
+	// The kernel's own description must not claim more than the parser does: it reads command text, so it is a guardrail.
+	const kernelSource = readFileSync(join(root, ".heli-harness", "adapters", "shared", "command-policy.mjs"), "utf8");
+	assert.doesNotMatch(kernelSource, /may never run them, in any invocation form/, "the header must not promise every form");
+	assert.match(kernelSource, /refuses every spelled-out form/);
+	assert.match(kernelSource, /a guardrail, not a guarantee/);
+
 	const legacy = workspace("legacy");
 
-	// 1. Agent-run privilege commands are hard-denied in every invocation form.
+	// 1. Agent-run privilege commands are hard-denied in every form listed here (the rule reads command text, so this is a guardrail).
 	const privileged = [
 		"heli grant issue --action git.push --scope once",
 		"heli grant --json issue --action git.push",

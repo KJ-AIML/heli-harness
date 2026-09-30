@@ -27,9 +27,12 @@
  *   command over it is refused fail-closed, never analyzed in part and allowed.
  * - Heli's own privilege commands (`heli grant issue`, `heli yolo on`, takeovers, write
  *   transfers, removing Heli or its host plugins, and any Heli invocation that carries
- *   `--accept-policy-changes`) are built-in T6 rules: the agent Heli
- *   governs may never run them, in any invocation form. shellWriteTargets lists the paths
- *   a command writes, for the protected-state check in hook-core.
+ *   `--accept-policy-changes`) are built-in T6 rules: the hook refuses every spelled-out form
+ *   of them this module recognizes (`heli`, `heli-harness`, `node .../heli.mjs`, the package
+ *   runners, quoted command lines, argv lists), whatever YOLO or a grant says. Like all of this
+ *   parsing it reads command text, so it is a guardrail, not a guarantee: a command that never
+ *   spells one out (built at run time, or run by code the agent writes) is out of its reach.
+ *   shellWriteTargets lists the paths a command writes, for the protected-state check in hook-core.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
