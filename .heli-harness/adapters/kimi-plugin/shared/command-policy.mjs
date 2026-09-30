@@ -16,6 +16,10 @@
  *   `su -c '...'`, `watch 'bash -c "..."'`), unless
  *   it is text or data: after echo/grep/..., after -m/--title/..., after `key:` or
  *   `x =`, or in a line of prose. Interpreters (`python -c`) are not read.
+ * - Comments are not commands: when the shell that runs the text is known (the tool's name says
+ *   bash or PowerShell, or a `bash -c` / `pwsh -Command` / `eval` payload), the comments that
+ *   shell ignores are left out first (shell-comments.mjs), so `# never rm -rf here` or
+ *   `npm test # then git push` is not a hard deny. Text of an unknown shell is read whole.
  * - Program names are compared without their directory and a trailing
  *   .exe/.cmd/.bat/.com/.ps1, in any case (`git.exe`, `npm.cmd`), by the built-in
  *   rules and by the rules file alike.
@@ -29,6 +33,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathsFor } from "./concurrency/paths.mjs";
+import { MAX_SYNTAX_DEPTH, stripComments } from "./shell-comments.mjs";
 
 const MAX_UNWRAP_DEPTH = 4;
 const POSIX_SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish"]);
@@ -95,6 +100,8 @@ function precedesData(word) {
  * - maxSegmentTokens: words in one command. Rule tests scan a command's words
  *   once per program word, so their worst case grows with its square.
  * - maxNesting: sh -c / cmd /c / powershell -Command / eval layers.
+ * - maxSyntaxNesting: quotes, substitutions and braces inside one another (`"$(echo "$(...)")"`), where
+ *   the comment scan of a known shell recurses; real commands stay under ten levels.
  *
  * Sizing (scripts/smoke-command-rules.mjs pins it): the slowest adversarial input
  * that fits these limits takes about 0.5 s through the whole hook (the host's hook
@@ -111,6 +118,7 @@ export const COMMAND_ANALYSIS_LIMITS = Object.freeze({
 	maxTokens: 16384,
 	maxSegmentTokens: 256,
 	maxNesting: MAX_UNWRAP_DEPTH,
+	maxSyntaxNesting: MAX_SYNTAX_DEPTH,
 });
 
 /** Lowercased program name of a token: strips directories and .exe/.cmd/.bat/.com/.ps1. */
@@ -301,33 +309,36 @@ function shellCommandString(tokens, start) {
 	return "";
 }
 
-/** Inner command strings run by sh/bash -c, cmd /c, pwsh/powershell -Command|-EncodedCommand, eval. */
+/**
+ * Inner command strings run by sh/bash -c, cmd /c, pwsh/powershell -Command|-EncodedCommand, eval, each with the shell that
+ * runs it (`posix`, `powershell`, or null for cmd), which decides what a comment is in it (see shell-comments.mjs).
+ */
 function unwrapPayloads(tokens) {
 	const payloads = [];
 	for (let i = 0; i < tokens.length; i += 1) {
 		const program = programName(tokens[i]);
 		if (POSIX_SHELLS.has(program)) {
-			payloads.push(shellCommandString(tokens, i + 1));
+			payloads.push({ text: shellCommandString(tokens, i + 1), shell: "posix" });
 		} else if (program === "cmd") {
 			const flag = tokens.findIndex((token, index) => index > i && /^\/[ck]$/i.test(token));
-			if (flag > i) payloads.push(tokens.slice(flag + 1).join(" "));
+			if (flag > i) payloads.push({ text: tokens.slice(flag + 1).join(" "), shell: null });
 		} else if (program === "powershell" || program === "pwsh") {
 			for (let j = i + 1; j < tokens.length; j += 1) {
 				const option = tokens[j].toLowerCase();
 				if (option.length >= 2 && "-command".startsWith(option)) {
-					payloads.push(tokens.slice(j + 1).join(" "));
+					payloads.push({ text: tokens.slice(j + 1).join(" "), shell: "powershell" });
 					break;
 				}
 				if ((option === "-e" || option === "-ec" || (option.length >= 3 && "-encodedcommand".startsWith(option))) && j + 1 < tokens.length) {
-					payloads.push(decodePowerShellBase64(tokens[j + 1]));
+					payloads.push({ text: decodePowerShellBase64(tokens[j + 1]), shell: "powershell" });
 					break;
 				}
 			}
 		} else if (program === "eval") {
-			payloads.push(tokens.slice(i + 1).join(" "));
+			payloads.push({ text: tokens.slice(i + 1).join(" "), shell: "posix" });
 		}
 	}
-	return payloads.filter((payload) => payload && payload.trim());
+	return payloads.filter((payload) => payload.text && payload.text.trim());
 }
 
 /** Spelled like a command, not like a capitalized word of prose: `rm`, `RD`, `Remove-Item`, not `Find`. */
@@ -380,9 +391,12 @@ function quotedCommandWords(tokens, programs) {
 /**
  * Parse command text into de-duplicated segments, within COMMAND_ANALYSIS_LIMITS.
  * @param {string} command
- * @param {{ limits?: typeof COMMAND_ANALYSIS_LIMITS, commandPrograms?: Set<string> }} [options] `limits` lets tests hit
- *   each limit with small input. `commandPrograms` are the programs rules target (see commandProgramNames): a quoted
- *   word that starts with one is analyzed as a command line. Default: the built-in rules' programs.
+ * @param {{ limits?: typeof COMMAND_ANALYSIS_LIMITS, commandPrograms?: Set<string>, comments?: "posix"|"powershell"|null }} [options]
+ *   `limits` lets tests hit each limit with small input. `commandPrograms` are the programs rules target (see
+ *   commandProgramNames): a quoted word that starts with one is analyzed as a command line. Default: the built-in rules'
+ *   programs. `comments` is the shell that runs the command, when it is known, and its comments are left out of the
+ *   analysis (see shell-comments.mjs); null reads everything. The commands of a known shell inside it (`bash -c '...'`,
+ *   `pwsh -Command ...`, `eval`) are read that way whatever `comments` is.
  * @returns {{
  *   segments: Array<{ tokens: string[], rawTokens: string[], text: string, dialect: "posix"|"windows" }>,
  *   sequence: Array<{ tokens: string[], rawTokens: string[], text: string, dialect: "posix"|"windows" }>,
@@ -395,7 +409,7 @@ function quotedCommandWords(tokens, programs) {
  *   When `limitExceeded` is set the analysis stopped early and `segments` is
  *   incomplete: callers must refuse the command instead of matching rules on it.
  */
-export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS, commandPrograms = BUILTIN_COMMAND_PROGRAMS } = {}) {
+export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS, commandPrograms = BUILTIN_COMMAND_PROGRAMS, comments = null } = {}) {
 	const commandText = String(command ?? "");
 	const segments = [];
 	const sequence = [];
@@ -406,7 +420,15 @@ export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS, comm
 	const exceed = (limit, max, message) => {
 		limitExceeded ??= { limit, max, message };
 	};
-	const visit = (source, depth) => {
+	// Counts a scan of `chars` characters against the budget; false (and the limit set) when it is spent.
+	const scan = (chars) => {
+		work.scannedChars += chars;
+		if (work.scannedChars <= limits.maxScanChars) return true;
+		exceed("scan-chars", limits.maxScanChars, `checking it would scan more than ${limits.maxScanChars} characters of shell text once nested commands are unwrapped`);
+		return false;
+	};
+	// `shell` is the shell that runs `source` when it is known: its comments are not commands.
+	const visit = (source, depth, shell) => {
 		if (limitExceeded) return;
 		if (depth === 0 && source.length > limits.maxCommandChars) {
 			exceed("command-chars", limits.maxCommandChars, `the command is ${source.length} characters long and the limit is ${limits.maxCommandChars}`);
@@ -419,15 +441,22 @@ export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS, comm
 		}
 		// Re-visiting the same text at the same depth adds nothing, and without this
 		// a run of `eval` tokens (each unwraps to its own suffix) grows exponentially.
-		const visitKey = `${depth}\u0000${source}`;
+		const visitKey = `${depth}\u0000${shell ?? ""}\u0000${source}`;
 		if (visited.has(visitKey)) return;
 		visited.add(visitKey);
 		work.nesting = Math.max(work.nesting, depth);
-		work.scannedChars += source.length * 2; // one scan per dialect
-		if (work.scannedChars > limits.maxScanChars) {
-			exceed("scan-chars", limits.maxScanChars, `checking it would scan more than ${limits.maxScanChars} characters of shell text once nested commands are unwrapped`);
-			return;
+		if (shell) {
+			if (!scan(source.length)) return; // one scan to read the comments
+			const maxSyntaxNesting = limits.maxSyntaxNesting ?? MAX_SYNTAX_DEPTH;
+			const stripped = stripComments(source, shell, maxSyntaxNesting);
+			if (stripped === null) {
+				exceed("syntax-nesting", maxSyntaxNesting, `its quotes and substitutions are nested more than ${maxSyntaxNesting} levels deep`);
+				return;
+			}
+			source = stripped;
+			if (!source.trim()) return;
 		}
+		if (!scan(source.length * 2)) return; // one scan per dialect
 		for (const dialect of ["posix", "windows"]) {
 			for (const text of splitSegments(source, dialect)) {
 				const rawTokens = tokenize(text, dialect);
@@ -457,14 +486,21 @@ export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS, comm
 				sequence.push(segment);
 				// Wrapper payloads and quoted command lines are visited like the command itself, so they
 				// count against the same word, character and nesting limits.
-				for (const payload of new Set([...unwrapPayloads(rawTokens), ...quotedCommandWords(rawTokens, commandPrograms)])) {
-					visit(payload, depth + 1);
+				// A quoted command line is handed to a program whose shell is not known: its text is read whole,
+				// unless a shell that is known (`bash -c 'npm test # note'`) runs that very text and reads it its way.
+				const payloads = new Map();
+				for (const payload of [...unwrapPayloads(rawTokens), ...quotedCommandWords(rawTokens, commandPrograms).map((text) => ({ text, shell: null }))]) {
+					payloads.set(`${payload.shell ?? ""}\u0000${payload.text}`, payload);
+				}
+				for (const payload of payloads.values()) {
+					if (payload.shell === null && (payloads.has(`posix\u0000${payload.text}`) || payloads.has(`powershell\u0000${payload.text}`))) continue;
+					visit(payload.text, depth + 1, payload.shell);
 					if (limitExceeded) return;
 				}
 			}
 		}
 	};
-	visit(commandText, 0);
+	visit(commandText, 0, comments);
 	return { segments, sequence, limitExceeded, work };
 }
 
@@ -1305,14 +1341,16 @@ function limitExceededReason(limitExceeded) {
 
 /**
  * Evaluate a command against built-in + workspace rules.
+ * @param {{ comments?: "posix"|"powershell"|null }} [options] `comments`: the shell that runs the command, when it is known;
+ *   its comments are not commands (see analyzeCommand).
  * @returns {{ status: string, rulesPath: string|null, analysis: object, gitPush: boolean, hardDenies: object[], approvals: object[], limitExceeded: null|{ limit: string, max: number, message: string, reason: string } }}
  *   `approvals` excludes T5 ids approved via HELI_ALLOW_COMMAND; T6 is never approvable.
  *   `limitExceeded` is set when the command is over the analysis budget: no rule was
  *   evaluated, and the caller must deny it with `limitExceeded.reason`.
  */
-export function evaluateCommandRules(workspaceRoot, command, env = process.env) {
+export function evaluateCommandRules(workspaceRoot, command, env = process.env, { comments = null } = {}) {
 	const loaded = loadCommandRules(workspaceRoot);
-	const analysis = analyzeCommand(command, { commandPrograms: commandProgramNames(loaded.projectRules) });
+	const analysis = analyzeCommand(command, { commandPrograms: commandProgramNames(loaded.projectRules), comments });
 	if (analysis.limitExceeded) {
 		return {
 			status: loaded.status,

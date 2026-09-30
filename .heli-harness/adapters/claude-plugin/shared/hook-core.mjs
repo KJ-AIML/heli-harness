@@ -32,6 +32,7 @@ import {
 } from "./command-policy.mjs";
 import { COMMAND_ANALYSIS_LIMITS, argvCommandText } from "./command-policy.mjs";
 import { MCP_INPUT_LIMITS, mcpToolWrites, readMcpInput } from "./mcp-input.mjs";
+import { stripComments } from "./shell-comments.mjs";
 import {
 	classifyShellWriteTargets,
 	classifyToolPaths,
@@ -304,6 +305,21 @@ export function isShellTool(toolName) {
 }
 
 /**
+ * The shell whose comments a tool's `command` may leave out of the analysis, or null when its shell is not known. Only a tool
+ * that is named for its shell says so: `Bash` runs bash (Claude Code needs Git Bash for it), `PowerShell` runs PowerShell. The
+ * generic shell tools (`shell`, `terminal`, `run_command`), Monitor and MCP servers run whatever the host or the server picks
+ * (cmd.exe, on Windows), so their text is read whole: a comment mistaken for code is a false alarm, code mistaken for a comment
+ * is a bypass.
+ */
+export function shellCommentSyntax(toolName) {
+	if (isMcpTool(toolName)) return null;
+	const parts = String(toolName ?? "").toLowerCase().split(/[_\-.]+/);
+	if (parts.includes("bash")) return "posix";
+	if (parts.includes("powershell") || parts.includes("pwsh")) return "powershell";
+	return null;
+}
+
+/**
  * Tools whose `description` is prose about the call, never a stand-in for a missing `command` (on the shell tools of some
  * hosts a lone `description` is read as the command): an MCP tool's, since issue trackers and calendars have one, and Monitor's,
  * which labels the watch (a `ws` source has no command at all). Text there that mentions `rm -rf` or `git push` is not a command.
@@ -319,10 +335,14 @@ const IN_PLACE_REGEX_MAX_CHARS = 8192;
 
 export function isLikelyShellMutation(toolName, commandText) {
 	if (!isShellTool(toolName)) return false;
-	const text = String(commandText ?? "");
+	const raw = String(commandText ?? "");
 	// Text over the analysis limit is refused before it can run: skip the heuristics
 	// below and report a likely write.
-	if (text.length > COMMAND_ANALYSIS_LIMITS.maxCommandChars) return true;
+	if (raw.length > COMMAND_ANALYSIS_LIMITS.maxCommandChars) return true;
+	// A comment is not a write (`ls # rm -rf build`), where the shell is known to ignore it.
+	const text = stripComments(raw, shellCommentSyntax(toolName));
+	// Quotes nested too deep to read are refused by the analysis: report a likely write, as for over-long text.
+	if (text === null) return true;
 	const command = text.toLowerCase();
 	if (!command.trim()) return false;
 	// Best-effort common mutation detection only; this is not a sandbox.
@@ -529,7 +549,7 @@ export function evaluatePreToolUse({
 	// its name suggests. Paths are still read from the input above and every write check
 	// below still runs.
 	const commandPolicy = rawCommand.trim() && !isFileWriteToolName(name, writeToolNames)
-		? evaluateCommandRules(ctx.workspaceRoot, rawCommand, env)
+		? evaluateCommandRules(ctx.workspaceRoot, rawCommand, env, { comments: shellCommentSyntax(name) })
 		: null;
 	// A command too large or too deeply nested to analyze quickly is refused: hosts
 	// treat a hook that times out as an allow, and unanalyzed text could hide a T6.
