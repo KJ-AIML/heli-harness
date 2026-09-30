@@ -19,11 +19,6 @@ import { scrubHeliProcessEnv } from "./lib/hermetic-env.mjs";
 scrubHeliProcessEnv();
 const root = process.cwd();
 const hooksJson = JSON.parse(readFileSync(join(root, ".heli-harness", "adapters", "claude-plugin", "hooks", "hooks.json"), "utf8"));
-const scratch = mkdtempSync(join(tmpdir(), "heli-claude-coverage-"));
-const hostHome = join(scratch, "home");
-// Heli's directories point into the scratch folder for this process too, so setting up a workspace below never reaches the real home directory.
-Object.assign(process.env, { HELI_CONFIG_DIR: join(scratch, "config"), HELI_DATA_DIR: join(scratch, "data"), HELI_HOST_HOME: hostHome });
-const env = { ...process.env };
 const shippedRules = readFileSync(join(root, ".heli-harness", "safety", "command-rules.json"), "utf8");
 
 // 1. The PreToolUse matcher is a regex (it contains non-name characters) that
@@ -80,6 +75,13 @@ assert.equal(isLikelyShellMutation("Monitor", "echo 1 > a.txt"), true, "Monitor 
 assert.equal(isLikelyShellMutation("Monitor", "npm run dev"), false);
 assert.equal(isLikelyShellMutation("mcp__shell__run", "Set-Content a.txt 1"), false, "an MCP tool is never a local shell");
 assert.equal(isLikelyShellMutation("Read", "Set-Content a.txt 1"), false);
+
+// The scratch folder exists only from here, so a failed assertion above leaves nothing behind.
+const scratch = mkdtempSync(join(tmpdir(), "heli-claude-coverage-"));
+const hostHome = join(scratch, "home");
+// Heli's directories point into it for this process too, so setting up a workspace below never reaches the real home directory.
+Object.assign(process.env, { HELI_CONFIG_DIR: join(scratch, "config"), HELI_DATA_DIR: join(scratch, "data"), HELI_HOST_HOME: hostHome });
+const env = { ...process.env };
 
 function hook(cwd, payload, extraEnv = {}) {
 	const result = spawnSync(process.execPath, [join(root, ".heli-harness", "adapters", "claude-plugin", "hooks", "heli-pre-tool-use.mjs")], {
