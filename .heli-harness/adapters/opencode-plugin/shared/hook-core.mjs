@@ -19,11 +19,11 @@ import {
 import { resolveYolo, allowGitPushScoped, allowEnvWriteScoped } from "./concurrency/yolo-scope.mjs";
 import { sessionHoldsWriteLease, refreshLease } from "./concurrency/lease.mjs";
 import { findWorkspaceRoot } from "./concurrency/paths.mjs";
-import { consumeApplicableGrant, findUsableGrant } from "./concurrency/grant.mjs";
+import { consumeApplicableGrant, findUsableGrants } from "./concurrency/grant.mjs";
 import { resourceIdForWorktree } from "./concurrency/resource-authority.mjs";
 import { evaluateDiagnosisWriteGate, readActionPolicy, readDiagnosis } from "./concurrency/diagnosis.mjs";
 import { approvalReason, evaluateCommandRules, hardDenyReason } from "./command-policy.mjs";
-import { COMMAND_ANALYSIS_LIMITS } from "./command-policy.mjs";
+import { COMMAND_ANALYSIS_LIMITS, argvCommandText } from "./command-policy.mjs";
 
 export { commandRuleTokens, commandMatchesRuleTokens } from "./command-policy.mjs";
 
@@ -353,14 +353,18 @@ function grantRequest(ctx, action, env) {
 	};
 }
 
-/** Read-only: is there a usable grant for this action? Never consumes a use. */
-function findScopedGrant(ctx, action, env = process.env) {
-	if (!ctx?.workspaceRoot || !action) return null;
+/**
+ * Read-only: the grant each action would consume, in order, counting the uses an earlier
+ * action of the same call takes (one `once` grant pays for one action). null means no usable
+ * grant is left for that action. Never consumes a use.
+ */
+function findScopedGrants(ctx, actions, env = process.env) {
+	if (!ctx?.workspaceRoot) return actions.map(() => null);
 	try {
-		return findUsableGrant(ctx.workspaceRoot, grantRequest(ctx, action, env));
+		return findUsableGrants(ctx.workspaceRoot, actions.map((action) => grantRequest(ctx, action, env)), { env });
 	} catch {
 		// Malformed local grant state fails closed (no grant).
-		return null;
+		return actions.map(() => null);
 	}
 }
 
@@ -442,6 +446,12 @@ export function evaluatePreToolUse({
 		refreshLeaseOnResolve: false,
 	});
 
+	// A `command` given as an argv list (Codex's shell tool) is read as the shell-quoted join of
+	// its elements, not as their comma-joined text: the floor, the push gate and the mutation
+	// checks all work on shell text. A list holding anything but strings is refused below.
+	const argv = Array.isArray(toolInput?.command) ? argvCommandText(toolInput.command) : null;
+	if (argv && !argv.error) toolInput = { ...toolInput, command: argv.text };
+
 	const rawCommand = String(toolInput?.command ?? toolInput?.description ?? "");
 	const paths = [...pathsFrom(toolInput), ...patchPathsFrom(rawCommand)].map((path) =>
 		path.replaceAll("\\", "/").toLowerCase(),
@@ -452,6 +462,12 @@ export function evaluatePreToolUse({
 	const isWrite = isFileMutationTool(name, { paths, writeToolNames }) || shellMutation;
 	const taskStateOnly = isTaskStateWriteForContext(ctx, paths) || isTaskStateWrite(paths);
 	let ownershipDecision = null;
+
+	// A command list that cannot be read as words could hide anything: refuse it, beyond YOLO.
+	// (File-editing tools are not analyzed, see below.)
+	if (argv?.error && !isFileWriteToolName(name, writeToolNames)) {
+		return { deny: true, hardDeny: true, code: "COMMAND_UNPARSEABLE", reason: argv.reason, ctx };
+	}
 
 	// Command rules: EVERY rule is evaluated (built-in floor + workspace file).
 	// Any T6 match is a hard deny that dominates authority, grants, YOLO and
@@ -598,7 +614,9 @@ export function evaluatePreToolUse({
 			reason: approvalReason(match),
 		});
 	}
-	const missing = requirements.filter((requirement) => !findScopedGrant(ctx, requirement.action, env));
+	// Planned as one set, so a grant that can pay for one approval is not counted for two.
+	const planned = findScopedGrants(ctx, requirements.map((requirement) => requirement.action), env);
+	const missing = requirements.filter((_, index) => !planned[index]);
 	if (missing.length) {
 		return {
 			deny: true,

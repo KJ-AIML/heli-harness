@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { COMMAND_ANALYSIS_LIMITS, analyzeCommand, commandRunsGitPush, loadCommandRules, matchCommandRules } from "../.heli-harness/adapters/shared/command-policy.mjs";
+import { COMMAND_ANALYSIS_LIMITS, analyzeCommand, argvCommandText, commandRunsGitPush, loadCommandRules, matchCommandRules } from "../.heli-harness/adapters/shared/command-policy.mjs";
 import { DEFAULT_FILE_WRITE_TOOL_NAMES, evaluatePreToolUse, isFileMutationTool, isFileWriteToolName, isLikelyShellMutation } from "../.heli-harness/adapters/shared/hook-core.mjs";
 import { issueGrant, listGrants } from "../lib/concurrency/grant.mjs";
 import { projectWorkspaceKey } from "../lib/concurrency/project-binding.mjs";
@@ -84,6 +84,99 @@ const T6_TABLE = [
 	["git.exe push origin main", []],
 	["rm.exe -f build.log", []],
 	["mygit.exe reset --hard", []],
+	// A shell's options never hide its -c payload: options that take a value (-o, +o, -O, +O,
+	// --rcfile, --init-file) are skipped whole, -c may sit in a cluster (-lc, -euxc), options
+	// may follow -c, and long flags without a value are skipped.
+	["bash -o pipefail -c 'rm -rf /'", ["destructive-delete"]],
+	["bash -euo pipefail -c 'rm -rf /'", ["destructive-delete"]],
+	["bash -o pipefail -o errexit -c 'rm -rf /'", ["destructive-delete"]],
+	["bash --rcfile x -c 'rm -rf /'", ["destructive-delete"]],
+	["bash --rcfile=x -c 'rm -rf /'", ["destructive-delete"]],
+	["bash --init-file x -c 'rm -rf /'", ["destructive-delete"]],
+	["bash -O extglob -c 'rm -rf /'", ["destructive-delete"]],
+	["bash +O extglob -c 'rm -rf /'", ["destructive-delete"]],
+	["bash +o pipefail -c 'rm -rf /'", ["destructive-delete"]],
+	["bash -lc 'rm -rf /'", ["destructive-delete"]],
+	["bash -ec 'rm -rf /'", ["destructive-delete"]],
+	["bash -euxc 'rm -rf /'", ["destructive-delete"]],
+	["bash -xc 'rm -rf /'", ["destructive-delete"]],
+	["bash -l -c 'rm -rf /'", ["destructive-delete"]],
+	["bash --login --norc --noprofile --posix --restricted -c 'rm -rf /'", ["destructive-delete"]],
+	["bash -c -o pipefail 'rm -rf /'", ["destructive-delete"]],
+	["bash -c -x 'rm -rf /'", ["destructive-delete"]],
+	["bash -c -- 'rm -rf /'", ["destructive-delete"]],
+	["sh -o errexit -c 'rm -rf /'", ["destructive-delete"]],
+	["dash -o errexit -c 'rm -rf /'", ["destructive-delete"]],
+	["ksh -o errexit -c 'rm -rf /'", ["destructive-delete"]],
+	["zsh -o errexit -c 'rm -rf /'", ["destructive-delete"]],
+	["zsh -fc 'rm -rf /'", ["destructive-delete"]],
+	["bash.exe -o pipefail -c 'rm -rf /'", ["destructive-delete"]],
+	["\"C:\\Program Files\\Git\\bin\\bash.exe\" -o pipefail -c 'rm -rf /'", ["destructive-delete"]],
+	["/bin/bash -o pipefail -c 'rm -rf /'", ["destructive-delete"]],
+	["bash -o pipefail -c 'git reset --hard'", ["git-reset-hard"]],
+	["bash -euo pipefail -c 'git push --force origin main'", ["git-push-force"]],
+	["bash -o pipefail -c 'echo hi'", []],
+	["bash -o pipefail script.sh", []],
+	["bash -o pipefail", []],
+	["bash -o", []],
+	["bash -c", []],
+	// Common prefixes never hide the real program from the floor.
+	["sudo rm -rf /", ["destructive-delete"]],
+	["sudo -u root rm -rf /", ["destructive-delete"]],
+	["sudo -E -- rm -rf /", ["destructive-delete"]],
+	["doas rm -rf /", ["destructive-delete"]],
+	["env FOO=1 git push --force origin main", ["git-push-force"]],
+	["env -i -u NAME FOO=1 rm -rf /", ["destructive-delete"]],
+	["env -i -u NAME FOO=1 git push --force origin main", ["git-push-force"]],
+	["nohup rm -rf x", ["destructive-delete"]],
+	["nice -n 10 rm -rf x", ["destructive-delete"]],
+	["time rm -rf x", ["destructive-delete"]],
+	["timeout 5 rm -rf x", ["destructive-delete"]],
+	["timeout -s KILL 5 rm -rf x", ["destructive-delete"]],
+	["timeout --preserve-status 5 git push --force origin main", ["git-push-force"]],
+	["timeout 5 bash -c 'rm -rf x'", ["destructive-delete"]],
+	["timeout 5 bash -o pipefail -c 'rm -rf x'", ["destructive-delete"]],
+	["exec rm -rf /", ["destructive-delete"]],
+	["command rm -rf /", ["destructive-delete"]],
+	["builtin rm -rf /", ["destructive-delete"]],
+	["busybox rm -rf /", ["destructive-delete"]],
+	["busybox sh -c 'rm -rf /'", ["destructive-delete"]],
+	["sudo bash -euo pipefail -c 'rm -rf /'", ["destructive-delete"]],
+	["env FOO=1 bash -euo pipefail -c 'git push --force origin main'", ["git-push-force"]],
+	// git's global options that take a value (from `git help git`) are skipped in both spellings.
+	["git --config-env a.b=HOME reset --hard", ["git-reset-hard"]],
+	["git --config-env=a.b=HOME reset --hard", ["git-reset-hard"]],
+	["git --attr-source HEAD clean -fdx", ["git-clean-force"]],
+	["git --attr-source=HEAD clean -fdx", ["git-clean-force"]],
+	["git --config-env a.b=HOME push --force origin main", ["git-push-force"]],
+	["git --shallow-file /x reset --hard", ["git-reset-hard"]],
+	["git --super-prefix p reset --hard", ["git-reset-hard"]],
+	["git --super-prefix=p reset --hard", ["git-reset-hard"]],
+	["git --namespace n reset --hard", ["git-reset-hard"]],
+	["git --namespace=n reset --hard", ["git-reset-hard"]],
+	["git --work-tree w reset --hard", ["git-reset-hard"]],
+	["git --work-tree=w reset --hard", ["git-reset-hard"]],
+	["git --git-dir g reset --hard", ["git-reset-hard"]],
+	["git --git-dir=g reset --hard", ["git-reset-hard"]],
+	["git --exec-path=/x reset --hard", ["git-reset-hard"]],
+	["git --exec-path reset --hard", ["git-reset-hard"]],
+	["git --list-cmds=main reset --hard", ["git-reset-hard"]],
+	["git -P reset --hard", ["git-reset-hard"]],
+	["git -p reset --hard", ["git-reset-hard"]],
+	["git --no-pager --bare --no-replace-objects --literal-pathspecs -C . -c a=b reset --hard", ["git-reset-hard"]],
+	["git -c a=b --config-env x=Y -C . --attr-source HEAD --namespace n reset --hard", ["git-reset-hard"]],
+	["git --attr-source HEAD status", []],
+	// A Windows switch is a standalone token (/s, /S/Q), never a segment of a POSIX path.
+	["rmdir /s", ["windows-rmdir"]],
+	["rmdir /S /Q build", ["windows-rmdir"]],
+	["rd /s/q build", ["windows-rmdir"]],
+	["del /f/s/q x", ["windows-del"]],
+	["rmdir /tmp/s /s", ["windows-rmdir"]],
+	["rmdir /tmp/s", []],
+	["rmdir /var/s/x", []],
+	["rd /tmp/s", []],
+	["del /tmp/s/file.txt", []],
+	["rmdir /s/tmp/s", []],
 	// Legitimate, non-destructive commands must not match any built-in rule.
 	["rm -f build.log", []],
 	["rm -r build", []],
@@ -132,6 +225,28 @@ const PUSH_TABLE = [
 	["mygit.exe push", false],
 	["git.exe pull", false],
 	["echo git.exe pushups", false],
+	["sudo git push", true],
+	["env FOO=1 git push", true],
+	["nohup git push", true],
+	["timeout 5 git push", true],
+	["bash -o pipefail -c 'git push'", true],
+	["bash -euo pipefail -c 'git push'", true],
+	["bash --rcfile x -c 'git push'", true],
+	["git --config-env a.b=HOME push", true],
+	["git --config-env=a.b=HOME push", true],
+	["git --attr-source HEAD push", true],
+	["git --attr-source=HEAD push", true],
+	["git --shallow-file x push", true],
+	["git --super-prefix p push", true],
+	["git --namespace n push", true],
+	["git --work-tree w push", true],
+	["git --git-dir g push", true],
+	["git --exec-path=/x push", true],
+	["git -P push", true],
+	["git -p push", true],
+	["git --attr-source push status", false],
+	["git --config-env push status", false],
+	["git --exec-path=push status", false],
 ];
 for (const [command, expected] of PUSH_TABLE) {
 	assert.equal(commandRunsGitPush(analyzeCommand(command)), expected, `git push detection for ${JSON.stringify(command)}`);
@@ -167,6 +282,20 @@ const RULES_TABLE = [
 for (const [command, expected] of RULES_TABLE) {
 	const got = matchCommandRules(analyzeCommand(command), shipped.projectRules).map((match) => match.id).sort();
 	assert.deepEqual(got, [...expected].sort(), `rules-file layer for ${JSON.stringify(command)}`);
+}
+
+// A command given as an argv list reads as the shell-quoted join of its elements: every element
+// stays one word, whatever it holds, and words that need no quoting are left alone.
+assert.equal(argvCommandText(["bash", "-lc", "git push --force"]).text, "bash -lc 'git push --force'");
+assert.equal(argvCommandText(["echo", "it's", "", "a b"]).text, "echo 'it'\\''s' '' 'a b'");
+assert.equal(argvCommandText(["git", "-C", "/repo/x", "commit", "-m", "wip"]).text, "git -C /repo/x commit -m wip");
+assert.equal(argvCommandText([]).text, "");
+for (const notWords of [["a", 1], ["a", null], [["a"]], [undefined], "bash -c x", null, 5]) {
+	assert.ok(argvCommandText(notWords).error, `${JSON.stringify(notWords)} is not a list of strings`);
+}
+for (const word of ["a b", "it's", "say \"hi\"", "$HOME", "`x`", "a;b", "a&&b", "a|b", "(x)", "*", "~", "a\nb", "C:\\Program Files\\x", "x=y", "#c", "{a,b}", "a>b"]) {
+	const posix = analyzeCommand(argvCommandText(["run", word, "end"]).text).segments.find((segment) => segment.dialect === "posix");
+	assert.deepEqual(posix.rawTokens, ["run", word, "end"], `${JSON.stringify(word)} survives the quoting as one word`);
 }
 
 // ------------------------------------------------------ analysis budget
@@ -257,9 +386,9 @@ function remainingUses(ws, grantId) {
 const FAIL_CLOSED_PREFIX = "Heli-Harness could not evaluate this action (COMMAND_TOO_COMPLEX: ";
 
 /** A command over the analysis budget is a hard deny in the fail-closed format, decided fast. */
-function assertTooComplex(dir, command, label, extraEnv = {}) {
+function assertTooComplex(dir, command, label, extraEnv = {}, toolInput = null) {
 	const startedAt = Date.now();
-	const result = bash(dir, command, extraEnv);
+	const result = toolInput ? tool(dir, "Bash", toolInput, extraEnv) : bash(dir, command, extraEnv);
 	const elapsed = Date.now() - startedAt;
 	assert.equal(result.code, "COMMAND_TOO_COMPLEX", `${label}: ${result.reason}`);
 	assert.equal(result.deny, true, label);
@@ -447,6 +576,61 @@ try {
 	const unboundWrite = tool(concurrentEditing, "Write", { file_path: "Makefile", content: "clean:\n\trm -rf build\n" });
 	assert.equal(unboundWrite.deny, true, "control: a Write without a bound session is refused");
 	assert.equal(unboundPatch.code, unboundWrite.code, `an unbound apply_patch reaches the same ownership gate as a Write: ${unboundPatch.reason}`);
+
+	// One `once` grant pays for one approval. A wildcard once-grant matches both requirements of
+	// `git tag && npm publish`, so the call is refused BEFORE anything is consumed.
+	const multi = workspace("multiplicity");
+	const multiResource = { type: "workspace", id: projectWorkspaceKey(multi, { env }) };
+	const wildcardOnce = issueGrant(multi, { action: "command.approval.*", scope: "once", resource: multiResource, env });
+	const twoApprovals = bash(multi, "git tag v1.0.0 && npm publish");
+	assert.equal(twoApprovals.deny, true);
+	assert.equal(twoApprovals.code, "TIER_APPROVAL_REQUIRED", twoApprovals.reason);
+	assert.deepEqual(twoApprovals.missingApprovals, ["command.approval.npm-publish"]);
+	assert.equal(remainingUses(multi, wildcardOnce.grantId), 1, "a refused call must not spend the grant");
+	const publishOnce = grant(multi, "command.approval.npm-publish");
+	const paidTwice = bash(multi, "git tag v1.0.0 && npm publish");
+	assert.equal(paidTwice.deny, false, paidTwice.reason);
+	assert.equal(remainingUses(multi, wildcardOnce.grantId), 0, "the wildcard grant paid for the first approval");
+	assert.equal(remainingUses(multi, publishOnce.grantId), 0, "the specific grant paid for the second");
+	// A grant without a use limit covers any number of approvals and is never spent.
+	const unlimitedWs = workspace("multiplicity-unlimited");
+	issueGrant(unlimitedWs, { action: "command.approval.*", scope: "workspace", resource: { type: "workspace", id: projectWorkspaceKey(unlimitedWs, { env }) }, env });
+	assert.equal(bash(unlimitedWs, "git tag v1.0.0 && npm publish").deny, false);
+	assert.equal(bash(unlimitedWs, "git tag v1.0.0 && npm publish").deny, false, "a workspace grant is not spent");
+
+	// A `command` given as an argv list (Codex's shell tool) is analyzed as the shell-quoted join of
+	// its elements, not as their comma-joined text, so the floor and the push gate see it.
+	const argvDir = workspace("argv");
+	assert.equal(tool(argvDir, "Bash", { command: ["bash", "-lc", "rm -rf /"] }).code, "TIER_BLOCKED");
+	assert.equal(tool(argvDir, "Bash", { command: ["bash", "-o", "pipefail", "-c", "rm -rf /"] }).code, "TIER_BLOCKED");
+	assert.equal(tool(argvDir, "Bash", { command: ["rm", "-rf", "build"] }).code, "TIER_BLOCKED");
+	assert.equal(tool(argvDir, "custom_runner", { command: ["rm", "-rf", "build"] }).code, "TIER_BLOCKED", "any tool that is not a file editor");
+	assert.deepEqual(tool(argvDir, "Bash", { command: ["bash", "-lc", "git push --force origin main"] }).missingApprovals, ["git.push", "command.approval.git-push-force"]);
+	assert.deepEqual(tool(argvDir, "Bash", { command: ["git", "push", "--force", "origin", "main"] }).missingApprovals, ["git.push", "command.approval.git-push-force"]);
+	assert.deepEqual(tool(argvDir, "Bash", { command: ["npm", "publish"] }).missingApprovals, ["command.approval.npm-publish"]);
+	assert.equal(tool(argvDir, "Bash", { command: ["ls", "-la"] }).deny, false);
+	assert.equal(tool(argvDir, "Bash", { command: ["git", "commit", "-m", "notes on rm -rf and git push --force"] }).deny, false, "an argument is data, not a command");
+	assert.equal(tool(argvDir, "Bash", { command: [] }).deny, false, "an empty list is an empty command");
+	const argvGrant = grant(argvDir, "command.approval.npm-publish");
+	assert.equal(tool(argvDir, "Bash", { command: ["npm", "publish"] }).deny, false, "an approved argv command runs");
+	assert.equal(remainingUses(argvDir, argvGrant.grantId), 0);
+	// A list with anything but strings cannot be read: fail closed, beyond YOLO.
+	for (const malformed of [["bash", 5], ["bash", null], [["bash", "-c", "x"]], ["bash", { a: 1 }], [undefined, "x"]]) {
+		const refused = tool(argvDir, "Bash", { command: malformed }, { HELI_YOLO: "1" });
+		assert.equal(refused.code, "COMMAND_UNPARSEABLE", `${JSON.stringify(malformed)}: ${refused.reason}`);
+		assert.equal(refused.hardDeny, true);
+		assert.ok(refused.reason.startsWith("Heli-Harness could not evaluate this action (COMMAND_UNPARSEABLE: "), refused.reason);
+		assert.match(refused.reason, /\); denying \(fail-closed\)\./);
+	}
+	assert.equal(tool(argvDir, "Write", { file_path: "notes.txt", command: ["bash", 5] }).deny, false, "file-editing tools are not analyzed");
+	// The size budget covers lists too, and a huge list is refused without quoting all of it.
+	assertTooComplex(argvDir, undefined, "a list of 200000 words", {}, { command: Array(200000).fill("x") });
+	assertTooComplex(argvDir, undefined, "a list with one word of twice the size limit", {}, { command: ["echo", "x".repeat(LIMITS.maxCommandChars * 2)] });
+	assertTooComplex(argvDir, undefined, "an over-limit list whose tail is malformed", {}, { command: [...Array(LIMITS.maxCommandChars).fill("xy"), 5] });
+	// A list is judged like the same command written as a string, mutation checks included.
+	for (const [list, text] of [[["git", "add", "."], "git add ."], [["npm", "install"], "npm install"], [["sed", "-i", "s/a/b/", "f"], "sed -i s/a/b/ f"], [["ls", "-la"], "ls -la"]]) {
+		assert.equal(tool(concurrentEditing, "Bash", { command: list }).code, tool(concurrentEditing, "Bash", { command: text }).code, `${JSON.stringify(list)} is judged like ${JSON.stringify(text)}`);
+	}
 
 	// A grant is not consumed when a later check denies (stuck task gate).
 	const stuck = workspace("stuck", shippedRules, "# Current Task\n\nTarget repo: demo\n\nCurrent status: blocked\n\nFailed attempts count: 2\n");

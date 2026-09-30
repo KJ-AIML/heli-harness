@@ -224,6 +224,32 @@ export function findUsableGrant(workspaceRoot, {
 	return findApplicableGrant(workspaceRoot, { action, sessionId, resource, env });
 }
 
+/**
+ * Read-only plan for several approvals of one call: for each request, in order, the grant
+ * consuming would spend. Uses that earlier requests take are counted, so a `once` grant
+ * (one use) is never counted for more requests than it can pay for. Entries are null where
+ * no usable grant is left. Never creates directories and never consumes a use.
+ * Requests are `{ action, sessionId, resource }` like findUsableGrant's.
+ */
+export function findUsableGrants(workspaceRoot, requests = [], { env = process.env } = {}) {
+	if (!requests.length) return [];
+	const paths = grantStorePaths(workspaceRoot, { env });
+	const store = readStore(workspaceRoot, { env });
+	const now = Date.now();
+	const taken = new Map();
+	return requests.map(({ action, sessionId = null, resource = null }) => {
+		const policy = evaluateGrantPolicy(workspaceRoot, action, { env });
+		if (!policy.grantable || policy.hardDenied) return null;
+		const grant = store.grants.find((candidate) =>
+			grantMatches(candidate, { action, sessionId, resource, paths, now }) &&
+			(candidate.scope !== "once" || Number(candidate.remainingUses || 0) > (taken.get(candidate.grantId) || 0)),
+		);
+		if (!grant) return null;
+		taken.set(grant.grantId, (taken.get(grant.grantId) || 0) + 1);
+		return grant;
+	});
+}
+
 export function consumeApplicableGrant(workspaceRoot, {
 	action,
 	sessionId = null,

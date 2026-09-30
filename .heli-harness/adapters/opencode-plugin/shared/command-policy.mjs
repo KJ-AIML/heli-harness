@@ -23,7 +23,25 @@ import { pathsFor } from "./concurrency/paths.mjs";
 
 const MAX_UNWRAP_DEPTH = 4;
 const POSIX_SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish"]);
-const GIT_OPTIONS_WITH_VALUE = new Set(["-c", "--git-dir", "--work-tree", "--namespace"]);
+// git's global options that take the next word as their value (`git help git` and git.c).
+// Each of them except -c and --shallow-file also comes as `--option=value`, which is one
+// word and needs no skipping. -c covers -C too, since tokens are lowercased. --exec-path
+// and --list-cmds only take a value in their `=` form, so they are not listed.
+const GIT_OPTIONS_WITH_VALUE = new Set([
+	"-c",
+	"--config-env",
+	"--git-dir",
+	"--work-tree",
+	"--namespace",
+	"--super-prefix",
+	"--attr-source",
+	"--shallow-file",
+]);
+// A POSIX shell's long options that take the next word as their value. Every other long
+// option is a bare flag (--login, --norc, --noprofile, --posix, --restricted, ...).
+const SHELL_LONG_OPTIONS_WITH_VALUE = new Set(["--rcfile", "--init-file"]);
+// Words made only of these characters need no quoting in a shell (the set Python's shlex.quote uses).
+const UNQUOTED_ARGV_WORD = /^[A-Za-z0-9_@%+=:,./-]+$/;
 
 /**
  * Deterministic analysis budget: counts of work, never wall-clock. Hosts treat a
@@ -157,21 +175,47 @@ function decodePowerShellBase64(value) {
 	}
 }
 
+/**
+ * The command string a POSIX shell runs with -c, or "" when it runs a script or stdin.
+ * Follows the shell's own option parsing from `start` (the word after the shell): short
+ * options may be clustered (-lc, -euxc), -o/-O (also +o/+O) take the next word as their
+ * value wherever they sit in a cluster, --rcfile/--init-file take one, options may still
+ * follow -c, and the command string is the first word that is not an option.
+ */
+function shellCommandString(tokens, start) {
+	let wantsCommand = false;
+	for (let j = start; j < tokens.length; j += 1) {
+		const token = tokens[j];
+		// `--` (or a lone `-`) ends the options; -c then takes the very next word.
+		if (token === "--" || token === "-") return wantsCommand ? tokens[j + 1] ?? "" : "";
+		if (token.startsWith("--")) {
+			if (SHELL_LONG_OPTIONS_WITH_VALUE.has(token)) j += 1;
+			continue;
+		}
+		// A short-option cluster (-c, -lc, -euo). Tested as two linear checks instead of
+		// /^-[a-z]*c[a-z]*$/, which backtracks quadratically on a long `-ccc...c!` word.
+		// `-C` counts as `-c` too, as it always has: it is fish's init command, and in bash it
+		// only makes the next word get analyzed as a command string.
+		if (/^[-+][a-z]+$/i.test(token)) {
+			for (const letter of token.slice(1)) {
+				if ((letter === "c" || letter === "C") && token[0] === "-") wantsCommand = true;
+				if (letter === "o" || letter === "O") j += 1;
+			}
+			continue;
+		}
+		if (token.length > 1 && (token[0] === "-" || token[0] === "+")) continue;
+		return wantsCommand ? token : "";
+	}
+	return "";
+}
+
 /** Inner command strings run by sh/bash -c, cmd /c, pwsh/powershell -Command|-EncodedCommand, eval. */
 function unwrapPayloads(tokens) {
 	const payloads = [];
 	for (let i = 0; i < tokens.length; i += 1) {
 		const program = programName(tokens[i]);
 		if (POSIX_SHELLS.has(program)) {
-			for (let j = i + 1; j < tokens.length; j += 1) {
-				// A short-option cluster containing `c` (-c, -lc, -ec). Two linear tests instead of
-				// /^-[a-z]*c[a-z]*$/, which backtracks quadratically on a long `-ccc...c!` token.
-				if (/^-[a-z]+$/i.test(tokens[j]) && /c/i.test(tokens[j]) && j + 1 < tokens.length) {
-					payloads.push(tokens[j + 1]);
-					break;
-				}
-				if (!tokens[j].startsWith("-")) break;
-			}
+			payloads.push(shellCommandString(tokens, i + 1));
 		} else if (program === "cmd") {
 			const flag = tokens.findIndex((token, index) => index > i && /^\/[ck]$/i.test(token));
 			if (flag > i) payloads.push(tokens.slice(flag + 1).join(" "));
@@ -411,8 +455,17 @@ function gitPushForce(tokens) {
 	);
 }
 
+/**
+ * A standalone Windows switch token: `/s`, or several written together (`/s/q`, `/S/Q`).
+ * Each switch is one letter or `?` (`/a:h` may carry attributes), so a path such as
+ * `/tmp/s` is never a switch.
+ */
 function hasWindowsSwitch(args, name) {
-	return args.some((arg) => arg.startsWith("/") && arg.split("/").includes(name));
+	return args.some((arg) => {
+		if (!arg.startsWith("/")) return false;
+		const switches = arg.slice(1).split("/");
+		return switches.every((item) => /^[a-z?](?::.*)?$/i.test(item)) && switches.some((item) => item.split(":")[0].toLowerCase() === name);
+	});
 }
 
 function cmdRecursiveRmdir(tokens) {
@@ -538,6 +591,38 @@ export function hardDenyReason(match) {
 
 export function approvalReason(match) {
 	return `Heli-Harness requires explicit approval for "${match.summary}" (rule ${match.id}, tier T5): ${match.reason}. Ask the user to run \`heli grant issue --action command.approval.${match.id} --scope once\` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_COMMAND=${match.id} or YOLO.`;
+}
+
+/**
+ * Command text for a `command` that is an argv list (Codex's shell tool sends
+ * `["bash", "-lc", "git push --force"]`): the elements joined with the quoting a shell
+ * needs, so that reads as `bash -lc 'git push --force'` and every element stays one word.
+ * A list holding anything but strings cannot be read. Building stops once the text is
+ * over the command limit (the analysis refuses it), so a huge list costs no more than
+ * the limit allows.
+ * @returns {{ text: string } | { error: string, reason: string }}
+ */
+export function argvCommandText(argv) {
+	const unreadable = () => {
+		const error = "the command is a list with an element that is not a string";
+		return {
+			error,
+			reason: `Heli-Harness could not evaluate this action (COMMAND_UNPARSEABLE: ${error}); denying (fail-closed). Send the command as one string, or as a list of strings.`,
+		};
+	};
+	if (!Array.isArray(argv)) return unreadable();
+	const words = [];
+	let length = 0;
+	for (let i = 0; i < argv.length && length <= COMMAND_ANALYSIS_LIMITS.maxCommandChars; i += 1) {
+		const word = argv[i];
+		if (typeof word !== "string") return unreadable();
+		const quoted = word.length > COMMAND_ANALYSIS_LIMITS.maxCommandChars || (word !== "" && UNQUOTED_ARGV_WORD.test(word))
+			? word
+			: `'${word.replaceAll("'", "'\\''")}'`;
+		words.push(quoted);
+		length += quoted.length + 1;
+	}
+	return { text: words.join(" ") };
 }
 
 /** Fail-closed reason for a command the analysis refused (see COMMAND_ANALYSIS_LIMITS). */
