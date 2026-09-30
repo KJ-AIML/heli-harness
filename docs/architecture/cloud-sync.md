@@ -281,7 +281,8 @@ The sync server is treated as untrusted for governance purposes:
   workspace.
 - **No silent rollback:** a pull that would apply a version older than the one this
   machine already applied is refused unless the user asks for it explicitly with
-  `heli pull --version N`.
+  `heli pull --version N`. The baseline (`state/sync.json`: last applied version, content
+  hash, E2E latch) survives linking the same sync workspace again with `heli ws link`.
 - **No silent governance changes:** a pull that would add or change anything under
   `safety/` or `policies/`, add or change a `tasks/*/yolo.json`, `diagnosis.json` or
   `events.jsonl` (the files Heli reads as a task's authority), change
@@ -313,7 +314,12 @@ The sync server is treated as untrusted for governance purposes:
 Limits: without E2E the bundle version comes from the server's response, so the rollback
 check only catches a server that admits to serving an older version, and a device with no
 sync history (a fresh `heli init`) has no baseline to compare against. The governance
-gate does not depend on either.
+gate does not depend on either. What stays resettable: the baseline lives in an ordinary
+workspace file, `state/sync.json`, which is not protected state, so `heli ws unlink` (then
+a new link), linking a different sync workspace, or deleting or editing the file starts the
+device over (no E2E latch, no last version), and so can anyone or anything that may write
+into the workspace. The checks stop a server that misbehaves; they are not a barrier
+against someone who resets the device on purpose.
 
 ## Risks
 

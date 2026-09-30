@@ -550,6 +550,22 @@ try {
 	ok(await asHuman("pull", [wsB, "--force", "--accept-policy-changes"], { ...cfgB, ...passphrase }), "accept the schema change");
 	assert.equal(isConcurrentMode(wsB), false, "with the human-gated flag the schema applies");
 
+	// The baseline that refuses a rollback and a plaintext downgrade (last applied version, content hash, E2E latch)
+	// survives re-linking the SAME sync workspace; only a different workspace starts over.
+	const syncFile = join(wsB, ".heli-harness", "state", "sync.json");
+	const baseline = JSON.parse(readFileSync(syncFile, "utf8"));
+	assert.equal(baseline.e2e, true);
+	assert.ok(baseline.lastVersion > 1 && baseline.lastContentSha, "device B has a baseline to lose");
+	ok(await cli(["ws", "link", "lab"], cfgB, { cwd: wsB }), "re-link the same sync workspace");
+	assert.deepEqual(JSON.parse(readFileSync(syncFile, "utf8")), baseline, "re-linking the same workspace changes nothing");
+	const otherWorkspace = await (await fetch(new URL("/ws", url), { method: "POST", headers: { ...authA, "content-type": "application/json" }, body: JSON.stringify({ name: "lab2" }) })).json();
+	ok(await cli(["ws", "link", "lab2"], cfgB, { cwd: wsB }), "link another sync workspace");
+	assert.deepEqual(
+		JSON.parse(readFileSync(syncFile, "utf8")),
+		{ workspaceId: otherWorkspace.id, name: "lab2", lastVersion: 0, lastContentSha: null },
+		"a different workspace starts over",
+	);
+
 	// Browser activation: a link cannot approve a device in one click, and the
 	// OAuth state is random, single-use and bound to the confirming browser.
 	{
