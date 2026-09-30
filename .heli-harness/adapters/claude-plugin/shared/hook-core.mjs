@@ -6,8 +6,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
 
 import {
 	resolveExecutionContext,
@@ -32,11 +31,13 @@ import {
 	shellWriteTargets,
 } from "./command-policy.mjs";
 import { COMMAND_ANALYSIS_LIMITS, argvCommandText } from "./command-policy.mjs";
+import { MCP_INPUT_LIMITS, mcpToolWrites, readMcpInput } from "./mcp-input.mjs";
 import {
 	classifyShellWriteTargets,
 	classifyToolPaths,
 	disablesClaudeHooks,
 	heliEnvironmentKeys,
+	normalizePolicyPath,
 	protectedEnvironmentReason,
 	protectedWriteReason,
 	settingsContentOf,
@@ -203,35 +204,6 @@ export function patchPathsFrom(commandText, out = []) {
 	while ((match = re.exec(commandText))) out.push(match[1].trim());
 	const moveRe = /^\*\*\* Move to: (.+)$/gm;
 	while ((match = moveRe.exec(commandText))) out.push(match[1].trim());
-	return out;
-}
-
-const PATH_KEY_RE = /path|file|dir|dest|target|source|uri|location/i;
-
-/**
- * MCP tool inputs are server-defined, so any string that looks like a
- * filesystem path is a candidate: values under path-like keys (a list inherits
- * its key), and whitespace-free values that contain a separator or start with `~`.
- * There is no length limit: `x/../x/../...` padded past any limit names the same file,
- * and classifying a long string costs a scan of it, not a walk of its directories.
- */
-function pathLikeValues(value, key = "", out = []) {
-	if (typeof value === "string") {
-		let text = value.trim();
-		// A file: URI names the file its decoded path names (`file:///C:/a%2Fb`, `file:/C:/a`).
-		if (/^file:/i.test(text)) {
-			try {
-				text = fileURLToPath(text);
-			} catch {
-				/* keep the raw text */
-			}
-		}
-		const underPathKey = PATH_KEY_RE.test(key) && text.length > 0 && !text.includes("\n");
-		const looksLikePath = !/\s/.test(text) && (/[\\/]/.test(text) || text.startsWith("~"));
-		if (underPathKey || looksLikePath) out.push(text);
-	} else if (value && typeof value === "object") {
-		for (const [childKey, child] of Object.entries(value)) pathLikeValues(child, Array.isArray(value) ? key : childKey, out);
-	}
 	return out;
 }
 
@@ -440,6 +412,14 @@ function structuredHeliAction(toolInput) {
 	return action && typeof action === "object" && !Array.isArray(action) ? action : null;
 }
 
+/**
+ * The fail-closed denial for an MCP input Heli refuses to read (see mcp-input.mjs): hosts treat a hook that times out as an
+ * allow, so an input too large to check in time is refused, never checked in part.
+ */
+function mcpInputTooComplexReason(message) {
+	return `Heli-Harness could not evaluate this action (MCP_INPUT_TOO_COMPLEX: ${message}); denying (fail-closed). An MCP call this large cannot be checked against Heli's protected state in time; split it into smaller calls.`;
+}
+
 export function isYoloActive(cwd = process.cwd(), env = process.env) {
 	const ctx = resolveExecutionContext({
 		cwd,
@@ -509,15 +489,23 @@ export function evaluatePreToolUse({
 	if (argv && !argv.error) toolInput = { ...toolInput, command: argv.text };
 
 	const baseCwd = cwd || process.cwd();
+	const name = String(toolName);
+	// An MCP input is server-defined and has no size limit: it is read once, within limits, before anything else looks at it.
+	const mcp = isMcpTool(name) ? readMcpInput(toolInput) : null;
+	if (mcp?.tooLarge) {
+		return { deny: true, hardDeny: true, code: "MCP_INPUT_TOO_COMPLEX", reason: mcpInputTooComplexReason(mcp.tooLarge.message), ctx };
+	}
+	// One cache for every path this call classifies: it saves lookups, and it counts them against the budget of an MCP call.
+	const pathCache = new Map();
+	if (mcp) pathCache.maxLookups = MCP_INPUT_LIMITS.maxLookups;
 	const rawCommand = String(toolInput?.command ?? (hasProseDescription(toolName) ? undefined : toolInput?.description) ?? "");
 	const rawPaths = [...pathsFrom(toolInput), ...patchPathsFrom(rawCommand)];
 	const paths = rawPaths.map((path) => path.replaceAll("\\", "/").toLowerCase());
-	const name = String(toolName);
 
 	const shellMutation = isLikelyShellMutation(name, rawCommand);
 	const isWrite = isFileMutationTool(name, { paths, writeToolNames }) || shellMutation;
 	// Only narrative state files skip the ownership gate (see isTaskStateWriteForContext), and only a write needs it.
-	const taskStateOnly = isWrite && isTaskStateWriteForContext(ctx, rawPaths, { cwd: baseCwd, env });
+	const taskStateOnly = isWrite && isTaskStateWriteForContext(ctx, rawPaths, { cwd: baseCwd, env, cache: pathCache });
 	let ownershipDecision = null;
 
 	// A command list that cannot be read as words could hide anything: refuse it, beyond YOLO.
@@ -565,22 +553,36 @@ export function evaluatePreToolUse({
 	// Heli's own authority state is never agent-writable: not by the lease
 	// holder, not under YOLO. Structured writes are checked by their paths,
 	// shell commands by the paths they write, move or delete.
-	const pathScope = { workspaceRoot: ctx.workspaceRoot, cwd: baseCwd, env };
+	const pathScope = { workspaceRoot: ctx.workspaceRoot, cwd: baseCwd, env, cache: pathCache };
 	// MCP tools: server-defined inputs, so every path-like value is checked.
-	const structuredEntries = isMcpTool(name)
-		? classifyToolPaths([...new Set([...rawPaths, ...pathLikeValues(toolInput)])], pathScope)
-		: isWrite
-			? classifyToolPaths(rawPaths, pathScope)
-			: [];
+	const structuredPaths = mcp ? [...new Set([...rawPaths, ...mcp.paths.map((path) => path.text)])] : rawPaths;
 	// A command is read for the files it writes wherever it runs: in a shell tool, or in an MCP tool that carries one (a shell
 	// server). That MCP tool is still not a shell: it is not guessed at as a write, and not refused for a missing rules file.
 	const runsCommand = Boolean(commandPolicy) && (isShellTool(name) || isMcpTool(name));
-	const shellEntries = runsCommand
-		? classifyShellWriteTargets(shellWriteTargets(commandPolicy.analysis), pathScope)
-		: [];
+	if (runsCommand && mcp && mcp.directories.length > MCP_INPUT_LIMITS.maxDirectories) {
+		return { deny: true, hardDeny: true, code: "MCP_INPUT_TOO_COMPLEX", reason: mcpInputTooComplexReason(`the number of directory values in a call that carries a command is over the limit of ${MCP_INPUT_LIMITS.maxDirectories}`), ctx };
+	}
+	let structuredEntries;
+	let shellEntries;
+	try {
+		structuredEntries = mcp || isWrite ? classifyToolPaths(structuredPaths, pathScope) : [];
+		shellEntries = [];
+		if (runsCommand) {
+			// The command runs in the folder the call names (`cwd`, `root`, ...) as well as where the hook started.
+			const targets = shellWriteTargets(commandPolicy.analysis);
+			shellEntries = classifyShellWriteTargets(targets, pathScope);
+			for (const directory of mcp?.directories ?? []) {
+				const base = normalizePolicyPath(directory, { cwd: baseCwd, env, cache: pathCache })?.path ?? resolve(baseCwd, directory);
+				shellEntries.push(...classifyShellWriteTargets(targets, { ...pathScope, cwd: base }));
+			}
+		}
+	} catch (error) {
+		if (error?.code !== "PATH_LOOKUP_BUDGET") throw error;
+		return { deny: true, hardDeny: true, code: "MCP_INPUT_TOO_COMPLEX", reason: mcpInputTooComplexReason(error.message), ctx };
+	}
 	const protectedEntry = [...structuredEntries, ...shellEntries].find((entry) => entry.kind === "authority");
 	if (protectedEntry) {
-		return { deny: true, hardDeny: true, code: "HELI_STATE_PROTECTED", reason: protectedWriteReason(protectedEntry), ctx };
+		return { deny: true, hardDeny: true, code: "HELI_STATE_PROTECTED", reason: protectedWriteReason(protectedEntry, { mcp: Boolean(mcp) }), ctx };
 	}
 	const settingsEntry = [...structuredEntries, ...shellEntries].find((entry) => entry.kind === "claude-settings");
 	if (settingsEntry) {
@@ -700,8 +702,20 @@ export function evaluatePreToolUse({
 		});
 	}
 	const envFile = /(^|\/)\.env(\.|$)/;
-	const envWrite = paths.some((path) => envFile.test(path)) ||
-		[...structuredEntries, ...shellEntries].some((entry) => entry.normalized && envFile.test(entry.normalized.toLowerCase()));
+	const namesEnvFile = (entry) => entry.normalized && envFile.test(entry.normalized.toLowerCase());
+	let envWrite;
+	if (mcp) {
+		// A read of a `.env` file is not a write, and an MCP tool's input is server-defined: only a call that looks like a write
+		// (a tool that writes, moves, copies or deletes, text to put in the file, or a path Heli already reads as a write) counts
+		// for every path it names, and otherwise only the paths under a destination-like key (`destination`, `output`, `to` ...).
+		const writes = isWrite || mcpToolWrites(name) || mcp.hasContentKey;
+		const written = new Set(writes ? structuredPaths : mcp.paths.filter((path) => path.destination).map((path) => path.text));
+		envWrite = [...written].some((path) => envFile.test(path.replaceAll("\\", "/").toLowerCase())) ||
+			structuredEntries.some((entry) => written.has(entry.raw) && namesEnvFile(entry)) ||
+			shellEntries.some(namesEnvFile);
+	} else {
+		envWrite = paths.some((path) => envFile.test(path)) || [...structuredEntries, ...shellEntries].some(namesEnvFile);
+	}
 	if (envWrite && !allowEnvWriteScoped(scope)) {
 		requirements.push({
 			action: "env.write",

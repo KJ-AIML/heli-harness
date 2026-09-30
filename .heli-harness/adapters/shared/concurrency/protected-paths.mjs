@@ -92,6 +92,17 @@ function spellings(value, scope) {
 	return drive ? [expanded, `${drive[1]}:${expanded.slice(drive[0].length) || "/"}`] : [expanded];
 }
 
+// What a classification may spend on file-system lookups when its caller sets `cache.maxLookups` (an MCP call: its input has
+// no size limit). An existence check costs 1 and a realpath 5, about what they cost in time (0.03-0.09 ms and 0.3-0.4 ms on
+// Windows). Past the limit the classification throws, and the hook refuses the call: hosts treat a hook that times out as an allow.
+function spend(cache, units) {
+	if (cache.maxLookups === undefined) return;
+	cache.lookups = (cache.lookups ?? 0) + units;
+	if (cache.lookups > cache.maxLookups) {
+		throw Object.assign(new Error(`naming its paths takes more than ${cache.maxLookups.toLocaleString("en-US")} file-system lookups`), { code: "PATH_LOOKUP_BUDGET" });
+	}
+}
+
 function nativeRealpath(path) {
 	try {
 		return realpathSync.native(path);
@@ -114,7 +125,7 @@ const LINEAR_WALK_LEVELS = 8;
  * The deepest ancestor of `start` (itself included) that exists, by bisection; the root when none does.
  * The ancestors of a resolved path are its prefixes that end before a separator.
  */
-function nearestExistingAncestor(start) {
+function nearestExistingAncestor(start, cache) {
 	const rootLength = parse(start).root.length;
 	const cuts = [rootLength];
 	for (let i = rootLength; i < start.length; i += 1) {
@@ -125,6 +136,7 @@ function nearestExistingAncestor(start) {
 	let high = cuts.length - 1;
 	while (low < high) {
 		const middle = (low + high + 1) >> 1;
+		spend(cache, 1);
 		if (existsSync(start.slice(0, cuts[middle]))) low = middle;
 		else high = middle - 1;
 	}
@@ -149,7 +161,9 @@ function realpathNearestAncestor(path, cache) {
 			base = hit;
 			break;
 		}
+		spend(cache, 1);
 		if (existsSync(current)) {
+			spend(cache, 5);
 			base = nativeRealpath(current);
 			cache.set(current, base);
 			break;
@@ -162,7 +176,7 @@ function realpathNearestAncestor(path, cache) {
 		missing.push(current);
 		current = parent;
 		if (missing.length === LINEAR_WALK_LEVELS) {
-			current = nearestExistingAncestor(current);
+			current = nearestExistingAncestor(current, cache);
 			jumped = true;
 		}
 	}
@@ -237,8 +251,8 @@ function normalizeSpelling(value, { cwd, cache }) {
 	return { path: canonical(real), lexical: canonical(absolute), suspicious, unc: false };
 }
 
-function newScope({ cwd, env }) {
-	return { cwd, env, lookup: envLookup(env), cache: new Map() };
+function newScope({ cwd, env, cache = new Map() }) {
+	return { cwd, env, lookup: envLookup(env), cache };
 }
 
 /**
@@ -364,8 +378,8 @@ function classifyRaw(raw, base, locations, scope) {
 }
 
 /** Normalize + classify a batch of raw tool paths. A path with more than one reading has one entry per reading. */
-export function classifyToolPaths(rawPaths, { workspaceRoot = null, cwd = process.cwd(), env = process.env } = {}) {
-	const scope = newScope({ cwd, env });
+export function classifyToolPaths(rawPaths, { workspaceRoot = null, cwd = process.cwd(), env = process.env, cache } = {}) {
+	const scope = newScope({ cwd, env, cache });
 	const locations = protectedLocations(workspaceRoot, { env, cwd, cache: scope.cache });
 	return (rawPaths || []).flatMap((raw) => classifyRaw(raw, cwd, locations, scope));
 }
@@ -441,8 +455,8 @@ function createChainResolver(cwd, scope) {
  * target is resolved against the hook cwd AND, when the command changed
  * directory first, against that directory — a protected reading wins.
  */
-export function classifyShellWriteTargets(targets, { workspaceRoot = null, cwd = process.cwd(), env = process.env } = {}) {
-	const scope = newScope({ cwd, env });
+export function classifyShellWriteTargets(targets, { workspaceRoot = null, cwd = process.cwd(), env = process.env, cache } = {}) {
+	const scope = newScope({ cwd, env, cache });
 	const locations = protectedLocations(workspaceRoot, { env, cwd, cache: scope.cache });
 	const chains = createChainResolver(cwd, scope);
 	const entries = [];
@@ -520,8 +534,11 @@ export function heliEnvironmentKeys(text, { loose = false } = {}) {
 	return [...new Set([...decodeJsonEscapes(text).matchAll(pattern)].map((match) => match[1]))];
 }
 
-export function protectedWriteReason(entry) {
-	return `Heli-Harness protects its own authority state: ${entry.raw} is ${entry.label}. Agents may not write it. Use the Heli CLI for normal state changes (heli task/session/target commands), or ask the user to run approval/YOLO commands in their own terminal.`;
+export function protectedWriteReason(entry, { mcp = false } = {}) {
+	// An MCP call names its files in fields Heli cannot read the meaning of, so a call that reads Heli state is refused with the
+	// calls that write it.
+	const forbidden = mcp ? "Agents may not read or write it through MCP tools (an MCP call that reads it cannot be told from one that writes it)." : "Agents may not write it.";
+	return `Heli-Harness protects its own authority state: ${entry.raw} is ${entry.label}. ${forbidden} Use the Heli CLI for normal state changes (heli task/session/target commands), or ask the user to run approval/YOLO commands in their own terminal.`;
 }
 
 /** Reason for a settings write that sets HELI_ environment variables (see heliEnvironmentKeys). */

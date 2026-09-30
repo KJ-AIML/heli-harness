@@ -613,12 +613,12 @@ export function readPlanGateForContext(ctx) {
  * task's files never qualify. Authority-bearing files never qualify either.
  * A path that cannot be classified is not exempt: the ownership gate applies.
  */
-export function isTaskStateWriteForContext(ctx, paths, { cwd = process.cwd(), env = process.env } = {}) {
+export function isTaskStateWriteForContext(ctx, paths, { cwd = process.cwd(), env = process.env, cache } = {}) {
 	if (!ctx?.workspaceRoot || !Array.isArray(paths) || paths.length === 0) return false;
 	const sameTask = (a, b) => (isWindows() ? a.toLowerCase() === b.toLowerCase() : a === b);
 	const ownTask = ctx.taskId ? String(ctx.taskId) : null;
 	try {
-		return classifyToolPaths(paths, { workspaceRoot: ctx.workspaceRoot, cwd, env }).every(
+		return classifyToolPaths(paths, { workspaceRoot: ctx.workspaceRoot, cwd, env, cache }).every(
 			(entry) =>
 				entry.kind === "narrative" &&
 				(entry.taskId == null || (ownTask !== null && sameTask(entry.taskId, ownTask))),

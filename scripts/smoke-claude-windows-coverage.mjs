@@ -314,7 +314,7 @@ try {
 
 	// 7. This test is part of `npm run check`, right after the Claude plugin smoke test.
 	const checkChain = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts.check;
-	assert.ok(checkChain.includes("node scripts/smoke-claude-plugin.mjs && node scripts/smoke-claude-windows-coverage.mjs && node scripts/smoke-codex-plugin.mjs"), "smoke-claude-windows-coverage runs right after smoke-claude-plugin");
+	assert.ok(checkChain.includes("node scripts/smoke-claude-plugin.mjs && node scripts/smoke-claude-windows-coverage.mjs && "), "smoke-claude-windows-coverage runs right after smoke-claude-plugin");
 
 	console.log("claude windows coverage smoke ok");
 } finally {
