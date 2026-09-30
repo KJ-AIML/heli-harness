@@ -71,6 +71,95 @@ for (const command of [
 for (const command of ["Get-ChildItem", "git status", "echo sc is a word", "Get-Content a.txt", "Write-Host hello", "Select-String foo a.txt", "Test-Path a.txt", "Get-Help copy", "Get-Process | Sort-Object CPU"]) {
 	assert.equal(isLikelyShellMutation("PowerShell", command), false, command);
 }
+// A write is a cmdlet or alias where a command goes: the start of the text or of a statement, after `;` `|` `&&` `||` `&` `(`, after
+// a `{` (a script block or a function body) and after an assignment. Not a name that is only an argument.
+for (const command of [
+	"{ del a.txt }",
+	"if ($true) { del a.txt }",
+	"Get-ChildItem | ForEach-Object { del $_ }",
+	"Get-ChildItem | % { del $_ }",
+	"foreach ($f in 1..2) { ni $f }",
+	"try { Set-Content a.txt 1 } catch { }",
+	"Invoke-Command -ScriptBlock {del a.txt}",
+	"& { Remove-Item a.txt }",
+	"function f { md d }; f",
+	"$sb = { Remove-Item a.txt }",
+	"$null = md d",
+	"$x=md d",
+	"$x += ni a.txt",
+	"Get-Help Remove-Item; Remove-Item a.txt",
+	"git status && del a.txt",
+	"git status || del a.txt",
+	"(del a.txt)",
+	"Microsoft.PowerShell.Management\\Remove-Item a.txt",
+]) {
+	assert.equal(isLikelyShellMutation("PowerShell", command), true, command);
+}
+for (const command of [
+	"Get-Help Remove-Item",
+	"Get-Help Set-Content -Full",
+	"Get-Command New-Item",
+	"Select-String -Pattern 'Set-Content' a.txt",
+	"Write-Host Remove-Item",
+	"Get-Alias sc",
+	"{ Get-ChildItem }",
+	"if ($true) { Get-ChildItem }",
+	"$x = Get-ChildItem",
+	"$x = Get-Help Remove-Item",
+	"$null = Get-Command New-Item",
+]) {
+	assert.equal(isLikelyShellMutation("PowerShell", command), false, command);
+}
+// Downloads and archives that write are writes: the write-target reader already knows them, so does this.
+for (const command of [
+	"Invoke-WebRequest https://example.com/x.zip -OutFile x.zip",
+	"iwr https://example.com/x.zip -OutFile x.zip",
+	"irm https://example.com/x -OutFile x",
+	"Invoke-WebRequest -Uri https://example.com/x -OutFile:x",
+	"Expand-Archive x.zip -DestinationPath out",
+	"Expand-Archive -Path x.zip -DestinationPath out",
+]) {
+	assert.equal(isLikelyShellMutation("PowerShell", command), true, command);
+}
+for (const command of ["Invoke-WebRequest https://example.com/x", "Invoke-RestMethod https://example.com/x | ConvertFrom-Json", "Invoke-WebRequest https://example.com/x -OutFile $null", "Get-Help Expand-Archive"]) {
+	assert.equal(isLikelyShellMutation("PowerShell", command), false, command);
+}
+// A redirect to a null sink or to another file descriptor writes nothing; a redirect to a file does, whichever stream it takes.
+for (const [toolName, command, expected] of [
+	["PowerShell", "Get-ChildItem 2>$null", false],
+	["PowerShell", "git rev-parse HEAD 2>$null", false],
+	["PowerShell", "Get-ChildItem > $null", false],
+	["PowerShell", "Get-ChildItem *> $null", false],
+	["PowerShell", "git status 2>&1", false],
+	["PowerShell", "cmd 2>nul", false],
+	["PowerShell", "Get-ChildItem 2>$null | Sort-Object Name", false],
+	["PowerShell", "Get-ChildItem 2>err.txt", true],
+	["PowerShell", "Get-ChildItem 2>&1 > out.txt", true],
+	["PowerShell", "Get-ChildItem > $null; echo 1 > a.txt", true],
+	["Bash", "ls 2>/dev/null", false],
+	["Bash", "git rev-parse HEAD 2>/dev/null", false],
+	["Bash", "git status > /dev/null 2>&1", false],
+	["Bash", "ls &>/dev/null", false],
+	["Bash", "echo err >&2", false],
+	["Bash", "ls > /dev/stderr", false],
+	["Bash", "curl -s -o /dev/null https://example.com", false],
+	["Bash", "ls 2> err.txt", true],
+	["Bash", "ls > out.txt 2>/dev/null", true],
+	// A keyword or a wrapper of the builtin stands before a command without being it.
+	["Bash", "for f in a b; do del $f; done", true],
+	["Bash", "if true; then md d; fi", true],
+	["Bash", "for f in a b; do echo $f; done", false],
+	["Bash", "echo x >> out.txt", true],
+	["Bash", "echo x >| out.txt", true],
+	["Bash", "curl -o x.zip https://example.com/x.zip", true],
+	["Bash", "wget -O x https://example.com/x", true],
+	["Bash", "sort -o out.txt in.txt", true],
+	["Bash", "curl -s https://example.com", false],
+]) {
+	assert.equal(isLikelyShellMutation(toolName, command), expected, `${toolName}: ${command}`);
+}
+// A command over the analysis limits is refused before it runs; the heuristic reports it as a likely write, not as a read.
+assert.equal(isLikelyShellMutation("Bash", "w ".repeat(300)), true, "over the words-per-command limit");
 assert.equal(isLikelyShellMutation("Monitor", "echo 1 > a.txt"), true, "Monitor runs a shell command");
 assert.equal(isLikelyShellMutation("Monitor", "npm run dev"), false);
 assert.equal(isLikelyShellMutation("mcp__shell__run", "Set-Content a.txt 1"), false, "an MCP tool is never a local shell");
@@ -198,6 +287,11 @@ try {
 		["PowerShell", "del src/x.ts"],
 		["PowerShell", "'y' | Out-File src/x.ts"],
 		["Monitor", "echo y > src/x.ts"],
+		["PowerShell", "{ del src/x.ts }"],
+		["PowerShell", "$null = md src/d"],
+		["PowerShell", "Get-ChildItem | ForEach-Object { del $_ }"],
+		["PowerShell", "Invoke-WebRequest https://example.com/x -OutFile src/x.zip"],
+		["PowerShell", "Expand-Archive x.zip -DestinationPath src/out"],
 	]) {
 		const observerWrite = evaluatePreToolUse({ cwd: conc, host: "claude", env: { ...env, ...asObserver }, toolName, toolInput: { command } });
 		assert.equal(observerWrite.deny, true, `${toolName}: ${command}`);
@@ -205,8 +299,11 @@ try {
 		assert.equal(observerWrite.coverage, "shell-mutation-best-effort", `${toolName}: ${command}`);
 		assert.equal(evaluate(conc, toolName, { command }, asOwner).deny, false, `${toolName} by the lease holder: ${command}`);
 	}
-	for (const command of ["Get-ChildItem", "Get-Content src/x.ts", "git status"]) {
+	for (const command of ["Get-ChildItem", "Get-Content src/x.ts", "git status", "Get-ChildItem 2>$null", "git rev-parse HEAD 2>$null", "Get-Help Remove-Item", "Select-String -Pattern 'Set-Content' src/x.ts", "Invoke-WebRequest https://example.com/x"]) {
 		assert.equal(evaluate(conc, "PowerShell", { command }, asObserver).deny, false, `an observer may read: ${command}`);
+	}
+	for (const command of ["ls 2>/dev/null", "git rev-parse HEAD 2>/dev/null", "git status > /dev/null 2>&1"]) {
+		assert.equal(evaluate(conc, "Bash", { command }, asObserver).deny, false, `an observer may read: ${command}`);
 	}
 	assert.equal(evaluate(conc, "NotebookEdit", { notebook_path: "src/analysis.ipynb", new_source: "print(1)" }, asObserver).code, "NOT_WRITE_MODE", "NotebookEdit is a file writer");
 	assert.equal(evaluate(conc, "PowerShell", { command: "Set-Content .heli-harness/tasks/t1/task.json x" }, asOwner).code, "HELI_STATE_PROTECTED", "not even the lease holder writes authority state from PowerShell");

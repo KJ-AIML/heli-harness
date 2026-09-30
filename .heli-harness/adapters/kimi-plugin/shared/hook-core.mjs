@@ -25,9 +25,9 @@ import { evaluateDiagnosisWriteGate, readActionPolicy, readDiagnosis } from "./c
 import {
 	analyzeCommand,
 	approvalReason,
+	commandWritesFiles,
 	evaluateCommandRules,
 	hardDenyReason,
-	programName,
 	shellWriteTargets,
 } from "./command-policy.mjs";
 import { COMMAND_ANALYSIS_LIMITS, argvCommandText } from "./command-policy.mjs";
@@ -285,9 +285,12 @@ export function isFileMutationTool(
 // Git Bash) and `Monitor` runs a background command; both carry `command` (a Monitor
 // watching a WebSocket has a `ws` source instead).
 const SHELL_TOOL_NAME_RE = /(^|[_\-.])(bash|shell|terminal|exec|run_command|run-command|powershell|pwsh|monitor)($|[_\-.])/;
-const POWERSHELL_WRITE_CMDLETS = /\b(set-content|add-content|out-file|new-item|remove-item|move-item|copy-item|rename-item|clear-content|tee-object)\b/;
-// PowerShell/cmd aliases that are also common words only count at command position.
-const WRITE_ALIASES = new Set(["sc", "ac", "ni", "ri", "mi", "cpi", "rni", "clc", "md", "del", "erase", "rd", "rmdir", "move", "copy", "ren"]);
+// The PowerShell cmdlets and the PowerShell/cmd aliases that write. Cmdlets and aliases alike count only where a command goes
+// (`Get-Help Remove-Item` names one and runs none), and aliases are also common words (`echo sc`).
+const WRITE_COMMANDS = new Set([
+	"set-content", "add-content", "out-file", "new-item", "remove-item", "move-item", "copy-item", "rename-item", "clear-content", "tee-object",
+	"sc", "ac", "ni", "ri", "mi", "cpi", "rni", "clc", "md", "del", "erase", "rd", "rmdir", "move", "copy", "ren",
+]);
 
 /** MCP tools are named mcp__<server>__<tool>. */
 export function isMcpTool(toolName) {
@@ -323,9 +326,7 @@ export function isLikelyShellMutation(toolName, commandText) {
 	const command = text.toLowerCase();
 	if (!command.trim()) return false;
 	// Best-effort common mutation detection only; this is not a sandbox.
-	if (/(^|[^<])>>?\s*[^&|]/m.test(command)) return true;
 	if (/\b(tee|touch|mkdir|rmdir|rm|mv|cp|truncate)\b/.test(command)) return true;
-	if (POWERSHELL_WRITE_CMDLETS.test(command)) return true;
 	if (command.length > IN_PLACE_REGEX_MAX_CHARS) {
 		// Too long for the exact check: any sed or perl invocation counts as an in-place edit.
 		if (/\b(sed|perl)\s/.test(command)) return true;
@@ -335,8 +336,11 @@ export function isLikelyShellMutation(toolName, commandText) {
 	}
 	if (/\bgit\s+(add|commit|checkout|switch|restore|reset|clean|rm|mv)\b/.test(command)) return true;
 	if (/\b(npm|pnpm|yarn|bun)\s+(install|add|remove|uninstall|update|upgrade)\b/.test(command)) return true;
-	// The aliases are read last and by position (a segment's command word), which takes a parse: `echo sc` is not a write.
-	return analyzeCommand(text).segments.some((segment) => WRITE_ALIASES.has(programName(segment.rawTokens[0])));
+	// The rest is read last and by position, which takes a parse: a redirect to a file (not to a null sink such as `2>$null` or
+	// `2>/dev/null`), a PowerShell cmdlet or alias where a command goes (`{ del a }` and `$x = md d` are writes, `Get-Help Remove-Item`
+	// and `echo sc` are not) and a writer's output option (`Invoke-WebRequest -OutFile`, `Expand-Archive`, `curl -o`).
+	const analysis = analyzeCommand(text);
+	return Boolean(analysis.limitExceeded) || commandWritesFiles(analysis, WRITE_COMMANDS);
 }
 
 export function readTaskGate(cwd) {

@@ -911,6 +911,48 @@ function commandWordAt(tokens) {
 	return index;
 }
 
+// A PowerShell assignment whose value is a command: `$x=md d`, `$x+=ni a` (what follows the `=` in the same word is the command).
+const POWERSHELL_ASSIGNMENT = /^\$[\w:.]+(?:[+\-*/%]|\?\?)?=([\s\S]*)$/;
+const POWERSHELL_ASSIGNMENT_OPERATORS = new Set(["=", "+=", "-=", "*=", "/=", "%=", "??="]);
+
+/**
+ * The words of a segment that stand where a command goes: the first one, past keywords and assignments (`then`, `!`, `VAR=x`,
+ * `$x =`, `$x=`), and the one after each `{` (a script block or a function body: `ForEach-Object { del $_ }`, `{del a}`).
+ * A name that is only an argument (`Get-Help Remove-Item`) is not one. The other places a command can start (after `;`, `|`,
+ * `&`, `&&`, `||`, `(`, a newline) are where the analysis already cuts a command into segments.
+ */
+function commandWords(tokens) {
+	const words = [];
+	let expecting = true;
+	let options = false;
+	for (let index = 0; index < tokens.length; index += 1) {
+		let word = tokens[index];
+		if (word[0] === "{" && !/\s/.test(word)) {
+			expecting = true;
+			options = false;
+			word = word.replace(/^\{+/, "");
+			if (!word) continue;
+		}
+		if (!expecting) continue;
+		if (CD_PREFIXES.has(word.toLowerCase())) {
+			options = true;
+			continue;
+		}
+		if (ASSIGNMENT_WORD.test(word) || (options && word.startsWith("-"))) continue;
+		const assigned = POWERSHELL_ASSIGNMENT.exec(word);
+		if (assigned) {
+			word = assigned[1];
+			if (!word) continue;
+		} else if (/^\$[\w:.]+$/.test(word) && POWERSHELL_ASSIGNMENT_OPERATORS.has(tokens[index + 1])) {
+			index += 1;
+			continue;
+		}
+		words.push(word);
+		expecting = false;
+	}
+	return words;
+}
+
 /** The directory a `cd`-like command at `at` changes to: its first argument that is not an option, or else the value an option carries (`Set-Location -Path:d`); bare POSIX `cd` goes home. */
 function cdArgument(tokens, dialect, at) {
 	let index = at + 1;
@@ -1199,6 +1241,25 @@ export function shellWriteTargets(analysis) {
 		}
 	}
 	return targets;
+}
+
+/**
+ * Whether a command writes a file by the words it is made of, for the gates that need a yes or no and not the paths: a redirect
+ * to a file (a null sink or a file-descriptor copy is not one), one of `programs` where a command goes (`Get-Help Remove-Item`
+ * names a cmdlet, it does not run it; `{ del a }` and `$x = md d` do), or a writer's output option (`Invoke-WebRequest -OutFile`,
+ * `Expand-Archive`, `curl -o`: the ones shellWriteTargets reads too). `programs` are lowercase program names, as programName gives them.
+ * @param {ReturnType<typeof analyzeCommand>} analysis
+ * @param {Set<string>} programs
+ */
+export function commandWritesFiles(analysis, programs) {
+	for (const segment of analysis.segments) {
+		for (const match of segment.text.matchAll(REDIRECT_RE)) {
+			if (redirectTarget(match[1], match[2], segment.dialect)) return true;
+		}
+		if (explicitOutputs(segment.rawTokens).length) return true;
+		if (commandWords(segment.rawTokens).some((word) => programs.has(programName(word)))) return true;
+	}
+	return false;
 }
 
 export function approvalReason(match) {
