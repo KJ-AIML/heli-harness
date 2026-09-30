@@ -63,7 +63,16 @@ const stalePhrases = [
 ];
 
 const historicalLineMarker = /(historical|history|superseded|precursor|compatib|older|retained|provenance|shipped|introduced|before|since|baseline comparison)/i;
-const oldVersion = /\bv0\.(?:[0-9])(?:\.\d+|\.x)?\b/g;
+// Any minor width (v0.9.1, v0.10.1, v0.11.x); the old single-digit pattern
+// silently skipped every v0.10.x reference.
+const oldVersion = /\bv0\.(\d+)(?:\.(\d+|x))?\b/g;
+const currentMinor = currentVersion.split(".")[1];
+
+/** The exact current tag, or a bare series reference to the current minor line (v0.10 / v0.10.x). */
+function isCurrentReference(match) {
+	if (match[0] === currentTag) return true;
+	return match[1] === currentMinor && (match[2] === undefined || match[2] === "x");
+}
 const versionHistoryAllowedPaths = new Set([
 	canonicalRfc,
 	"ROADMAP.md",
@@ -85,11 +94,10 @@ for (const abs of walk(root)) {
 	const lines = text.replace(/\r\n/g, "\n").split("\n");
 	for (let index = 0; index < lines.length; index += 1) {
 		const line = lines[index];
-		const matches = [...line.matchAll(oldVersion)].map((m) => m[0]);
-		for (const match of matches) {
-			if (match === currentTag) continue;
+		for (const match of line.matchAll(oldVersion)) {
+			if (isCurrentReference(match)) continue;
 			if (!historicalLineMarker.test(line)) {
-				fail(path, `line ${index + 1} references ${match} without historical/compatibility context`);
+				fail(path, `line ${index + 1} references ${match[0]} without historical/compatibility context`);
 			}
 		}
 	}
