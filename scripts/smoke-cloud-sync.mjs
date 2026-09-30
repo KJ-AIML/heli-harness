@@ -636,6 +636,33 @@ try {
 		"only the variable that beats -c is removed, in any case",
 	);
 
+	// Without --clone, init only prints how to clone what is missing: the same hardened command, and never a command line
+	// built from a remote or path that a shell would interpret (a server-chosen string the user is invited to paste).
+	writeFileSync(
+		join(wsA, ".heli-harness", "workspace", "index.json"),
+		`${JSON.stringify({
+			schemaVersion: 1,
+			workspaceRoot: ".",
+			repos: [
+				{ name: "plain", path: "repos/plain", remote: "https://example.invalid/plain.git" },
+				{ name: "scp", path: "repos/scp", remote: "git@example.invalid:org/scp.git" },
+				{ name: "shell", path: "repos/shell", remote: "https://example.invalid/x.git; touch pwned" },
+				{ name: "spaced", path: "repos/sp aced", remote: "https://example.invalid/y.git" },
+			],
+		})}\n`,
+	);
+	ok(await cli(["push", "--force"], { ...cfgA, ...passphrase }, { cwd: wsA }), "push a repo map for the manual hints");
+	const hints = ok(
+		await asHuman("init", ["lab", "--dir", join(root, "ws-j"), "--accept-policy-changes"], { ...cfgA, ...passphrase }),
+		"init without --clone",
+	);
+	assert.match(hints.stdout, /Missing repo: plain at repos\/plain — clone with: git -c protocol\.ext\.allow=never clone -- https:\/\/example\.invalid\/plain\.git repos\/plain \(or re-run init with --clone\)/);
+	assert.match(hints.stdout, /Missing repo: scp at repos\/scp — clone with: git -c protocol\.ext\.allow=never clone -- git@example\.invalid:org\/scp\.git repos\/scp /);
+	assert.match(hints.stdout, /Missing repo: shell at repos\/shell — clone it manually/);
+	assert.match(hints.stdout, /Missing repo: spaced at repos\/sp aced — clone it manually/);
+	assert.doesNotMatch(hints.stdout, /touch pwned/, "no command line is built from a remote a shell would interpret");
+	assert.doesNotMatch(hints.stdout, /git clone --/, "the hint never prints the bare, unhardened command");
+
 	// Browser activation: a link cannot approve a device in one click, and the
 	// OAuth state is random, single-use and bound to the confirming browser.
 	{
