@@ -239,10 +239,16 @@ try {
 	const push1 = ok(await cli(["push"], cfgA, { cwd: wsA }), "first push");
 	assert.match(push1.stdout, /Pushed v1/);
 
-	// Device B: link by name, pull, verify content round-trip.
+	// Device B: link by name, pull, verify content round-trip. A task's event log is governance state, so a
+	// plain pull refuses it and writes nothing; a human accepts it.
 	ok(await cli(["ws", "link", "lab"], cfgB, { cwd: wsB }), "ws link on device B");
 	mkdirSync(join(wsB, "repos", "demo"), { recursive: true });
-	const pull1 = ok(await cli(["pull"], cfgB, { cwd: wsB }), "pull on device B");
+	const plainPull = await cli(["pull"], cfgB, { cwd: wsB });
+	assert.equal(plainPull.status, 1, "a pull that brings a task's event log needs acceptance");
+	assert.match(plainPull.stderr, /tasks\/portable-restore\/events\.jsonl \(added\)/);
+	assert.match(plainPull.stderr, /--accept-policy-changes/);
+	assert.equal(existsSync(join(wsB, ".heli-harness", "profiles", "demo.md")), false, "a refused pull writes nothing");
+	const pull1 = ok(await asHuman("pull", [wsB, "--accept-policy-changes"], cfgB), "pull on device B");
 	assert.match(pull1.stdout, /Pulled v1/);
 	assert.equal(
 		readFileSync(join(wsB, ".heli-harness", "profiles", "demo.md"), "utf8"),
@@ -344,7 +350,10 @@ try {
 	const b2Wrong = await cli(["pull", "--force"], { ...cfgB, HELI_E2E_PASSPHRASE: "wrong" }, { cwd: wsB });
 	assert.equal(b2Wrong.status, 1, "wrong passphrase must fail");
 	assert.match(b2Wrong.stderr, /wrong HELI_E2E_PASSPHRASE/);
-	ok(await cli(["pull", "--force"], { ...cfgB, ...passphrase }, { cwd: wsB }), "e2e pull with passphrase");
+	const plainE2ePull = await cli(["pull", "--force"], { ...cfgB, ...passphrase }, { cwd: wsB });
+	assert.equal(plainE2ePull.status, 1, "another device's task events need acceptance");
+	assert.match(plainE2ePull.stderr, /tasks\/smoke-auto\/events\.jsonl \(added\)/);
+	ok(await asHuman("pull", [wsB, "--force", "--accept-policy-changes"], { ...cfgB, ...passphrase }), "e2e pull with passphrase");
 	// Pulling an encrypted bundle turns e2e on locally: no silent plaintext downgrade.
 	assert.equal(
 		JSON.parse(readFileSync(join(wsB, ".heli-harness", "state", "sync.json"), "utf8")).e2e,
@@ -359,8 +368,12 @@ try {
 
 	// ---- Phase 2: heli init full device restore ----
 	const wsC = join(root, "ws-c");
+	const plainInit = await cli(["init", "lab", "--dir", wsC], { ...cfgA, ...passphrase });
+	assert.equal(plainInit.status, 1, "a fresh device's task history needs acceptance");
+	assert.match(plainInit.stderr, /tasks\/portable-restore\/events\.jsonl \(added\)/);
+	assert.equal(existsSync(join(wsC, ".heli-harness", "profiles", "demo.md")), false, "a refused init restores nothing");
 	const init = ok(
-		await cli(["init", "lab", "--dir", wsC], { ...cfgA, ...passphrase }),
+		await asHuman("init", ["lab", "--dir", wsC, "--accept-policy-changes"], { ...cfgA, ...passphrase }),
 		"init restores a fresh device",
 	);
 	assert.match(init.stdout, /restored at/);
@@ -624,6 +637,39 @@ try {
 			],
 		);
 
+		// A task's diagnosis gate and event log are authority state as well (protected-paths.mjs lists task.json,
+		// yolo.json, events.jsonl and diagnosis.json together): added or changed, they need the same acceptance.
+		const eventLog = '{"type":"task_created"}\n';
+		const taskFiles = {
+			"tasks/a/events.jsonl": eventLog,
+			"tasks/a/diagnosis.json": '{"state":"idle"}\n',
+			"tasks/a/plan.md": "# plan\n",
+			"tasks/a/evidence/events.jsonl": "{}\n",
+		};
+		assert.deepEqual(policyBearingChanges(taskFiles, { ...taskFiles }), [], "an unchanged event log and diagnosis are not changes");
+		assert.deepEqual(policyBearingChanges(taskFiles, { ...taskFiles, "tasks/a/events.jsonl": eventLog.replace(/\n/g, "\r\n") }), [], "a CRLF-only difference is not a change");
+		assert.deepEqual(
+			policyBearingChanges(taskFiles, {
+				"tasks/a/events.jsonl": `${eventLog}{"type":"yolo_changed"}\n`,
+				"tasks/a/diagnosis.json": '{"state":"root_cause_confirmed"}\n',
+				"tasks/b/events.jsonl": "{}\n",
+				"tasks/b/diagnosis.json": "{}\n",
+				"tasks/C/Events.JSONL": "{}\n",
+				"tasks/a/plan.md": "# plan v2\n",
+				"tasks/a/decisions.md": "# decisions\n",
+				"tasks/a/reports/r1.md": "r\n",
+				"tasks/a/evidence/events.jsonl": "{}\nnot the task's own log\n",
+			}),
+			[
+				{ rel: "tasks/C/Events.JSONL", change: "added" },
+				{ rel: "tasks/a/diagnosis.json", change: "modified" },
+				{ rel: "tasks/a/events.jsonl", change: "modified" },
+				{ rel: "tasks/b/diagnosis.json", change: "added" },
+				{ rel: "tasks/b/events.jsonl", change: "added" },
+			],
+			"the event log and diagnosis of a task are governance, its narrative files and nested evidence are not",
+		);
+
 		// A bundle entry name must be the name it will be written under. join() and the filesystem resolve
 		// dot/empty segments, case, NTFS streams and 8.3 short names to another file, so a spelling that
 		// merely looks unlike tasks/<id>/yolo.json must not slip past the governance list or the writer.
@@ -646,6 +692,10 @@ try {
 			"tasks/x//yolo.json",
 			"tasks/x/yolo.json::$DATA",
 			"tasks/x/YOLO~1.JSO",
+			"tasks/x/./events.jsonl",
+			"tasks/x//diagnosis.json",
+			"tasks/x/events.jsonl::$DATA",
+			"tasks/x/DIAGNO~1.JSO",
 			"profiles/a:b.md",
 			"profiles/\u0001.md",
 			"tasks/x/",

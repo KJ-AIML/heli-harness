@@ -278,9 +278,12 @@ The sync server is treated as untrusted for governance purposes:
   machine already applied is refused unless the user asks for it explicitly with
   `heli pull --version N`.
 - **No silent governance changes:** a pull that would add or change anything under
-  `safety/` or `policies/`, add or change a `tasks/*/yolo.json`, or turn a task's YOLO
+  `safety/` or `policies/`, add or change a `tasks/*/yolo.json`, `diagnosis.json` or
+  `events.jsonl` (the files Heli reads as a task's authority), or turn a task's YOLO
   mode on is refused as a whole (nothing is written) and lists the files; re-run with
-  `--accept-policy-changes` after reviewing them. `heli init` forwards the flag.
+  `--accept-policy-changes` after reviewing them. `heli init` forwards the flag. The
+  event log grows whenever a task moves, so pulling another device's task progress
+  needs the flag every time.
 - **Accepting is a human action:** `--accept-policy-changes` is refused unless stdin and
   stdout are an interactive terminal (checked first, before any credential is read or
   request made), and an agent-run Heli invocation that carries it is a T6 hard deny in the

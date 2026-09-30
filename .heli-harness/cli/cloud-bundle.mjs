@@ -213,8 +213,10 @@ export function unpackBundle(bytes, { passphrase = null, requireEncryption = fal
 }
 
 const POLICY_DIRS = ["safety/", "policies/"];
+// The files Heli reads as a task's authority besides task.json (protected-paths.mjs TASK_AUTHORITY_FILES): the
+// task's YOLO state, its diagnosis gate and its event log. task.json is judged by its content, below.
 // Case-insensitive on purpose: Windows and macOS filesystems fold case, so tasks/x/Yolo.json is tasks/x/yolo.json there.
-const TASK_YOLO_FILE_RE = /^tasks\/[^/]+\/yolo\.json$/i;
+const TASK_AUTHORITY_FILE_RE = /^tasks\/[^/]+\/(?:yolo\.json|diagnosis\.json|events\.jsonl)$/i;
 const TASK_FILE_RE = /^tasks\/[^/]+\/task\.json$/i;
 
 function taskEnablesYolo(text) {
@@ -230,8 +232,8 @@ const sameText = (a, b) => String(a).replace(/\r\n/g, "\n") === String(b).replac
 
 /**
  * Governance-bearing differences an incoming bundle would apply: any added or
- * modified file under safety/ or policies/, any tasks/<id>/yolo.json, and any
- * task.json that turns YOLO on.
+ * modified file under safety/ or policies/, any tasks/<id>/yolo.json, diagnosis.json
+ * or events.jsonl, and any task.json that turns YOLO on.
  * @returns {Array<{ rel: string, change: string }>}
  */
 export function policyBearingChanges(localFiles, incomingFiles) {
@@ -241,7 +243,7 @@ export function policyBearingChanges(localFiles, incomingFiles) {
 		if (local !== undefined && sameText(local, content)) continue;
 		const change = local === undefined ? "added" : "modified";
 		const lower = rel.toLowerCase();
-		if (POLICY_DIRS.some((dir) => lower.startsWith(dir)) || TASK_YOLO_FILE_RE.test(rel)) {
+		if (POLICY_DIRS.some((dir) => lower.startsWith(dir)) || TASK_AUTHORITY_FILE_RE.test(rel)) {
 			changes.push({ rel, change });
 		} else if (TASK_FILE_RE.test(rel) && taskEnablesYolo(content) && !(local !== undefined && taskEnablesYolo(local))) {
 			changes.push({ rel, change: "enables YOLO" });
