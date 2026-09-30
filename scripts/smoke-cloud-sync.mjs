@@ -9,7 +9,7 @@
  */
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -487,6 +487,16 @@ try {
 	// init --clone: index.json paths/remotes from the server cannot escape the
 	// workspace or inject git options; a safe local remote still clones.
 	const remoteRepo = join(root, "remote-repo");
+	// Clone targets a server must not be able to choose: inside Heli's own state (a clone there would bypass the
+	// governance check of a pull), inside the root dot-folders of the workspace, or any hidden folder.
+	const HOSTILE_CLONE_TARGETS = [
+		".heli-harness/tasks/evil",
+		".heli-harness/profiles/evil",
+		".heli/config",
+		".git/hooks/evil",
+		".claude/evil",
+		"repos/.hidden",
+	];
 	const git = (...gitArgs) => {
 		const result = spawnSync("git", gitArgs, { encoding: "utf8" });
 		assert.equal(result.status, 0, result.stderr);
@@ -505,6 +515,7 @@ try {
 				{ name: "escape", path: "../escaped", remote: remoteRepo },
 				{ name: "option", path: "repos/option", remote: "--upload-pack=touch pwned" },
 				{ name: "dash", path: "-rf", remote: remoteRepo },
+				...HOSTILE_CLONE_TARGETS.map((path, index) => ({ name: `hostile-${index}`, path, remote: remoteRepo })),
 			],
 		})}\n`,
 	);
@@ -518,7 +529,7 @@ try {
 	assert.match(indexPull.stderr, /workspace\/index\.json \(modified\)/);
 	assert.equal(JSON.parse(readFileSync(indexFile, "utf8")).repos.length, 1, "a refused pull writes nothing");
 	ok(await asHuman("pull", [wsB, "--force", "--accept-policy-changes"], { ...cfgB, ...passphrase }), "accept the repo map");
-	assert.equal(JSON.parse(readFileSync(indexFile, "utf8")).repos.length, 4);
+	assert.equal(JSON.parse(readFileSync(indexFile, "utf8")).repos.length, 4 + HOSTILE_CLONE_TARGETS.length);
 
 	const wsD = join(root, "ws-d");
 	const initRefused = await cli(["init", "lab", "--dir", wsD, "--clone", "--accept-policy-changes"], { ...cfgA, ...passphrase });
@@ -533,6 +544,10 @@ try {
 	assert.match(initOutput, /unsafe path "\.\.\/escaped"/);
 	assert.match(initOutput, /unsafe remote "--upload-pack=touch pwned"/);
 	assert.match(initOutput, /unsafe path "-rf"/);
+	for (const target of HOSTILE_CLONE_TARGETS) {
+		assert.equal(existsSync(join(wsD, ...target.split("/"))), false, `${target} must not be cloned into`);
+		assert.ok(initOutput.includes(`unsafe path ${JSON.stringify(target)}`), `${target} is reported`);
+	}
 
 	// workspace/schema.json decides whether the ownership and lease gate runs at all: a workspace whose mode is not
 	// "concurrent" skips it. A pulled bundle that flips the mode is refused and writes nothing; a human applies it.
@@ -833,6 +848,19 @@ try {
 			4,
 			"ordinary names still write",
 		);
+
+		// Belt and braces for `init --clone`: whatever the path text says, the folder a repo path resolves to (junctions,
+		// symlinks, 8.3 names and case followed) may not be, hold or lie inside Heli's operational root, .heli, .git or .claude.
+		const { resolvesIntoHeliState } = await import("../lib/cli/cloud.mjs");
+		const layout = join(root, "layout");
+		mkdirSync(join(layout, ".heli-harness", "profiles"), { recursive: true });
+		symlinkSync(join(layout, ".heli-harness"), join(layout, "aliased"), "junction"); // a junction on Windows, a symlink elsewhere
+		for (const path of ["aliased/profiles/evil", "aliased", "aliased/tasks/x", ".heli-harness/profiles/x", ".heli/x", ".git/x", ".claude/x", "."]) {
+			assert.equal(resolvesIntoHeliState(layout, path), true, `${path} leads into Heli's state`);
+		}
+		for (const path of ["repos/good", "repos/a/b/c", "aliasedx/y", "heli-harness/x"]) {
+			assert.equal(resolvesIntoHeliState(layout, path), false, `${path} is an ordinary folder`);
+		}
 
 		// Activation edge cases: hostile device name, missing/null Origin, expired state, spent code.
 		let clock = 1_000_000;
