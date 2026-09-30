@@ -1029,6 +1029,12 @@ try {
 		"echo x > .heli-harness/state/\"yolo\".json",
 		"echo x > '.heli-harness/state/'yolo.json",
 		"echo x > $'.heli-harness/state/yolo.json'",
+		// `$'...'` decodes its escapes: \x6f and \157 are an `o`, and `\'` does not end the word.
+		"echo x > $'.heli-harness/state/yol\\x6f.json'",
+		"cd .heli-harness/state && echo x > $'yol\\157.json'",
+		"echo x > $'.heli-harness/state/\\x79olo.json'",
+		"echo $'it\\'s'; echo x > .heli-harness/state/yolo.json",
+		"echo $'\\''; cd .heli-harness/state; echo x > yolo.json",
 		"echo x >| .heli-harness/state/yol\\o.json",
 		"exec 3<>.heli-harness/state/yol\"\"o.json",
 	]) {
@@ -1040,6 +1046,7 @@ try {
 		"! cd docs && echo x > yolo.json",
 		"echo x > 'my notes.txt'",
 		"echo x > \"my\"' notes'.txt",
+		"echo x > $'my\\x20notes.txt'",
 	]) {
 		assert.equal(shell(command).deny, false, command);
 	}
@@ -1048,6 +1055,9 @@ try {
 		["echo x > \"yo\"lo.json", ["yolo.json"]],
 		["echo x > 'a b'c", ["a bc"]],
 		["echo x > $'a.json'", ["a.json"]],
+		// The POSIX reading decodes the escapes; the Windows reading of the same text keeps them as written, and both are checked.
+		["echo x > $'a\\x62.json'", ["a\\x62.json", "ab.json"]],
+		["echo x > $'it\\'s.json'", ["it's.json", "it\\s.json"]],
 		["echo x > \"a b\"", ["a b"]],
 		["echo x >| \"a b\"", ["a b"]],
 		["echo x > \"\"", []],

@@ -119,6 +119,21 @@ export function programName(token) {
 	return base.replace(/\.(exe|cmd|bat|com|ps1)$/, "");
 }
 
+const ANSI_C_ESCAPES = { a: "\x07", b: "\b", e: "\x1b", E: "\x1b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v", "\\": "\\", "'": "'", "\"": "\"", "?": "?" };
+
+/** What `$'...'` makes of the text between its quotes: the backslash escapes bash knows, decoded (others stay as written). */
+function decodeAnsiC(body) {
+	return body.replace(/\\(?:([0-7]{1,3})|x([0-9a-fA-F]{1,2})|u([0-9a-fA-F]{1,4})|U([0-9a-fA-F]{1,8})|([\s\S]))/g, (whole, octal, hex, short, long, plain) => {
+		if (octal) return String.fromCharCode(Number.parseInt(octal, 8) & 255);
+		if (hex) return String.fromCharCode(Number.parseInt(hex, 16));
+		if (short || long) {
+			const code = Number.parseInt(short || long, 16);
+			return code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+		}
+		return ANSI_C_ESCAPES[plain] ?? whole;
+	});
+}
+
 function splitSegments(text, dialect) {
 	// Line continuations join lines: `\`+newline (POSIX), backtick/caret+newline
 	// (PowerShell/cmd). Remaining backticks/carets are Windows escape characters.
@@ -128,15 +143,27 @@ function splitSegments(text, dialect) {
 	const segments = [];
 	let current = "";
 	let quote = null;
+	// Inside `$'...'` (ANSI-C quoting) a backslash escapes the next character: `\'` does not end the word.
+	let ansiC = false;
 	for (let i = 0; i < source.length; i += 1) {
 		const ch = source[i];
 		if (quote) {
 			current += ch;
-			if (dialect === "posix" && quote === "\"" && ch === "\\" && i + 1 < source.length) {
+			if (dialect === "posix" && (quote === "\"" || ansiC) && ch === "\\" && i + 1 < source.length) {
 				current += source[++i];
 				continue;
 			}
-			if (ch === quote) quote = null;
+			if (ch === quote) {
+				quote = null;
+				ansiC = false;
+			}
+			continue;
+		}
+		if (dialect === "posix" && ch === "$" && source[i + 1] === "'") {
+			quote = "'";
+			ansiC = true;
+			current += "$'";
+			i += 1;
 			continue;
 		}
 		if (ch === "'" || ch === "\"") {
@@ -174,8 +201,21 @@ function tokenize(segment, dialect) {
 	let current = "";
 	let inToken = false;
 	let quote = null;
+	// The raw text of a `$'...'` word so far: it is decoded whole when the closing quote arrives.
+	let ansiC = null;
 	for (let i = 0; i < segment.length; i += 1) {
 		const ch = segment[i];
+		if (ansiC !== null) {
+			if (ch === "'") {
+				current += decodeAnsiC(ansiC);
+				ansiC = null;
+			} else if (ch === "\\" && i + 1 < segment.length) {
+				ansiC += ch + segment[++i];
+			} else {
+				ansiC += ch;
+			}
+			continue;
+		}
 		if (quote) {
 			if (ch === quote) {
 				quote = null;
@@ -186,6 +226,13 @@ function tokenize(segment, dialect) {
 				continue;
 			}
 			current += ch;
+			continue;
+		}
+		if (dialect === "posix" && ch === "$" && (segment[i + 1] === "'" || segment[i + 1] === "\"")) {
+			// `$'...'` (ANSI-C) and `$"..."` (locale) are quotes: the `$` is not part of the word.
+			inToken = true;
+			if (segment[++i] === "'") ansiC = "";
+			else quote = "\"";
 			continue;
 		}
 		if (ch === "'" || ch === "\"") {
@@ -207,6 +254,7 @@ function tokenize(segment, dialect) {
 		current += ch;
 		inToken = true;
 	}
+	if (ansiC !== null) current += decodeAnsiC(ansiC); // an unterminated `$'` is still read
 	if (inToken && current) tokens.push(current);
 	return tokens;
 }
@@ -837,10 +885,11 @@ const RSYNC_VALUE_OPTIONS = new Set([
 
 /**
  * The file a redirect writes, or null for a null sink or a file-descriptor copy (`2>&1`, `>&2`, `>&-`). The word is read
- * as the shell reads it: quotes and backslashes removed, `$'...'` and `$"..."` as `'...'` and `"..."`. Nothing is expanded.
+ * as the shell reads it: quotes and backslashes removed, `$'...'` and `$"..."` decoded as bash does (the Windows reading
+ * takes the `$` off, as it does a variable's name). Nothing is expanded.
  */
 function redirectTarget(copy, word, dialect) {
-	const target = tokenize(word.replace(/\$(?=['"])/g, ""), dialect)[0] ?? "";
+	const target = tokenize(dialect === "posix" ? word : word.replace(/\$(?=['"])/g, ""), dialect)[0] ?? "";
 	if (copy && /^(?:\d+|-)$/.test(target)) return null;
 	return target && !NULL_SINKS.test(target) ? target : null;
 }
