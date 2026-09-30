@@ -12,7 +12,7 @@
  *     can prove which host commands ran.
  */
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -154,7 +154,14 @@ export function createHermeticEnv({ prefix = "heli-hermetic-", hosts = FAKE_HOST
 				? spawnSync("where", [host], { env, encoding: "utf8", windowsHide: true })
 				: spawnSync("sh", ["-c", `command -v ${host}`], { env, encoding: "utf8" });
 			const first = String(probe.stdout || "").split(/\r?\n/).map((line) => line.trim()).find(Boolean) || "";
-			if (!first.toLowerCase().startsWith(fakeBin.toLowerCase())) {
+			// Windows may spell the same temp directory once as a long path and once
+			// through its 8.3 alias (for example runneradmin vs RUNNER~1). Compare the
+			// real directories instead of their textual spellings so the leak check
+			// still proves the shim came from this hermetic fake-bin.
+			const resolvedDir = first ? realpathSync.native(dirname(first)) : "";
+			const expectedDir = realpathSync.native(fakeBin);
+			const normalize = (value) => process.platform === "win32" ? value.toLowerCase() : value;
+			if (normalize(resolvedDir) !== normalize(expectedDir)) {
 				throw new Error(`hermetic env leak: ${host} resolves to "${first || "nothing"}", expected a shim in ${fakeBin}`);
 			}
 		},
