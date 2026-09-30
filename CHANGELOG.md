@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.10.4 - Phase 0 security hardening
+
+### Security
+
+- PreToolUse hooks fail closed: malformed or empty hook input, broken workspace state (for example an invalid `.heli/workspace.json`) and internal errors now produce a deny that points to `heli doctor`, instead of a crash the host treats as "allow". The decision is emitted before audit writes, so a failing audit write can no longer turn a deny into an allow.
+- Every command rule is evaluated: any T6 match is a hard deny that scoped grants, YOLO and `HELI_ALLOW_COMMAND` cannot override, and each matched T5 rule needs its own approval. Grants are consumed only when the call is finally allowed.
+- A built-in, non-removable T6 floor covers recursive forced deletes in any spelling (`rm -rf`/`-fr`/`-r -f`/`--recursive --force`, `rd /s`, `Remove-Item -Recurse -Force`), `git reset --hard`, `git clean -f` with `-d`/`-x` and unfiltered `find -delete`; `git push --force` needs its own `git-push-force` approval. Commands are normalized (quotes, escapes, `git -C/-c`, chains, `sh -c`/`bash -c`/`cmd /c`/`pwsh -Command` payloads) before matching. A missing or malformed `safety/command-rules.json` now denies shell commands instead of disabling every rule.
+- Heli protects itself: agent-run `heli grant issue`, `heli yolo on`, task takeovers, write transfers, YOLO task/session flags and Heli removal are hard-denied; `heli grant issue` and `heli yolo on` require an interactive terminal; Heli authority state (task, session, lock, binding, YOLO and workspace records, `~/.heli`, Heli-installed host hooks) is not agent-writable under any path spelling, including `..`, casing, junction/symlink, alternate-data-stream and `\\?\` forms; settings that disable Claude Code hooks are denied; shell writes to `.env` files and protected paths are checked.
+- Claude Code: the PreToolUse matcher covers `PowerShell` (the Windows default shell), `Monitor`, `NotebookEdit` and MCP tools, and the kernel recognizes PowerShell file-mutating cmdlets.
+- Cloud sync (experimental): browser activation requires an explicit confirmation and binds the OAuth state to the confirming browser; pulls refuse plaintext when E2E is on, refuse rollbacks and relabeled ciphertext (bundles are bound to workspace id and version), and never apply `safety/`, `policies/` or task YOLO changes without `--accept-policy-changes`; `heli init --clone` rejects unsafe repo paths and remotes.
+
+### Changed
+
+- PreToolUse hook timeouts are 30 seconds for every host; the Codex Windows fallback denies when `node` is missing; the Claude plugin no longer declares the Codex-only `commandWindows` field.
+- `current-task.md` `Mode: yolo` no longer enables YOLO; a human runs `heli yolo on` in their own terminal.
+- `workspace/target.json` is protected state; use `heli target set <repo>`.
+- Atomic state writes retry transient Windows sharing violations instead of deleting the target first.
+- Legacy unbound E2E bundles (`aes-256-gcm-scrypt`) are refused; re-push them from an updated client.
+
+### Fixed
+
+- The test suite is hermetic: host lifecycle tests run against fake host CLIs in a temporary home, host CLI calls always receive the caller's environment, and grant lookups no longer create directories under the real `~/.heli`.
+- The release workflow fails when `NPM_TOKEN` is missing instead of reporting success without publishing; the release script bumps every current-facing version file and supports `--prepare-only`.
+- Documentation currentness checks now cover two-digit minor versions.
+
+
 ## v0.10.3 - Pi runtime evidence distribution fix
 
 ### Fixed
