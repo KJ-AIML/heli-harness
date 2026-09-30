@@ -862,17 +862,19 @@ function commandWordAt(tokens) {
 	return index;
 }
 
-/** The directory a `cd`-like command at `at` changes to: its first argument that is not an option (bare POSIX `cd` goes home). */
+/** The directory a `cd`-like command at `at` changes to: its first argument that is not an option, or else the value an option carries (`Set-Location -Path:d`); bare POSIX `cd` goes home. */
 function cdArgument(tokens, dialect, at) {
 	let index = at + 1;
+	let attached = null;
 	for (; index < tokens.length; index += 1) {
 		if (tokens[index] === "--") {
 			index += 1;
 			break;
 		}
 		if (!tokens[index].startsWith("-") && !(dialect === "windows" && /^\/[a-z]$/i.test(tokens[index]))) break;
+		attached ??= attachedParameterValue(tokens[index]);
 	}
-	return tokens[index] || (dialect === "posix" ? "~" : null);
+	return tokens[index] || attached || (dialect === "posix" ? "~" : null);
 }
 
 /** `name` next to `existing` (in the same directory), or null when `name` is itself a path or `existing` has none. */
@@ -888,6 +890,17 @@ function siblingPath(existing, name) {
 function attachedFolder(token, dialect) {
 	if (token.startsWith("--")) return token.startsWith("--target-directory=") ? token.slice("--target-directory=".length) : null;
 	return dialect === "posix" ? (/^-[a-z]*?t(.+)$/.exec(token)?.[1] ?? null) : null;
+}
+
+/**
+ * The value a PowerShell parameter carries in its own word: `-Path:a`, `-Destination:"a b"` (the quotes are gone by now), or
+ * any unambiguous prefix of the name. null for `-Path:` alone and for a switch's value (`-Force:$false`), which is not a name.
+ */
+function attachedParameterValue(token) {
+	const colon = token.indexOf(":");
+	if (colon < 2 || colon === token.length - 1 || !/^-[A-Za-z]+$/.test(token.slice(0, colon))) return null;
+	const value = token.slice(colon + 1);
+	return /^\$(?:true|false|null)$/i.test(value) ? null : value;
 }
 
 /** The values of the options that take a path, in the spellings getopt reads: `-o v`, `-ov`, `-sSo v` (a cluster that ends in it), `--long v`, `--long=v`. */
@@ -1111,8 +1124,10 @@ export function shellWriteTargets(analysis) {
 			const token = tokens[index];
 			const program = programName(token);
 			if (writing) {
-				const folder = isOptionWord(token) ? attachedFolder(token, dialect) : token;
-				if (folder) add(folder, dialect);
+				// An option is no target, but the folder or file it carries in its own word is (`--target-directory=d`, `-Path:f`).
+				for (const target of isOptionWord(token) ? [attachedFolder(token, dialect), attachedParameterValue(token)] : [token]) {
+					if (target) add(target, dialect);
+				}
 			}
 			if (afterDd && token.toLowerCase().startsWith("of=")) add(token.slice(3), dialect);
 			if (editsInPlace && index > editorAt && !token.startsWith("-")) add(token, dialect);
@@ -1124,7 +1139,8 @@ export function shellWriteTargets(analysis) {
 		for (const renameAt of renames) {
 			const names = [];
 			for (let index = renameAt + 1; index < tokens.length && names.length < 2; index += 1) {
-				if (!isOptionWord(tokens[index])) names.push(tokens[index]);
+				const name = isOptionWord(tokens[index]) ? attachedParameterValue(tokens[index]) : tokens[index];
+				if (name) names.push(name);
 			}
 			if (names.length === 2) {
 				for (const sibling of [siblingPath(names[0], names[1]), siblingPath(names[1], names[0])]) {
