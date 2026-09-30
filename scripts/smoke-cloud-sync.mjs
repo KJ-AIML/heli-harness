@@ -1000,14 +1000,14 @@ try {
 		symlinkSync(join(layout, ".heli-harness"), join(layout, "aliased"), "junction"); // a junction on Windows, a symlink elsewhere
 		symlinkSync(elsewhere, join(layout, "out"), "junction");
 		symlinkSync(join(layout, ".vscode"), join(layout, "hidden-link"), "junction");
-		for (const path of ["aliased/profiles/evil", "aliased", "aliased/tasks/x", ".heli-harness/profiles/x", ".heli/x", ".git/x", ".claude/x", ".", "out", "out/evil", "hidden-link/evil", ".vscode/evil", ".gemini/x"]) {
+		for (const path of ["aliased/profiles/evil", "aliased", "aliased/tasks/x", ".heli-harness/profiles/x", ".heli/x", ".git/x", ".claude/x", ".", "out", "out/evil", "hidden-link/evil", ".vscode/evil", ".gemini/x", "repos/.cache/x"]) {
 			assert.ok(cloneTargetRefusal(layout, path), `${path} is refused`);
 		}
 		assert.match(cloneTargetRefusal(layout, "out/evil"), /outside the workspace/);
 		assert.match(cloneTargetRefusal(layout, "aliased/profiles/evil"), /Heli's own state or a hidden folder/);
 		assert.match(cloneTargetRefusal(layout, "hidden-link/evil"), /Heli's own state or a hidden folder/);
 		assert.match(cloneTargetRefusal(layout, ".gemini/x"), /Heli's own state or a hidden folder/);
-		for (const path of ["repos/good", "repos/a/b/c", "aliasedx/y", "heli-harness/x"]) {
+		for (const path of ["repos/good", "repos/a/b/c", "aliasedx/y", "heli-harness/x", "repos/my.repo", "repos/a.b/c.d"]) {
 			assert.equal(cloneTargetRefusal(layout, path), null, `${path} is an ordinary folder`);
 		}
 
