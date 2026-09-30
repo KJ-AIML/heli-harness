@@ -6,7 +6,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import {
 	resolveExecutionContext,
@@ -18,10 +18,33 @@ import {
 } from "./concurrency/resolve.mjs";
 import { resolveYolo, allowGitPushScoped, allowEnvWriteScoped } from "./concurrency/yolo-scope.mjs";
 import { sessionHoldsWriteLease, refreshLease } from "./concurrency/lease.mjs";
-import { findWorkspaceRoot, pathsFor } from "./concurrency/paths.mjs";
-import { consumeApplicableGrant } from "./concurrency/grant.mjs";
+import { findWorkspaceRoot } from "./concurrency/paths.mjs";
+import { consumeApplicableGrant, findUsableGrants } from "./concurrency/grant.mjs";
 import { resourceIdForWorktree } from "./concurrency/resource-authority.mjs";
 import { evaluateDiagnosisWriteGate, readActionPolicy, readDiagnosis } from "./concurrency/diagnosis.mjs";
+import {
+	analyzeCommand,
+	approvalReason,
+	commandWritesFiles,
+	evaluateCommandRules,
+	hardDenyReason,
+	shellWriteTargets,
+} from "./command-policy.mjs";
+import { COMMAND_ANALYSIS_LIMITS, argvCommandText } from "./command-policy.mjs";
+import { MCP_INPUT_LIMITS, mcpToolWrites, readMcpInput } from "./mcp-input.mjs";
+import { stripComments } from "./shell-comments.mjs";
+import {
+	classifyShellWriteTargets,
+	classifyToolPaths,
+	disablesClaudeHooks,
+	heliEnvironmentKeys,
+	normalizePolicyPath,
+	protectedEnvironmentReason,
+	protectedWriteReason,
+	settingsContentOf,
+} from "./concurrency/protected-paths.mjs";
+
+export { commandRuleTokens, commandMatchesRuleTokens } from "./command-policy.mjs";
 
 export function field(text, label) {
 	const match = new RegExp(`^${label}:[ \\t]*(.*)$`, "m").exec(text);
@@ -135,7 +158,7 @@ export function buildSessionContext(cwd, { host = "unknown", hookPayload = null,
 				"Carried-over task state from .heli-harness/state/current-task.md:",
 				taskText,
 				"",
-				"Acknowledge this before your first edit this session: confirm with the user whether to resume, abandon, or reset it. If it shows a target-repo mismatch against workspace/target.json, or 2+ failed attempts on an incomplete task, the PreToolUse hook will block Edit/Write/apply_patch calls until you update current-task.md (or target.json) to resolve it.",
+				"Acknowledge this before your first edit this session: confirm with the user whether to resume, abandon, or reset it. If it shows a target-repo mismatch against workspace/target.json, or 2+ failed attempts on an incomplete task, the PreToolUse hook will block Edit/Write/apply_patch calls until you update current-task.md (or run `heli target set <repo>`) to resolve it.",
 			);
 			if (incomplete) {
 				lines.push(
@@ -193,6 +216,9 @@ export function patchPathsFrom(commandText, out = []) {
 export const DEFAULT_FILE_WRITE_TOOL_NAMES = Object.freeze([
 	"Edit",
 	"Write",
+	// Claude Code's other file writers: one name each, so the verb-based fallback below never sees them as `edit`.
+	"MultiEdit",
+	"NotebookEdit",
 	"apply_patch",
 	"write",
 	"edit",
@@ -232,31 +258,109 @@ function hasMutationVerb(tokens) {
 	);
 }
 
+/**
+ * True when `toolName` is on the write-tool list (DEFAULT_FILE_WRITE_TOOL_NAMES unless
+ * the caller passes its own), compared by name only and ignoring case. Unlike
+ * isFileMutationTool it has no path-aware fallback, so a tool that merely looks like a
+ * file writer is not one.
+ */
+export function isFileWriteToolName(toolName, writeToolNames = DEFAULT_FILE_WRITE_TOOL_NAMES) {
+	const name = String(toolName ?? "").toLowerCase();
+	for (const knownName of writeToolNames ?? DEFAULT_FILE_WRITE_TOOL_NAMES) {
+		if (String(knownName).toLowerCase() === name) return true;
+	}
+	return false;
+}
+
 export function isFileMutationTool(
 	toolName,
 	{ paths = [], writeToolNames = DEFAULT_FILE_WRITE_TOOL_NAMES } = {},
 ) {
 	const name = String(toolName ?? "");
-	for (const knownName of writeToolNames ?? DEFAULT_FILE_WRITE_TOOL_NAMES) {
-		if (String(knownName).toLowerCase() === name.toLowerCase()) return true;
-	}
+	if (isFileWriteToolName(name, writeToolNames)) return true;
 	if (!Array.isArray(paths) || paths.length === 0) return false;
 	return hasMutationVerb(normalizedToolNameTokens(name));
 }
 
+// Claude Code on Windows runs commands through `PowerShell` (no Bash tool without
+// Git Bash) and `Monitor` runs a background command; both carry `command` (a Monitor
+// watching a WebSocket has a `ws` source instead).
+const SHELL_TOOL_NAME_RE = /(^|[_\-.])(bash|shell|terminal|exec|run_command|run-command|powershell|pwsh|monitor)($|[_\-.])/;
+// The PowerShell cmdlets and the PowerShell/cmd aliases that write. Cmdlets and aliases alike count only where a command goes
+// (`Get-Help Remove-Item` names one and runs none), and aliases are also common words (`echo sc`).
+const WRITE_COMMANDS = new Set([
+	"set-content", "add-content", "out-file", "new-item", "remove-item", "move-item", "copy-item", "rename-item", "clear-content", "tee-object",
+	"sc", "ac", "ni", "ri", "mi", "cpi", "rni", "clc", "md", "del", "erase", "rd", "rmdir", "move", "copy", "ren",
+]);
+
+/** MCP tools are named mcp__<server>__<tool>. */
+export function isMcpTool(toolName) {
+	return String(toolName ?? "").toLowerCase().startsWith("mcp__");
+}
+
+/** Tools whose `command` is executed by a shell (MCP tools never are). */
+export function isShellTool(toolName) {
+	if (isMcpTool(toolName)) return false;
+	return SHELL_TOOL_NAME_RE.test(String(toolName ?? "").toLowerCase());
+}
+
+/**
+ * The shell whose comments a tool's `command` may leave out of the analysis, or null when its shell is not known. Only a tool
+ * that is named for its shell says so: `Bash` runs bash (Claude Code needs Git Bash for it), `PowerShell` runs PowerShell. The
+ * generic shell tools (`shell`, `terminal`, `run_command`), Monitor and MCP servers run whatever the host or the server picks
+ * (cmd.exe, on Windows), so their text is read whole: a comment mistaken for code is a false alarm, code mistaken for a comment
+ * is a bypass.
+ */
+export function shellCommentSyntax(toolName) {
+	if (isMcpTool(toolName)) return null;
+	const parts = String(toolName ?? "").toLowerCase().split(/[_\-.]+/);
+	if (parts.includes("bash")) return "posix";
+	if (parts.includes("powershell") || parts.includes("pwsh")) return "powershell";
+	return null;
+}
+
+/**
+ * Tools whose `description` is prose about the call, never a stand-in for a missing `command` (on the shell tools of some
+ * hosts a lone `description` is read as the command): an MCP tool's, since issue trackers and calendars have one, and Monitor's,
+ * which labels the watch (a `ws` source has no command at all). Text there that mentions `rm -rf` or `git push` is not a command.
+ */
+function hasProseDescription(toolName) {
+	return isMcpTool(toolName) || String(toolName ?? "").toLowerCase() === "monitor";
+}
+
+// The sed/perl in-place regexes below backtrack quadratically on a long run of
+// whitespace or of repeated words (1.8 s at 48 KB), so past this size they are
+// replaced by a linear check.
+const IN_PLACE_REGEX_MAX_CHARS = 8192;
+
 export function isLikelyShellMutation(toolName, commandText) {
-	const name = String(toolName ?? "").toLowerCase();
-	if (!/(^|[_\-.])(bash|shell|terminal|exec|run_command|run-command)($|[_\-.])/.test(name)) return false;
-	const command = String(commandText ?? "").toLowerCase();
+	if (!isShellTool(toolName)) return false;
+	const raw = String(commandText ?? "");
+	// Text over the analysis limit is refused before it can run: skip the heuristics
+	// below and report a likely write.
+	if (raw.length > COMMAND_ANALYSIS_LIMITS.maxCommandChars) return true;
+	// A comment is not a write (`ls # rm -rf build`), where the shell is known to ignore it.
+	const text = stripComments(raw, shellCommentSyntax(toolName));
+	// Quotes nested too deep to read are refused by the analysis: report a likely write, as for over-long text.
+	if (text === null) return true;
+	const command = text.toLowerCase();
 	if (!command.trim()) return false;
 	// Best-effort common mutation detection only; this is not a sandbox.
-	if (/(^|[^<])>>?\s*[^&|]/m.test(command)) return true;
 	if (/\b(tee|touch|mkdir|rmdir|rm|mv|cp|truncate)\b/.test(command)) return true;
-	if (/\bsed\s+[^\n;|&]*-i(?:\s|$)/.test(command)) return true;
-	if (/\bperl\s+[^\n;|&]*-p?i(?:\s|$)/.test(command)) return true;
+	if (command.length > IN_PLACE_REGEX_MAX_CHARS) {
+		// Too long for the exact check: any sed or perl invocation counts as an in-place edit.
+		if (/\b(sed|perl)\s/.test(command)) return true;
+	} else {
+		if (/\bsed\s+[^\n;|&]*-i(?:\s|$)/.test(command)) return true;
+		if (/\bperl\s+[^\n;|&]*-p?i(?:\s|$)/.test(command)) return true;
+	}
 	if (/\bgit\s+(add|commit|checkout|switch|restore|reset|clean|rm|mv)\b/.test(command)) return true;
 	if (/\b(npm|pnpm|yarn|bun)\s+(install|add|remove|uninstall|update|upgrade)\b/.test(command)) return true;
-	return false;
+	// The rest is read last and by position, which takes a parse: a redirect to a file (not to a null sink such as `2>$null` or
+	// `2>/dev/null`), a PowerShell cmdlet or alias where a command goes (`{ del a }` and `$x = md d` are writes, `Get-Help Remove-Item`
+	// and `echo sc` are not) and a writer's output option (`Invoke-WebRequest -OutFile`, `Expand-Archive`, `curl -o`).
+	const analysis = analyzeCommand(text);
+	return Boolean(analysis.limitExceeded) || commandWritesFiles(analysis, WRITE_COMMANDS);
 }
 
 export function readTaskGate(cwd) {
@@ -283,40 +387,46 @@ export function withCliHint(reason) {
 	return `${reason}\n(heli not on PATH? Run: node .heli-harness/heli.mjs <command> from the workspace root.)`;
 }
 
-export function isTaskStateWrite(paths) {
-	// Exempt only when EVERY affected path is task/projection state. A mixed
-	// task-state + source patch must still face the ownership gate.
-	if (!Array.isArray(paths) || paths.length === 0) return false;
-	return paths.every(
-		(path) =>
-			path.endsWith(".heli-harness/state/current-task.md") ||
-			path.endsWith(".heli-harness/state/plan.md") ||
-			path.endsWith(".heli-harness/workspace/target.json") ||
-			path.endsWith(".heli-harness/state/yolo.json") ||
-			path.includes(".heli-harness/tasks/"),
-	);
-}
-
 function taskRiskTier(ctx) {
 	const taskPath = ctx?.taskPaths?.currentTaskMd;
 	if (!taskPath || !existsSync(taskPath)) return "S1";
 	return field(readFileSync(taskPath, "utf8"), "Risk tier") || "S1";
 }
 
-function scopedGrantFor(ctx, action, env = process.env) {
+function grantRequest(ctx, action, env) {
+	return {
+		action,
+		sessionId: ctx.sessionId || null,
+		resource: {
+			type: "worktree",
+			id: resourceIdForWorktree(ctx.worktreeRoot || ctx.workspaceRoot),
+		},
+		env,
+	};
+}
+
+/**
+ * Read-only: the grant each action would consume, in order, counting the uses an earlier
+ * action of the same call takes (one `once` grant pays for one action). null means no usable
+ * grant is left for that action. Never consumes a use.
+ */
+function findScopedGrants(ctx, actions, env = process.env) {
+	if (!ctx?.workspaceRoot) return actions.map(() => null);
+	try {
+		return findUsableGrants(ctx.workspaceRoot, actions.map((action) => grantRequest(ctx, action, env)), { env });
+	} catch {
+		// Malformed local grant state fails closed (no grant).
+		return actions.map(() => null);
+	}
+}
+
+/** Consume one use; call only once the final decision is allow. */
+function consumeScopedGrant(ctx, action, env = process.env) {
 	if (!ctx?.workspaceRoot || !action) return null;
 	try {
-		return consumeApplicableGrant(ctx.workspaceRoot, {
-			action,
-			sessionId: ctx.sessionId || null,
-			resource: {
-				type: "worktree",
-				id: resourceIdForWorktree(ctx.worktreeRoot || ctx.workspaceRoot),
-			},
-			env,
-		});
+		return consumeApplicableGrant(ctx.workspaceRoot, grantRequest(ctx, action, env));
 	} catch {
-		// Grant-store contention or malformed local state fails closed.
+		// Grant-store contention fails closed.
 		return null;
 	}
 }
@@ -324,6 +434,14 @@ function scopedGrantFor(ctx, action, env = process.env) {
 function structuredHeliAction(toolInput) {
 	const action = toolInput?.heli_action ?? toolInput?.heliAction ?? toolInput?.metadata?.heli_action;
 	return action && typeof action === "object" && !Array.isArray(action) ? action : null;
+}
+
+/**
+ * The fail-closed denial for an MCP input Heli refuses to read (see mcp-input.mjs): hosts treat a hook that times out as an
+ * allow, so an input too large to check in time is refused, never checked in part.
+ */
+function mcpInputTooComplexReason(message) {
+	return `Heli-Harness could not evaluate this action (MCP_INPUT_TOO_COMPLEX: ${message}); denying (fail-closed). An MCP call this large cannot be checked against Heli's protected state in time; split it into smaller calls.`;
 }
 
 export function isYoloActive(cwd = process.cwd(), env = process.env) {
@@ -388,24 +506,131 @@ export function evaluatePreToolUse({
 		refreshLeaseOnResolve: false,
 	});
 
-	const rawCommand = String(toolInput?.command ?? toolInput?.description ?? "");
-	const command = rawCommand.replace(/\s+/g, " ").trim().toLowerCase();
-	const paths = [...pathsFrom(toolInput), ...patchPathsFrom(rawCommand)].map((path) =>
-		path.replaceAll("\\", "/").toLowerCase(),
-	);
+	// A `command` given as an argv list (Codex's shell tool) is read as the shell-quoted join of
+	// its elements, not as their comma-joined text: the floor, the push gate and the mutation
+	// checks all work on shell text. A list holding anything but strings is refused below.
+	const argv = Array.isArray(toolInput?.command) ? argvCommandText(toolInput.command) : null;
+	if (argv && !argv.error) toolInput = { ...toolInput, command: argv.text };
+
+	const baseCwd = cwd || process.cwd();
 	const name = String(toolName);
+	// An MCP input is server-defined and has no size limit: it is read once, within limits, before anything else looks at it.
+	const mcp = isMcpTool(name) ? readMcpInput(toolInput) : null;
+	if (mcp?.tooLarge) {
+		return { deny: true, hardDeny: true, code: "MCP_INPUT_TOO_COMPLEX", reason: mcpInputTooComplexReason(mcp.tooLarge.message), ctx };
+	}
+	// One cache for every path this call classifies: it saves lookups, and it counts them against the budget of an MCP call.
+	const pathCache = new Map();
+	if (mcp) pathCache.maxLookups = MCP_INPUT_LIMITS.maxLookups;
+	const rawCommand = String(toolInput?.command ?? (hasProseDescription(toolName) ? undefined : toolInput?.description) ?? "");
+	const rawPaths = [...pathsFrom(toolInput), ...patchPathsFrom(rawCommand)];
+	const paths = rawPaths.map((path) => path.replaceAll("\\", "/").toLowerCase());
 
 	const shellMutation = isLikelyShellMutation(name, rawCommand);
 	const isWrite = isFileMutationTool(name, { paths, writeToolNames }) || shellMutation;
-	const taskStateOnly = isTaskStateWriteForContext(ctx, paths) || isTaskStateWrite(paths);
+	// Only narrative state files skip the ownership gate (see isTaskStateWriteForContext), and only a write needs it.
+	const taskStateOnly = isWrite && isTaskStateWriteForContext(ctx, rawPaths, { cwd: baseCwd, env, cache: pathCache });
 	let ownershipDecision = null;
 
-	// T6 hard denies dominate every normal authority/grant path. Evaluate them
-	// before actor/resource authority so a missing session can never mask a
-	// destructive-command denial. T5 approvals continue through the normal
-	// authority + scoped-grant flow below.
-	const preAuthorityTier = evaluateCommandTierRules(ctx.workspaceRoot || cwd, command, env);
-	if (preAuthorityTier?.hardDeny) return { ...preAuthorityTier, ctx };
+	// A command list that cannot be read as words could hide anything: refuse it, beyond YOLO.
+	// (File-editing tools are not analyzed, see below.)
+	if (argv?.error && !isFileWriteToolName(name, writeToolNames)) {
+		return { deny: true, hardDeny: true, code: "COMMAND_UNPARSEABLE", reason: argv.reason, ctx };
+	}
+
+	// Command rules: EVERY rule is evaluated (built-in floor + workspace file).
+	// Any T6 match is a hard deny that dominates authority, grants, YOLO and
+	// HELI_ALLOW_COMMAND, so it runs before ownership and before YOLO.
+	//
+	// They read commands, not the content of file-editing tools: an `apply_patch` or
+	// `Write` carries data being written (a Makefile line `rm -rf build`, a 100 KB file),
+	// never a command being run. A tool is one of these by NAME, from the list that marks
+	// it a file writer; any other tool that carries `command` text stays analyzed, whatever
+	// its name suggests. Paths are still read from the input above and every write check
+	// below still runs.
+	const commandPolicy = rawCommand.trim() && !isFileWriteToolName(name, writeToolNames)
+		? evaluateCommandRules(ctx.workspaceRoot, rawCommand, env, { comments: shellCommentSyntax(name) })
+		: null;
+	// A command too large or too deeply nested to analyze quickly is refused: hosts
+	// treat a hook that times out as an allow, and unanalyzed text could hide a T6.
+	if (commandPolicy?.limitExceeded) {
+		return {
+			deny: true,
+			hardDeny: true,
+			code: "COMMAND_TOO_COMPLEX",
+			reason: commandPolicy.limitExceeded.reason,
+			ctx,
+		};
+	}
+	if (commandPolicy?.hardDenies.length) {
+		return {
+			deny: true,
+			hardDeny: true,
+			code: "TIER_BLOCKED",
+			ruleId: commandPolicy.hardDenies[0].id,
+			ruleIds: commandPolicy.hardDenies.map((match) => match.id),
+			reason: commandPolicy.hardDenies.map(hardDenyReason).join("\n"),
+			ctx,
+		};
+	}
+
+	// Heli's own authority state is never agent-writable: not by the lease
+	// holder, not under YOLO. Structured writes are checked by their paths,
+	// shell commands by the paths they write, move or delete.
+	const pathScope = { workspaceRoot: ctx.workspaceRoot, cwd: baseCwd, env, cache: pathCache };
+	// MCP tools: server-defined inputs, so every path-like value is checked.
+	const structuredPaths = mcp ? [...new Set([...rawPaths, ...mcp.paths.map((path) => path.text)])] : rawPaths;
+	// A command is read for the files it writes wherever it runs: in a shell tool, or in an MCP tool that carries one (a shell
+	// server). That MCP tool is still not a shell: it is not guessed at as a write, and not refused for a missing rules file.
+	const runsCommand = Boolean(commandPolicy) && (isShellTool(name) || isMcpTool(name));
+	if (runsCommand && mcp && mcp.directories.length > MCP_INPUT_LIMITS.maxDirectories) {
+		return { deny: true, hardDeny: true, code: "MCP_INPUT_TOO_COMPLEX", reason: mcpInputTooComplexReason(`the number of directory values in a call that carries a command is over the limit of ${MCP_INPUT_LIMITS.maxDirectories}`), ctx };
+	}
+	let structuredEntries;
+	let shellEntries;
+	try {
+		structuredEntries = mcp || isWrite ? classifyToolPaths(structuredPaths, pathScope) : [];
+		shellEntries = [];
+		if (runsCommand) {
+			// The command runs in the folder the call names (`cwd`, `root`, ...) as well as where the hook started.
+			const targets = shellWriteTargets(commandPolicy.analysis);
+			shellEntries = classifyShellWriteTargets(targets, pathScope);
+			for (const directory of mcp?.directories ?? []) {
+				const base = normalizePolicyPath(directory, { cwd: baseCwd, env, cache: pathCache })?.path ?? resolve(baseCwd, directory);
+				shellEntries.push(...classifyShellWriteTargets(targets, { ...pathScope, cwd: base }));
+			}
+		}
+	} catch (error) {
+		if (error?.code !== "PATH_LOOKUP_BUDGET") throw error;
+		return { deny: true, hardDeny: true, code: "MCP_INPUT_TOO_COMPLEX", reason: mcpInputTooComplexReason(error.message), ctx };
+	}
+	const protectedEntry = [...structuredEntries, ...shellEntries].find((entry) => entry.kind === "authority");
+	if (protectedEntry) {
+		return { deny: true, hardDeny: true, code: "HELI_STATE_PROTECTED", reason: protectedWriteReason(protectedEntry, { mcp: Boolean(mcp) }), ctx };
+	}
+	const settingsEntry = [...structuredEntries, ...shellEntries].find((entry) => entry.kind === "claude-settings");
+	if (settingsEntry) {
+		// A shell command is read whole, and for the assignments jq and PowerShell make; a file tool by the text it puts in the
+		// file (not the text it replaces). An MCP tool that carries a command is read both ways: the assignments in its command
+		// and every string the call carries (its content, too).
+		const loose = isShellTool(name) || runsCommand;
+		const written = isShellTool(name) ? rawCommand : settingsContentOf(toolInput);
+		if (disablesClaudeHooks(written, { loose })) {
+			return {
+				deny: true,
+				hardDeny: true,
+				code: "HELI_HOOKS_PROTECTED",
+				reason:
+					"Heli-Harness blocks settings changes that disable Claude Code hooks or the Heli plugin (disableAllHooks / enabledPlugins). Ask the user to change Claude settings themselves.",
+				ctx,
+			};
+		}
+		// The env block of a settings file can reach Heli's hooks: HELI_YOLO or a relocated grant store is self-approval.
+		const heliVariables = heliEnvironmentKeys(written, { loose });
+		if (heliVariables.length) {
+			return { deny: true, hardDeny: true, code: "HELI_STATE_PROTECTED", reason: protectedEnvironmentReason(settingsEntry, heliVariables), ctx };
+		}
+	}
 
 	// Ownership gates — NEVER bypassed by YOLO.
 	if (isWrite && !taskStateOnly) {
@@ -447,7 +672,7 @@ export function evaluatePreToolUse({
 	const diagnosis = ctx.taskId ? readDiagnosis(ctx.workspaceRoot, ctx.taskId) : null;
 	const diagnosisGate = evaluateDiagnosisWriteGate(diagnosis, {
 		riskTier: taskRiskTier(ctx),
-		isWrite: isWrite && !isTaskStateWriteForContext(ctx, paths) && !isTaskStateWrite(paths),
+		isWrite: isWrite && !taskStateOnly,
 		action: structuredHeliAction(toolInput),
 		policy: readActionPolicy(ctx.workspaceRoot || cwd),
 	});
@@ -460,77 +685,109 @@ export function evaluatePreToolUse({
 		};
 	}
 
-	const yolo = resolveYolo({
+	const scope = {
 		workspaceRoot: ctx.workspaceRoot || cwd,
 		cwd,
 		taskId: ctx.taskId,
 		sessionId: ctx.sessionId,
 		env,
 		legacyMode: ctx.legacyMode,
-	});
+	};
+	const yolo = resolveYolo(scope);
 	if (yolo.active) {
 		return { deny: false, yolo: true, yoloSource: yolo.source, ctx };
 	}
 
-	const appliedGrants = [];
+	// A Heli workspace whose rules file is missing or unreadable cannot evaluate
+	// T5 approvals: deny shell commands instead of silently skipping them.
 	if (
-		/\bgit\s+push\b/.test(command) &&
-		!allowGitPushScoped({
-			workspaceRoot: ctx.workspaceRoot || cwd,
-			cwd,
-			taskId: ctx.taskId,
-			sessionId: ctx.sessionId,
-			env,
-			legacyMode: ctx.legacyMode,
-		})
+		commandPolicy &&
+		ctx.workspaceRoot &&
+		isShellTool(name) &&
+		(commandPolicy.status === "missing" || commandPolicy.status === "malformed")
 	) {
-		const grant = scopedGrantFor(ctx, "git.push", env);
-		if (!grant) {
-			return {
-				deny: true,
-				code: "REMOTE_PUSH_DENIED",
-				reason:
-					"Heli-Harness blocks git push without scoped authority. Preferred opt-in: `heli grant issue --action git.push --scope once`. Emergency/debug overrides remain HELI_ALLOW_GIT_PUSH or YOLO.",
-				ctx,
-			};
-		}
-		appliedGrants.push(grant);
-	}
-	if (
-		paths.some((path) => /(^|\/)\.env(\.|$)/.test(path)) &&
-		!allowEnvWriteScoped({
-			workspaceRoot: ctx.workspaceRoot || cwd,
-			cwd,
-			taskId: ctx.taskId,
-			sessionId: ctx.sessionId,
-			env,
-			legacyMode: ctx.legacyMode,
-		})
-	) {
-		const grant = scopedGrantFor(ctx, "env.write", env);
-		if (!grant) {
-			return {
-				deny: true,
-				code: "ENV_WRITE_DENIED",
-				reason:
-					"Heli-Harness blocks .env-style writes without scoped authority. Preferred opt-in: `heli grant issue --action env.write --scope once`.",
-				ctx,
-			};
-		}
-		appliedGrants.push(grant);
+		return {
+			deny: true,
+			code: "COMMAND_RULES_UNAVAILABLE",
+			reason: `Heli-Harness cannot evaluate shell commands: the safety rules file ${commandPolicy.rulesPath} is ${commandPolicy.status}. Built-in hard-deny rules still apply, but approval rules cannot be checked, so shell commands are denied until the file is restored (restore it from version control, or run \`heli update\` in an embedded workspace; \`heli doctor\` helps diagnose). File edits are not affected.`,
+			ctx,
+		};
 	}
 
-	const tierDenial = evaluateCommandTierRules(ctx.workspaceRoot || cwd, command, env);
-	if (tierDenial) {
-		if (tierDenial.hardDeny) return { ...tierDenial, ctx };
-		const grant = scopedGrantFor(ctx, tierDenial.actionId, env);
-		if (!grant) return { ...tierDenial, ctx };
-		appliedGrants.push(grant);
+	// Approval stage: collect EVERY required approval and look grants up
+	// read-only. Grants are consumed only after the final decision is allow.
+	const requirements = [];
+	if (commandPolicy?.gitPush && !allowGitPushScoped(scope)) {
+		requirements.push({
+			action: "git.push",
+			code: "REMOTE_PUSH_DENIED",
+			reason:
+				"Heli-Harness blocks git push without scoped authority. Ask the user to run `heli grant issue --action git.push --scope once` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_GIT_PUSH or YOLO.",
+		});
+	}
+	const envFile = /(^|\/)\.env(\.|$)/;
+	const namesEnvFile = (entry) => entry.normalized && envFile.test(entry.normalized.toLowerCase());
+	let envWrite;
+	if (mcp) {
+		// A read of a `.env` file is not a write, and an MCP tool's input is server-defined: only a call that looks like a write
+		// (a tool that writes, moves, copies or deletes, text to put in the file, or a path Heli already reads as a write) counts
+		// for every path it names, and otherwise only the paths under a destination-like key (`destination`, `output`, `to` ...).
+		const writes = isWrite || mcpToolWrites(name) || mcp.hasContentKey;
+		const written = new Set(writes ? structuredPaths : mcp.paths.filter((path) => path.destination).map((path) => path.text));
+		envWrite = [...written].some((path) => envFile.test(path.replaceAll("\\", "/").toLowerCase())) ||
+			structuredEntries.some((entry) => written.has(entry.raw) && namesEnvFile(entry)) ||
+			shellEntries.some(namesEnvFile);
+	} else {
+		envWrite = paths.some((path) => envFile.test(path)) || [...structuredEntries, ...shellEntries].some(namesEnvFile);
+	}
+	if (envWrite && !allowEnvWriteScoped(scope)) {
+		requirements.push({
+			action: "env.write",
+			code: "ENV_WRITE_DENIED",
+			reason:
+				"Heli-Harness blocks .env-style writes without scoped authority. Ask the user to run `heli grant issue --action env.write --scope once` in their own terminal.",
+		});
+	}
+	for (const match of commandPolicy?.approvals || []) {
+		requirements.push({
+			action: `command.approval.${match.id}`,
+			code: "TIER_APPROVAL_REQUIRED",
+			ruleId: match.id,
+			reason: approvalReason(match),
+		});
+	}
+	// Planned as one set, so a grant that can pay for one approval is not counted for two.
+	const planned = findScopedGrants(ctx, requirements.map((requirement) => requirement.action), env);
+	const missing = requirements.filter((_, index) => !planned[index]);
+	if (missing.length) {
+		return {
+			deny: true,
+			code: missing[0].code,
+			...(missing[0].ruleId ? { ruleId: missing[0].ruleId, actionId: missing[0].action } : {}),
+			missingApprovals: missing.map((requirement) => requirement.action),
+			reason: missing.map((requirement) => requirement.reason).join("\n"),
+			ctx,
+		};
 	}
 
-	if (isWrite && !isTaskStateWriteForContext(ctx, paths) && !isTaskStateWrite(paths)) {
+	if (isWrite && !taskStateOnly) {
 		const gateReason = readTaskGateForContext(ctx) || readPlanGateForContext(ctx);
 		if (gateReason) return { deny: true, reason: gateReason, ctx };
+	}
+
+	// Final decision is allow: consume one use of each approval now.
+	const appliedGrants = [];
+	for (const requirement of requirements) {
+		const grant = consumeScopedGrant(ctx, requirement.action, env);
+		if (!grant) {
+			return {
+				deny: true,
+				code: "GRANT_NO_LONGER_AVAILABLE",
+				reason: `Heli-Harness could not use the approval for ${requirement.action}: it was used up, revoked or expired while this call was evaluated. Ask the user to issue a new grant.`,
+				ctx,
+			};
+		}
+		appliedGrants.push(grant);
 	}
 
 	return {
@@ -547,116 +804,6 @@ export function evaluatePreToolUse({
 				}
 			: {}),
 	};
-}
-
-/**
- * Split a command (or a rule's `match`) into lowercase tokens.
- *
- * Normalization pipeline, in order:
- *  1. lowercase — closes "GIT PUSH".
- *  2. shell separators (`;` `&` `|` `(` `)` and newlines) become spaces, so they
- *     act as token boundaries — closes "git push;echo hi", "git push;",
- *     "git push|cat", "git push&&echo ok" (punctuation glued to a token used to
- *     produce "push;echo" and slip past the rule tokens).
- *  3. split on whitespace runs — closes "git  push" / "git\tpush".
- *  4. strip surrounding quote characters (' " `) from each token — closes
- *     `"git" "push"`. Only leading/trailing quotes are removed; token interiors
- *     are untouched and tokens are never merged, so `echo "digit pushups"` still
- *     tokenizes to [echo, digit, pushups] and stays allowed.
- */
-export function commandRuleTokens(value) {
-	return String(value ?? "")
-		.toLowerCase()
-		.replace(/[;&|()\r\n]/g, " ")
-		.split(/\s+/)
-		.map((token) => token.replace(/^["'`]+/, "").replace(/["'`]+$/, ""))
-		.filter(Boolean);
-}
-
-/**
- * Program-position tokens also match a path-qualified invocation of the same
- * program, so `node .heli-harness/heli.mjs push` still trips the `heli.mjs push`
- * rule (substring matching used to cover this). Applied to the FIRST rule token
- * only — later tokens are argument positions and must match exactly.
- * Quotes are already stripped by commandRuleTokens, so a quoted path
- * (`"C:\tools\heli.mjs" push`) hits the same suffix check.
- */
-function commandTokenMatches(commandToken, ruleToken, isProgramPosition) {
-	if (commandToken === ruleToken) return true;
-	if (!isProgramPosition) return false;
-	return commandToken.endsWith(`/${ruleToken}`) || commandToken.endsWith(`\\${ruleToken}`);
-}
-
-/**
- * True when the rule's tokens appear as a CONSECUTIVE subsequence of the
- * command's tokens. Token-sequence matching (not substring) so "git push" no
- * longer fires on "echo digit pushups" while still firing on any real
- * whitespace/case variant of `git push`.
- */
-export function commandMatchesRuleTokens(commandTokens, ruleTokens) {
-	if (!ruleTokens.length || ruleTokens.length > commandTokens.length) return false;
-	for (let start = 0; start + ruleTokens.length <= commandTokens.length; start += 1) {
-		let hit = true;
-		for (let offset = 0; offset < ruleTokens.length; offset += 1) {
-			if (!commandTokenMatches(commandTokens[start + offset], ruleTokens[offset], offset === 0)) {
-				hit = false;
-				break;
-			}
-		}
-		if (hit) return true;
-	}
-	return false;
-}
-
-/**
- * Enforce safety/command-rules.json T5/T6 rules on command strings.
- * T6 (block) and T5 (explicit approval) deny; T0–T4 stay advisory.
- * YOLO bypasses this (safety scope) — callers run it after the YOLO early-return.
- * git-push has its own dedicated check with scoped opt-ins; skipped here so a
- * granted HELI_ALLOW_GIT_PUSH is not re-denied by the generic rule.
- *
- * Matching is token-sequence based; known-unfixable evasions (shell variable
- * indirection, base64, aliases) remain out of scope — this is best-effort
- * command guarding, not a sandbox.
- */
-export function evaluateCommandTierRules(workspaceRoot, command, env = process.env) {
-	if (!command || !workspaceRoot) return null;
-	const rulesPath = join(pathsFor(workspaceRoot).safetyDir, "command-rules.json");
-	if (!existsSync(rulesPath)) return null;
-	let rules;
-	try {
-		rules = JSON.parse(readFileSync(rulesPath, "utf8"));
-	} catch {
-		return null; // malformed safety overlay is advisory-only; ownership gates still hold
-	}
-	if (!Array.isArray(rules?.rules)) return null;
-	const approved = String(env.HELI_ALLOW_COMMAND || "")
-		.split(",")
-		.map((s) => s.trim())
-		.filter(Boolean);
-	const commandTokens = commandRuleTokens(command);
-	if (!commandTokens.length) return null;
-	for (const rule of rules.rules) {
-		if (!rule?.match || (rule.tier !== "T5" && rule.tier !== "T6")) continue;
-		if (rule.id === "git-push") continue;
-		const ruleTokens = commandRuleTokens(rule.match);
-		if (!ruleTokens.length || !commandMatchesRuleTokens(commandTokens, ruleTokens)) continue;
-		if (approved.includes(rule.id)) continue;
-		const kind = rule.tier === "T6" ? "blocks destructive command" : "requires explicit approval for";
-		return {
-			deny: true,
-			code: rule.tier === "T6" ? "TIER_BLOCKED" : "TIER_APPROVAL_REQUIRED",
-			hardDeny: rule.tier === "T6",
-			ruleId: rule.id,
-			actionId: `command.approval.${rule.id}`,
-			reason:
-				`Heli-Harness ${kind} "${rule.match}" (rule ${rule.id}, tier ${rule.tier}): ${rule.reason || "see safety/command-rules.json"}. ` +
-				(rule.tier === "T6"
-					? "This is a hard deny; scoped grants do not override it."
-					: `Preferred opt-in: \`heli grant issue --action command.approval.${rule.id} --scope once\`. Emergency/debug overrides remain HELI_ALLOW_COMMAND=${rule.id} or YOLO.`),
-		};
-	}
-	return null;
 }
 
 export { resolveExecutionContext };

@@ -1,6 +1,6 @@
 # Adapter Support Matrix
 
-**Current released baseline:** `v0.10.3`
+**Current released baseline:** `v0.10.4`
 **Architecture:** [Current Heli architecture](architecture/README.md)
 **Install lifecycle:** [Install Matrix](INSTALL_MATRIX.md)
 
@@ -45,7 +45,7 @@ Legend: **Yes** = implemented and repository-tested; **Partial** = implemented w
 
 **Pi.** `/heli-install` now means “link this project to global Heli” and must not create a local `.heli-harness/`. Embedded/hermetic installation is explicitly `/heli-legacy-install`. The package version is sourced from root `package.json`; a new release is required to replace any older package/catalog copy already installed or published outside this repository.
 
-**Claude Code.** Managed install resolves the plugin from the globally installed Heli package. Direct project-local plugin installation is compatibility/dogfood only.
+**Claude Code.** Managed install resolves the plugin from the globally installed Heli package. Direct project-local plugin installation is compatibility/dogfood only. The PreToolUse matcher covers `Bash`, `PowerShell` (the default shell on Windows, and the only shell there without Git Bash), `Monitor`, `Edit`, `Write`, `NotebookEdit` and every `mcp__*` tool; other built-in tools such as `Read`, `Glob` and `WebFetch` are not routed through Heli. Hooks fail closed and time out after 30 seconds.
 
 **Codex.** The default path uses the Git marketplace `KJ-AIML/heli-harness` plus `heli-harness@heli-harness`; nested workspace marketplace paths are compatibility/dogfood only.
 

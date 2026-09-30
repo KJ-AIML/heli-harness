@@ -38,6 +38,20 @@ assertHookDeny(root, `${plugin}/hooks/heli-pre-tool-use.mjs`, {
 	tool_name: "Bash",
 	tool_input: { command: "git push origin main" },
 }, /git push/);
+// Codex's shell tool sends the command as an argv list; it is analyzed as its shell-quoted
+// join (`bash -lc 'git push origin main'`), and a list that is not words fails closed.
+assertHookDeny(root, `${plugin}/hooks/heli-pre-tool-use.mjs`, {
+	tool_name: "Bash",
+	tool_input: { command: ["bash", "-lc", "git push origin main"] },
+}, /git push/);
+assertHookDeny(root, `${plugin}/hooks/heli-pre-tool-use.mjs`, {
+	tool_name: "Bash",
+	tool_input: { command: ["bash", "-o", "pipefail", "-c", "rm -rf /"] },
+}, /tier T6/);
+assertHookDeny(root, `${plugin}/hooks/heli-pre-tool-use.mjs`, {
+	tool_name: "Bash",
+	tool_input: { command: ["bash", 5] },
+}, /COMMAND_UNPARSEABLE.*fail-closed/);
 // Real Codex apply_patch calls embed the target path in a patch body under
 // `command` (confirmed by capturing a live Codex session's actual hook
 // input), not a path/file field — a synthetic { path: ... } payload here

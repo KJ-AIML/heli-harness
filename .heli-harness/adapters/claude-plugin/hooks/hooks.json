@@ -7,7 +7,6 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/heli-session-start.mjs\"",
-            "commandWindows": "if (Get-Command node -ErrorAction SilentlyContinue) { node \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\heli-session-start.mjs\" }",
             "timeout": 5,
             "statusMessage": "Loading Heli-Harness context..."
           }
@@ -16,13 +15,12 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|Edit|Write",
+        "matcher": "^(Bash|PowerShell|Monitor|Edit|MultiEdit|Write|NotebookEdit)$|^mcp__",
         "hooks": [
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/heli-pre-tool-use.mjs\"",
-            "commandWindows": "if (Get-Command node -ErrorAction SilentlyContinue) { node \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\heli-pre-tool-use.mjs\" }",
-            "timeout": 5,
+            "timeout": 30,
             "statusMessage": "Checking Heli-Harness safety policy..."
           }
         ]

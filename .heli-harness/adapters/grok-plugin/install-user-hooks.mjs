@@ -49,7 +49,7 @@ const config = {
 					{
 						type: "command",
 						command: `node "${pre}"`,
-						timeout: 5,
+						timeout: 30,
 					},
 				],
 			},

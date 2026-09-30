@@ -4,7 +4,9 @@
  *
  * Talks to the heli sync service (cloud/core.mjs contract). Strictly optional:
  * no governance path imports this module — a workspace works fully offline and
- * unauthenticated. Design: docs/architecture/cloud-sync.md.
+ * unauthenticated. Design: docs/architecture/cloud-sync.md. A pull refuses governance
+ * changes (safety/, policies/, workspace mode/repo map, task YOLO/diagnosis/event files)
+ * unless --accept-policy-changes is passed, and that flag needs an interactive terminal.
  *
  * Local files:
  *   <config dir>/credentials.json          { url, token, login }   (per device;
@@ -19,6 +21,8 @@ import { isAbsolute, join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { findWorkspaceRoot, pathsFor } from "../adapters/shared/concurrency/paths.mjs";
 import { readJson, writeJsonAtomic } from "../adapters/shared/concurrency/fs-atomic.mjs";
+import { normalizePolicyPath, protectedLocations } from "../adapters/shared/concurrency/protected-paths.mjs";
+import { assertHumanTerminal } from "./human-gate.mjs";
 import {
 	collectBundleFiles,
 	contentSha256,
@@ -26,11 +30,16 @@ import {
 	unpackBundle,
 	writeBundleFiles,
 	normalizeTaskFilesForBundle,
+	policyBearingChanges,
 	restoreTaskFilesForWorkspace,
 	scanBundleSecrets,
 } from "./cloud-bundle.mjs";
 
 const POLL_TIMEOUT_MS = 15 * 60 * 1000;
+// Applies governance changes a sync server sent (safety/, policies/, workspace mode/repo map, task YOLO/diagnosis/event files).
+// Meant as a human decision, like a grant: it needs an interactive terminal, and the Heli hook refuses agent-run
+// commands that spell it. A guardrail, not a guarantee (code an agent runs itself is out of reach of both).
+const ACCEPT_POLICY_FLAG = "--accept-policy-changes";
 
 function configDir() {
 	return process.env.HELI_CONFIG_DIR || join(homedir(), ".heli");
@@ -217,12 +226,21 @@ async function runAuth(args) {
 
 // ------------------------------------------------------------------ heli ws
 
+/**
+ * Point a workspace at a sync workspace. Linking the SAME sync workspace again keeps this machine's baseline
+ * (last applied version and content hash, the E2E latch, auto-push): it is what refuses a rollback and a
+ * plaintext downgrade, and a re-link is no reason to forget it. Only a different workspace id starts over.
+ * (`heli ws unlink`, or deleting or editing state/sync.json, still resets it: see the design doc.)
+ */
 function linkWorkspace(workspaceRoot, ws) {
+	const previous = readSyncState(workspaceRoot);
+	const same = Boolean(previous?.workspaceId) && previous.workspaceId === ws.id;
 	writeJsonAtomic(syncStatePath(workspaceRoot), {
+		...(same ? previous : {}),
 		workspaceId: ws.id,
 		name: ws.name,
-		lastVersion: ws.currentVersion ?? 0,
-		lastContentSha: null,
+		lastVersion: same ? previous.lastVersion ?? 0 : ws.currentVersion ?? 0,
+		lastContentSha: same ? previous.lastContentSha ?? null : null,
 	});
 }
 
@@ -331,9 +349,12 @@ async function runPush(args) {
 		);
 	}
 
-	const bundle = packBundle(files, { passphrase: passphraseFor(state) });
+	const passphrase = passphraseFor(state);
 	let baseVersion = state.lastVersion ?? 0;
 	for (;;) {
+		// Encrypted bundles are bound to the version they will be stored as, so
+		// re-pack on every attempt (a --force retry changes the base version).
+		const bundle = packBundle(files, { passphrase, workspaceId: state.workspaceId, version: baseVersion + 1 });
 		try {
 			const result = await api(creds, "POST", `/ws/${state.workspaceId}/push`, {
 				body: bundle,
@@ -383,9 +404,42 @@ async function runPull(args) {
 		const data = await response.json().catch(() => ({}));
 		throw new Error(data.error === "no_versions" ? "Nothing to pull: no versions pushed yet." : `Pull failed: ${data.error || response.status}`);
 	}
+	const version = Number(response.headers.get("x-version"));
+	if (!Number.isInteger(version) || version < 1) {
+		throw new Error("Pull failed: the sync server did not report a valid bundle version.");
+	}
+	const requestedVersion = versionArg ? Number(versionArg) : null;
+	if (requestedVersion !== null && version !== requestedVersion) {
+		throw new Error(`Pull refused: requested v${requestedVersion} but the sync server returned v${version}.`);
+	}
+	const lastApplied = Number(state.lastVersion) || 0;
+	if (requestedVersion === null && version < lastApplied) {
+		throw new Error(
+			`Pull refused: the sync server offered v${version}, older than v${lastApplied} already applied on this machine (possible rollback). ` +
+				`To restore an older version on purpose, run: heli pull --version ${version}`,
+		);
+	}
 	const bytes = Buffer.from(await response.arrayBuffer());
-	const unpackedFiles = unpackBundle(bytes, { passphrase: process.env.HELI_E2E_PASSPHRASE || null });
+	const unpackedFiles = unpackBundle(bytes, {
+		passphrase: process.env.HELI_E2E_PASSPHRASE || null,
+		requireEncryption: Boolean(state.e2e),
+		workspaceId: state.workspaceId,
+		version,
+	});
 	const files = restoreTaskFilesForWorkspace(workspaceRoot, unpackedFiles);
+	const policyChanges = policyBearingChanges(collectBundleFiles(workspaceRoot), files);
+	if (policyChanges.length && !args.includes(ACCEPT_POLICY_FLAG)) {
+		for (const change of policyChanges) console.error(`  governance change: ${change.rel} (${change.change})`);
+		throw new Error(
+			`Pull refused: v${version} changes ${policyChanges.length} governance file(s) (safety/, policies/, the workspace mode or repo map, or a task's YOLO, diagnosis or event files). ` +
+				`Nothing was written. Review the list above, then run it again with ${ACCEPT_POLICY_FLAG} in your own terminal to apply it.`,
+		);
+	}
+	if (policyChanges.length) {
+		// Accepting is not blind: say what is being applied, before anything is written.
+		console.log(`Accepting ${policyChanges.length} governance change(s) (${ACCEPT_POLICY_FLAG}):`);
+		for (const change of policyChanges) console.log(`  governance change: ${change.rel} (${change.change})`);
+	}
 	// If the server bundle was encrypted, latch e2e on locally so this machine's
 	// next push cannot silently downgrade the workspace to plaintext.
 	let wireEncrypted = false;
@@ -397,7 +451,6 @@ async function runPull(args) {
 	}
 	const portableFiles = normalizeTaskFilesForBundle(workspaceRoot, files);
 	const written = writeBundleFiles(workspaceRoot, files);
-	const version = Number(response.headers.get("x-version"));
 	writeJsonAtomic(syncStatePath(workspaceRoot), {
 		...state,
 		lastVersion: version,
@@ -448,9 +501,88 @@ async function runSync(args) {
 
 // -------------------------------------------------------------- heli init
 
+/**
+ * A workspace-relative repo path the sync server may name: a plain folder inside the workspace. No absolute,
+ * drive or UNC form, nothing starting with "-" (a git option), and no folder starting with "." at all: that
+ * covers "..", and Heli's own state and the root dot-folders (.heli-harness, .heli, .git, .claude), which a
+ * clone must never write into (it would bypass the governance check a pull applies), and any hidden folder.
+ */
+function safeRepoPath(value) {
+	const text = String(value ?? "").trim();
+	if (!text || text.startsWith("-") || isAbsolute(text) || /^[a-zA-Z]:/.test(text) || /^[\\/]/.test(text)) return null;
+	if (text.split(/[\\/]/).some((part) => part.startsWith("."))) return null;
+	return text;
+}
+
+const overlaps = (a, b) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+
+const REFUSED_OUTSIDE = "resolves outside the workspace";
+const REFUSED_HIDDEN = "resolves into Heli's own state or a hidden folder";
+
+/**
+ * Belt and braces for safeRepoPath: why a repo path the sync server named may not be cloned into workspace `dir`, or
+ * null. The target is resolved the way the kernel resolves every path it protects (nearest existing ancestor
+ * realpath'd: junctions, symlinks, 8.3 names and case followed), because a link, one an earlier clone of the same run
+ * checked out or one that was there before, can lead a plain-looking path anywhere. The real path must
+ *  - stay inside the workspace's own real path (a folder that is a link out of it is not a clone target),
+ *  - pass through no folder starting with "." below the workspace (Heli's .heli-harness, .heli, .git and .claude, and
+ *    any other hidden folder such as .vscode or .gemini), and
+ *  - not be, hold or lie inside Heli's operational root, .heli (project config), .git or .claude (a linked workspace
+ *    keeps its operational root elsewhere, possibly inside the workspace under a plain name).
+ * A folder such as `repos` that a user made a link to another disk is therefore not cloned into either: clone there by hand.
+ */
+export function cloneTargetRefusal(dir, repoPath) {
+	const cache = new Map();
+	const at = (path) => normalizePolicyPath(path, { cwd: dir, cache })?.path ?? null;
+	const workspace = at(dir);
+	const target = at(join(dir, repoPath));
+	if (!workspace || !target || !target.startsWith(`${workspace}/`)) return REFUSED_OUTSIDE;
+	if (target.slice(workspace.length + 1).split("/").some((part) => part.startsWith("."))) return REFUSED_HIDDEN;
+	const roots = [protectedLocations(dir, { cwd: dir, cache }).operationalRoot, at(join(dir, ".heli")), at(join(dir, ".git")), at(join(dir, ".claude"))];
+	return roots.filter(Boolean).some((root) => overlaps(target, root)) ? REFUSED_HIDDEN : null;
+}
+
+/**
+ * The git command line that clones a repo the sync server named. "--" ends git's option parsing, so neither value
+ * can inject an option. The ext:: transport (it runs a command) is switched off whatever the user's git config says
+ * (and gitCloneEnv keeps GIT_ALLOW_PROTOCOL from switching it back on). Nothing is loosened: a local path is left to
+ * git's own policy, which allows a clone the user started, and a stricter policy of the user's (say
+ * protocol.file.allow=never) is honored, not overridden.
+ */
+export function gitCloneArgs(remote, target) {
+	return ["-c", "protocol.ext.allow=never", "clone", "--", remote, target];
+}
+
+/**
+ * The environment a clone of a server-named remote runs in: the caller's, minus GIT_ALLOW_PROTOCOL. Git lets that
+ * variable override every protocol.*.allow setting, `-c protocol.ext.allow=never` included, so it could switch the
+ * ext:: transport (it runs a command) back on. Checked against git 2.55: GIT_CONFIG_COUNT, GIT_CONFIG_PARAMETERS,
+ * GIT_CONFIG_GLOBAL and GIT_PROTOCOL_FROM_USER do not beat `-c`, so they can stay.
+ */
+export function gitCloneEnv(env = process.env) {
+	const clean = { ...env };
+	for (const key of Object.keys(clean)) {
+		if (key.toUpperCase() === "GIT_ALLOW_PROTOCOL") delete clean[key];
+	}
+	return clean;
+}
+
+/** A word that is safe inside a command line we print for the user to paste into any shell: plain characters only. */
+const plainWord = (text) => /^[\w@%+=:,./~-]+$/.test(text) && !text.startsWith("-");
+
+/** The command that clones a missing repo by hand: the hardened one, or null when a shell would read part of it. */
+function manualCloneCommand(remote, repoPath) {
+	return plainWord(remote) && plainWord(repoPath) ? ["git", ...gitCloneArgs(remote, repoPath)].join(" ") : null;
+}
+
+function safeRemote(value) {
+	const text = String(value ?? "").trim();
+	return text && !text.startsWith("-") ? text : null;
+}
+
 async function runInit(args, packageRoot) {
 	const name = args.find((a) => !a.startsWith("--"));
-	if (!name) throw new Error("Usage: heli init <sync-workspace-name> [--dir path] [--clone]");
+	if (!name) throw new Error("Usage: heli init <sync-workspace-name> [--dir path] [--clone] [--accept-policy-changes]");
 	const creds = requireCredentials();
 	const dirArg = flagValue(args, "--dir");
 	const dir = dirArg ? (isAbsolute(dirArg) ? dirArg : join(process.cwd(), dirArg)) : process.cwd();
@@ -468,21 +600,44 @@ async function runInit(args, packageRoot) {
 	const ws = list.find((w) => w.name === name || w.id === name);
 	if (!ws) throw new Error(`No sync workspace named "${name}". Run: heli ws list`);
 	linkWorkspace(dir, { ...ws, currentVersion: 0 });
-	await runPull([dir, "--force"]);
+	await runPull([dir, "--force", ...(args.includes(ACCEPT_POLICY_FLAG) ? [ACCEPT_POLICY_FLAG] : [])]);
 
 	// Offer the product repos back: entries with a `remote` can be re-cloned.
+	// index.json comes from the sync server, so its paths/remotes are untrusted.
 	const index = readJson(pathsFor(dir).indexPath, {});
 	const repos = Array.isArray(index.repos) ? index.repos : [];
-	const missing = repos.filter((repo) => repo.path && !existsSync(join(dir, repo.path)));
-	for (const repo of missing) {
+	for (const repo of repos) {
+		if (!repo.path) continue;
+		// `heli link` records the workspace itself as path ".": it is never cloned and is nothing to warn about.
+		if (String(repo.path).trim().replace(/[\\/]+$/, "") === ".") continue;
+		const repoPath = safeRepoPath(repo.path);
+		if (!repoPath) {
+			console.warn(`Skipping repo ${repo.name}: unsafe path ${JSON.stringify(repo.path)} in workspace/index.json (must be a plain folder inside the workspace: no "..", and no folder starting with "." or "-").`);
+			continue;
+		}
+		if (existsSync(join(dir, repoPath))) continue;
+		const refusal = cloneTargetRefusal(dir, repoPath);
+		if (refusal) {
+			console.warn(`Skipping repo ${repo.name}: ${JSON.stringify(repo.path)} in workspace/index.json ${refusal}, so a clone there is refused.`);
+			continue;
+		}
+		if (repo.remote && !safeRemote(repo.remote)) {
+			console.warn(`Skipping repo ${repo.name}: unsafe remote ${JSON.stringify(repo.remote)} in workspace/index.json.`);
+			continue;
+		}
 		if (repo.remote && args.includes("--clone")) {
 			console.log(`Cloning ${repo.name} from ${repo.remote}...`);
-			const result = spawnSync("git", ["clone", repo.remote, join(dir, repo.path)], { stdio: "inherit" });
+			const result = spawnSync("git", gitCloneArgs(repo.remote, join(dir, repoPath)), { stdio: "inherit", env: gitCloneEnv() });
 			if (result.status !== 0) console.warn(`Clone failed for ${repo.name} — clone it manually.`);
 		} else {
+			const command = repo.remote ? manualCloneCommand(repo.remote, repoPath) : null;
 			console.log(
 				`Missing repo: ${repo.name} at ${repo.path}` +
-					(repo.remote ? ` — clone with: git clone ${repo.remote} ${repo.path} (or re-run init with --clone)` : " — no remote recorded in workspace/index.json; clone it manually"),
+					(!repo.remote
+						? " — no remote recorded in workspace/index.json; clone it manually"
+						: command
+							? ` — clone with: ${command} (or re-run init with --clone)`
+							: " — clone it manually (its remote or path in workspace/index.json has characters a shell would interpret, so no command is printed)"),
 			);
 		}
 	}
@@ -490,7 +645,19 @@ async function runInit(args, packageRoot) {
 	console.log(`\nWorkspace "${ws.name}" restored at ${dir}. Next: open your agent from this folder.`);
 }
 
-export async function runCloud(command, args, packageRoot = null) {
+/**
+ * @param {string} command
+ * @param {string[]} args
+ * @param {string|null} [packageRoot]
+ * @param {{ terminal?: { stdin: boolean, stdout: boolean } }} [options]
+ *   terminal: test seam only; the CLI entry never passes it, so the real TTY state decides.
+ */
+export async function runCloud(command, args, packageRoot = null, { terminal } = {}) {
+	// Applying governance changes a sync server sent is meant to be a human decision, like a grant or YOLO.
+	// Refuse before any credential is read, any request is made or any file is written. (The Heli hook already
+	// refuses agent-run commands that spell the flag, command-policy.mjs; this is the second layer. Neither
+	// reaches code an agent runs itself, or a host that runs commands in a pseudo-terminal.)
+	if (args.includes(ACCEPT_POLICY_FLAG)) assertHumanTerminal(`heli ${command} ${ACCEPT_POLICY_FLAG}`, terminal);
 	switch (command) {
 		case "auth":
 			return runAuth(args);

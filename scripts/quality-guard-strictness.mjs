@@ -10,7 +10,7 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -195,6 +195,12 @@ writeFileSync(
 writeFileSync(
 	join(cleanDir, ".heli-harness", "workspace", "target.json"),
 	JSON.stringify({ targetRepo: "demo" }),
+);
+// A healthy workspace ships its command rules; a missing rules file denies shell commands.
+mkdirSync(join(cleanDir, ".heli-harness", "safety"), { recursive: true });
+writeFileSync(
+	join(cleanDir, ".heli-harness", "safety", "command-rules.json"),
+	readFileSync(join(root, ".heli-harness", "safety", "command-rules.json"), "utf8"),
 );
 
 for (const [name, rel] of Object.entries(hooks)) {
@@ -459,7 +465,7 @@ for (const [name, rel] of Object.entries(hooks)) {
 	});
 	for (const probe of controlPlaneProbes) {
 		hard(`${name}: control-plane write denied (${probe.label})`, () => {
-			expectDeny(rel, { tool_name: "Write", tool_input: { file_path: probe.file_path } }, /session/i, controlPlaneDir);
+			expectDeny(rel, { tool_name: "Write", tool_input: { file_path: probe.file_path } }, /protects its own authority state/i, controlPlaneDir);
 		});
 	}
 	hard(`${name}: zero-task bootstrap write still allowed`, () => {
@@ -586,8 +592,16 @@ for (const [name, rel] of Object.entries(hooks)) {
 	hard(`${name}: uppercase "GIT PUSH" denied`, () => {
 		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "GIT PUSH origin main" } }, /git push/i, tierDir);
 	});
-	hard(`${name}: newline-separated "git\\npush" denied`, () => {
-		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "git\npush origin main" } }, /git push/i, tierDir);
+	// A bare newline separates two commands (`git`, then `push ...`), so it is not a
+	// push; a line continuation joins them into one, and that must be denied.
+	hard(`${name}: line-continued "git \\\\<newline>push" denied`, () => {
+		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "git \\\npush origin main" } }, /git push/i, tierDir);
+	});
+	hard(`${name}: PowerShell line-continued "git \`<newline>push" denied`, () => {
+		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "git `\npush origin main" } }, /git push/i, tierDir);
+	});
+	hard(`${name}: newline-chained "echo ok\\ngit push" denied`, () => {
+		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "echo ok\ngit push origin main" } }, /git push/i, tierDir);
 	});
 	hard(`${name}: T6 tab-separated "rm\\t-rf" denied`, () => {
 		expectDeny(rel, { tool_name: "Bash", tool_input: { command: "rm\t-rf   build" } }, /destructive/i, tierDir);
@@ -664,11 +678,6 @@ for (const [name, rel] of Object.entries(hooks)) {
 gap(
 	"command-tier rules: variable-indirection evasion accepted",
 	"token-sequence matching closes whitespace/case evasion and substring false positives, but a command that never spells the rule literally (shell variable indirection like G=push; git $G, base64 -d | sh, or a shell alias) still evades every tier rule; accepted — the documented contract is best-effort command guarding, not a sandbox",
-);
-
-gap(
-	"lease holder can still write control-plane files",
-	"a bound write-mode session holding the lease passes the ownership gate and could hand-edit its own lease/schema; acceptable for the trusted writer, recorded for honesty",
 );
 
 // cleanup fixtures

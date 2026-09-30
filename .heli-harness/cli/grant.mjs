@@ -9,6 +9,7 @@ import {
 import { projectWorkspaceKey } from "../adapters/shared/concurrency/project-binding.mjs";
 import { wantsJson, stripOutputFlags, printProtocolResult } from "./output.mjs";
 import { protocolOk } from "../protocol/result.mjs";
+import { assertHumanTerminal } from "./human-gate.mjs";
 
 function error(code, message) {
 	const value = new Error(message);
@@ -47,10 +48,16 @@ function resourceFor(workspaceRoot, flag) {
 	return { type: "worktree", id: flag || resourceIdForWorktree(worktree) };
 }
 
-export function runGrant(args = []) {
+/**
+ * @param {string[]} args
+ * @param {{ terminal?: { stdin: boolean, stdout: boolean } }} [options]
+ *   terminal: test seam only; the CLI entry never passes it, so the real TTY state decides.
+ */
+export function runGrant(args = [], { terminal } = {}) {
 	const { json, sub, flags, positional } = parse(args);
 	let result;
 	if (sub === "issue") {
+		assertHumanTerminal("heli grant issue", terminal);
 		const workspaceRoot = workspaceFrom(positional);
 		if (!flags.action) throw error("GRANT_ACTION_REQUIRED", "--action is required");
 		const minutes = Number(flags.minutes);

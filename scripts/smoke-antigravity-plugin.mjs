@@ -30,6 +30,12 @@ const hooks = json(join(pluginRoot, "hooks.json"));
 assert.ok(hooks["heli-harness-pretool"]?.PreToolUse, "should define PreToolUse");
 assert.ok(hooks["heli-harness-session"]?.SessionStart, "should define SessionStart");
 
+// Exercise what the config actually runs: hosts execute the configured command, not the
+// shared wrapper it may load (smoke-hook-fail-closed.mjs pins that both hooks run their stubs).
+const configuredScript = (group, event) => hooks[group][event][0].hooks[0].command.replace(/^node /, "");
+const pre = configuredScript("heli-harness-pretool", "PreToolUse");
+const session = configuredScript("heli-harness-session", "SessionStart");
+
 for (const rel of [
 	`${plugin}/hooks/heli-session-start.mjs`,
 	`${plugin}/hooks/heli-pre-tool-use.mjs`,
@@ -39,12 +45,12 @@ for (const rel of [
 	nodeCheck(root, rel);
 }
 
-assertSessionContext(root, sharedSession);
-assertHookDeny(root, sharedPre, {
+assertSessionContext(root, session);
+assertHookDeny(root, pre, {
 	tool_name: "run_command",
 	tool_input: { command: "git push origin main" },
 }, /git push/);
-assertHookDeny(root, sharedPre, {
+assertHookDeny(root, pre, {
 	tool_name: "write_to_file",
 	tool_input: { file_path: ".env" },
 }, /\.env/);
@@ -55,14 +61,14 @@ withFixtureWorkspace({
 	".heli-harness/HARNESS.md": "# Heli-Harness\n",
 	".heli-harness/state/current-task.md": "# Current Task\n\nTarget repo: demo\n\nCurrent status: blocked\n\nFailed attempts count: 2\n",
 }, (cwd) => {
-	assertHookDenyInCwd(root, sharedPre, cwd, writeCall, /2 failed attempts/);
+	assertHookDenyInCwd(root, pre, cwd, writeCall, /2 failed attempts/);
 });
 
 withFixtureWorkspace({
 	".heli-harness/HARNESS.md": "# Heli-Harness\n",
 	".heli-harness/state/current-task.md": "# Current Task\n\nTarget repo: demo\n\nCurrent status: in progress\n\nFailed attempts count: 0\n",
 }, (cwd) => {
-	assertHookAllowInCwd(root, sharedPre, cwd, writeCall);
+	assertHookAllowInCwd(root, pre, cwd, writeCall);
 });
 
 console.log("smoke-antigravity-plugin: ok");

@@ -6,7 +6,7 @@
 event = "PreToolUse"
 matcher = ".*"
 command = 'node "C:/path/to/workspace/.heli-harness/adapters/kimi-plugin/hooks/heli-pre-tool-use.mjs"'
-timeout = 10
+timeout = 30
 
 [[hooks]]
 event = "SessionStart"

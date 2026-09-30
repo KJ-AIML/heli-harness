@@ -10,6 +10,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { runYolo } from "../lib/cli/yolo.mjs";
 
 const root = process.cwd();
 const hook = join(root, ".heli-harness", "adapters", "claude-plugin", "hooks", "heli-pre-tool-use.mjs");
@@ -72,14 +73,18 @@ try {
 	rmSync(yoloDir, { recursive: true, force: true });
 }
 
-// 3) CLI yolo on/off
+// 3) CLI yolo on is human-only (needs a terminal); yolo off stays scriptable
 const cliDir = mkdtempSync(join(tmpdir(), "heli-yolo-cli-"));
 try {
 	mkdirSync(join(cliDir, ".heli-harness", "state"), { recursive: true });
 	writeFileSync(join(cliDir, ".heli-harness", "HARNESS.md"), "# Heli\n");
 	const heli = join(root, "bin", "heli.mjs");
-	const on = spawnSync(process.execPath, [heli, "yolo", "on", cliDir], { encoding: "utf8" });
-	assert.equal(on.status, 0, on.stderr || on.stdout);
+	const refused = spawnSync(process.execPath, [heli, "yolo", "on", cliDir], { encoding: "utf8" });
+	assert.equal(refused.status, 1, "non-interactive `heli yolo on` must be refused");
+	assert.match(refused.stderr, /interactive terminal/);
+	assert.ok(!existsSync(join(cliDir, ".heli-harness", "state", "yolo.json")), "a refused yolo on must not write yolo.json");
+	// A human at a terminal (test seam: explicit terminal argument, not an env var).
+	runYolo(["on", cliDir], { terminal: { stdin: true, stdout: true } });
 	assert.ok(existsSync(join(cliDir, ".heli-harness", "state", "yolo.json")));
 	const allowed = runHook(cliDir, {
 		tool_name: "Bash",

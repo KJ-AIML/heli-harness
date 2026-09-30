@@ -6,18 +6,18 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.10.3-informational"></a>
+  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.10.4-informational"></a>
   <a href="https://github.com/KJ-AIML/heli-harness/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/KJ-AIML/heli-harness/ci.yml?branch=main&label=CI"></a>
   <a href="docs/ADAPTER_SUPPORT_MATRIX.md"><img alt="Adapters" src="https://img.shields.io/badge/adapters-evidence--backed-8A2BE2"></a>
 </p>
 
-**Portable governance for coding agents.** Heli-Harness v0.10.3 is a small governance and coordination kernel that gives heterogeneous coding hosts the same policy, resource-authority, approval, evidence, and explanation semantics without becoming the agent runtime.
+**Portable governance for coding agents.** Heli-Harness v0.10.4 is a small governance and coordination kernel that gives heterogeneous coding hosts the same policy, resource-authority, approval, evidence, and explanation semantics without becoming the agent runtime.
 
 ## Current architecture
 
 > Facts describe. Policy constrains. Authority scopes. Grants approve. Evidence explains.
 
-Heli v0.10.3 separates four concerns that older workspace-only releases mixed together:
+Heli v0.10.4 separates four concerns that older workspace-only releases mixed together:
 
 - **Distribution** — shared/global Heli package and host integrations.
 - **Project binding** — committed `.heli/workspace.json` + `.heli/heli.lock`.
@@ -44,12 +44,12 @@ Heli does **not** own model calls, the agent loop, a scheduler, sandbox implemen
 
 See the [current architecture index](docs/architecture/README.md) and [governance model](docs/architecture/governance-model.md).
 
-## Install v0.10.3
+## Install v0.10.4
 
-The current GitHub release is `v0.10.3`. Until the npm registry has `heli-harness@0.10.3`, use the pinned GitHub package for the global CLI:
+The current GitHub release is `v0.10.4`. Until the npm registry has `heli-harness@0.10.4`, use the pinned GitHub package for the global CLI:
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.3
+npm install -g github:KJ-AIML/heli-harness#v0.10.4
 heli --version
 heli setup
 heli host install all
@@ -100,7 +100,7 @@ Full installation and migration details: [INSTALL.md](INSTALL.md).
 
 ## Authority is resource-scoped
 
-v0.10.3 no longer treats a narrative task name as the root write-authority boundary.
+v0.10.4 no longer treats a narrative task name as the root write-authority boundary.
 
 For modeled local worktrees, Heli reasons about the actual resource. A conflicting resource has one active writer authority, with generation/revision tracking and conflict-checked reacquisition.
 
@@ -108,9 +108,9 @@ A task can still be created for durable handoff, multi-session work, investigati
 
 ## Scoped approvals
 
-Broad bypass is no longer the preferred temporary-approval path.
+Broad bypass is no longer the preferred temporary-approval path. Approvals come from a **human**: `heli grant issue` and `heli yolo on` only run in an interactive terminal, and the Heli hooks hard-deny them when a coding agent tries to run them itself.
 
-Example:
+Example (run in your own terminal):
 
 ```bash
 heli grant issue --action git.push --scope once
@@ -118,7 +118,7 @@ heli grant list
 heli grant revoke <grant-id>
 ```
 
-Grants are bounded by action/resource/execution and may also be bounded by host session, time, and usage count. T6 hard-deny rules remain non-grantable.
+Grants are bounded by action/resource/execution and may also be bounded by host session, time, and usage count. Each matched T5 rule needs its own grant, and a grant is used up only when the call is finally allowed. T6 hard-deny rules — including Heli's built-in floor — remain non-grantable.
 
 Project-controlled files may narrow trusted policy, but cannot silently elevate the built-in/user ceiling.
 
@@ -186,14 +186,14 @@ The check chain covers protocol/decision semantics, capability evidence, linked 
 
 ## Documentation
 
-Use these as current `v0.10.3` references:
+Use these as current `v0.10.4` references:
 
 - [Architecture index](docs/architecture/README.md) — canonical current architecture entry point.
 - [Governance model](docs/architecture/governance-model.md) — policy, authority, grants, decisions, evidence.
 - [Install guide](INSTALL.md) — v0.10 setup/link plus embedded compatibility.
 - [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) — current host claims and evidence.
 - [Enforcement Matrix](docs/ENFORCEMENT_MATRIX.md) — current governance surface/evidence map.
-- [Heli v1 Architecture Convergence RFC](docs/superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md) — accepted architecture contract implemented through v0.10.3.
+- [Heli v1 Architecture Convergence RFC](docs/superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md) — accepted architecture contract implemented through v0.10.4.
 - [Roadmap](ROADMAP.md) — current baseline and next gates.
 - [Changelog](CHANGELOG.md) — historical release facts.
 

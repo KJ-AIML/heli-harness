@@ -21,8 +21,8 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/heli-pre-tool-use.mjs\"",
-            "commandWindows": "if (Get-Command node -ErrorAction SilentlyContinue) { node \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\heli-pre-tool-use.mjs\" }",
-            "timeout": 5,
+            "commandWindows": "if (Get-Command node -ErrorAction SilentlyContinue) { node \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\heli-pre-tool-use.mjs\" } else { '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Heli-Harness could not run because node was not found on PATH; denying (fail-closed). Install Node.js 20+ and restart Codex.\"}}' }",
+            "timeout": 30,
             "statusMessage": "Checking Heli-Harness safety policy..."
           }
         ]

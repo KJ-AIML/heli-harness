@@ -21,7 +21,14 @@ import {
 import { heliDir as workspaceHeliDir } from "../adapters/shared/concurrency/paths.mjs";
 
 export const BUNDLE_FORMAT = "heli-bundle-v1";
-const E2E_SCHEME = "aes-256-gcm-scrypt";
+// The GCM additional authenticated data binds ciphertext to its sync workspace
+// id and version, so a server cannot replay or relabel bundles.
+export const E2E_SCHEME = "aes-256-gcm-scrypt-bound";
+const LEGACY_E2E_SCHEME = "aes-256-gcm-scrypt";
+
+function bundleAad(workspaceId, version) {
+	return Buffer.from(`${BUNDLE_FORMAT}|${workspaceId}|${version}`, "utf8");
+}
 
 // Portable subset — mirrors docs/architecture/cloud-sync.md. Machine-local
 // state (sessions/locks/bindings/yolo/target/sync.json) and reinstallable
@@ -43,10 +50,17 @@ function walkFiles(dir, baseRel, out) {
 	}
 }
 
-const TASK_JSON_RE = /^tasks\/[^/]+\/task\.json$/;
+/**
+ * A bundle name as a file system that folds case and Unicode forms would read it: NFKC turns the long s
+ * (U+017F) into s, the Kelvin sign (U+212A) into K and fullwidth letters into ASCII. Every name pattern below
+ * is matched against this, with the `i` AND `u` flags (`/i` alone folds neither of the first two).
+ */
+const folded = (rel) => rel.normalize("NFKC");
+
+const TASK_JSON_RE = /^tasks\/[^/]+\/task\.json$/iu;
 
 function taskEntries(files) {
-	return Object.keys(files).filter((rel) => TASK_JSON_RE.test(rel));
+	return Object.keys(files).filter((rel) => TASK_JSON_RE.test(folded(rel)));
 }
 
 function bundleWorkspaceIndex(workspaceRoot, files) {
@@ -119,13 +133,22 @@ function deriveKey(passphrase, salt) {
 	return scryptSync(passphrase, salt, 32);
 }
 
-export function packBundle(files, { passphrase = null } = {}) {
+/**
+ * @param {Record<string, string>} files
+ * @param {{ passphrase?: string|null, workspaceId?: string|null, version?: number|null }} [options]
+ *   Encrypted bundles must name the sync workspace id and the version they will be stored as.
+ */
+export function packBundle(files, { passphrase = null, workspaceId = null, version = null } = {}) {
 	if (!passphrase) {
 		return gzipSync(Buffer.from(JSON.stringify({ format: BUNDLE_FORMAT, encryption: "none", files }), "utf8"));
+	}
+	if (!workspaceId || !Number.isInteger(version) || version < 1) {
+		throw new Error("An encrypted bundle must be bound to its sync workspace id and version.");
 	}
 	const salt = randomBytes(16);
 	const iv = randomBytes(12);
 	const cipher = createCipheriv("aes-256-gcm", deriveKey(passphrase, salt), iv);
+	cipher.setAAD(bundleAad(workspaceId, version));
 	const plaintext = gzipSync(Buffer.from(JSON.stringify(files), "utf8"));
 	const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final(), cipher.getAuthTag()]);
 	return gzipSync(
@@ -133,6 +156,8 @@ export function packBundle(files, { passphrase = null } = {}) {
 			JSON.stringify({
 				format: BUNDLE_FORMAT,
 				encryption: E2E_SCHEME,
+				workspaceId,
+				version,
 				salt: salt.toString("base64"),
 				iv: iv.toString("base64"),
 				data: ciphertext.toString("base64"),
@@ -142,7 +167,13 @@ export function packBundle(files, { passphrase = null } = {}) {
 	);
 }
 
-export function unpackBundle(bytes, { passphrase = null } = {}) {
+/**
+ * @param {Buffer} bytes
+ * @param {{ passphrase?: string|null, requireEncryption?: boolean, workspaceId?: string|null, version?: number|null }} [options]
+ *   requireEncryption: refuse plaintext (E2E is on locally). workspaceId/version: the
+ *   values this machine expects; they are verified by AES-GCM, not trusted from the bundle.
+ */
+export function unpackBundle(bytes, { passphrase = null, requireEncryption = false, workspaceId = null, version = null } = {}) {
 	let parsed;
 	try {
 		parsed = JSON.parse(gunzipSync(bytes).toString("utf8"));
@@ -153,14 +184,23 @@ export function unpackBundle(bytes, { passphrase = null } = {}) {
 		throw new Error(`Unsupported bundle format: ${parsed.format || "unknown"}`);
 	}
 	if (!parsed.encryption || parsed.encryption === "none") {
+		if (requireEncryption) {
+			throw new Error("Refusing an unencrypted bundle: end-to-end encryption is on for this workspace, so the sync server must only return ciphertext.");
+		}
 		if (!parsed.files || typeof parsed.files !== "object") throw new Error("Bundle has no files map.");
 		return parsed.files;
+	}
+	if (parsed.encryption === LEGACY_E2E_SCHEME) {
+		throw new Error("Refusing a legacy end-to-end bundle that is not bound to its workspace and version. Re-push it from an up-to-date heli client.");
 	}
 	if (parsed.encryption !== E2E_SCHEME) {
 		throw new Error(`Bundle encryption "${parsed.encryption}" is not supported by this CLI version.`);
 	}
 	if (!passphrase) {
 		throw new Error("Bundle is end-to-end encrypted. Set HELI_E2E_PASSPHRASE and retry.");
+	}
+	if (!workspaceId || !Number.isInteger(version)) {
+		throw new Error("Cannot verify an encrypted bundle without the expected sync workspace id and version.");
 	}
 	const salt = Buffer.from(parsed.salt, "base64");
 	const iv = Buffer.from(parsed.iv, "base64");
@@ -170,12 +210,62 @@ export function unpackBundle(bytes, { passphrase = null } = {}) {
 	let plaintext;
 	try {
 		const decipher = createDecipheriv("aes-256-gcm", deriveKey(passphrase, salt), iv);
+		decipher.setAAD(bundleAad(workspaceId, version));
 		decipher.setAuthTag(tag);
 		plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 	} catch {
-		throw new Error("Decryption failed: wrong HELI_E2E_PASSPHRASE or corrupted bundle.");
+		throw new Error("Decryption failed: wrong HELI_E2E_PASSPHRASE, a corrupted bundle, or a bundle that belongs to a different workspace or version.");
 	}
 	return JSON.parse(gunzipSync(plaintext).toString("utf8"));
+}
+
+const POLICY_DIRS = ["safety/", "policies/"];
+// The files Heli reads as a task's authority besides task.json (protected-paths.mjs TASK_AUTHORITY_FILES): the
+// task's YOLO state, its diagnosis gate and its event log. task.json is judged by its content, below.
+// Matched the way the file systems that would write them read a name (see `folded`): without regard to case
+// (NTFS, APFS and HFS+ are case-insensitive by default, so tasks/x/Yolo.json is tasks/x/yolo.json there) and, with
+// NFKC and the `u` flag, also as tasks/x/yolo.jſon (U+017F) and tasK.json (the Kelvin sign, U+212A) read under Unicode
+// case folding, which a file system that applies it (macOS's APFS is documented to) treats as the names they imitate.
+// Only those two mechanisms are modeled, not every file system's own table; 8.3 short names are refused outright
+// instead (isAllowedRel). This was not run on macOS.
+const TASK_AUTHORITY_FILE_RE = /^tasks\/[^/]+\/(?:yolo\.json|diagnosis\.json|events\.jsonl)$/iu;
+const TASK_FILE_RE = /^tasks\/[^/]+\/task\.json$/iu;
+// The workspace's own settings, both in the bundle: index.json is the repo map that task targets and `init --clone`
+// resolve against, and schema.json's mode decides whether the ownership and lease gate runs at all.
+const WORKSPACE_AUTHORITY_FILE_RE = /^workspace\/(?:schema|index)\.json$/iu;
+
+function taskEnablesYolo(text) {
+	try {
+		const task = JSON.parse(text);
+		return task?.yolo?.enabled === true || ["yolo", "unguarded", "dangerous"].includes(task?.mode);
+	} catch {
+		return false;
+	}
+}
+
+const sameText = (a, b) => String(a).replace(/\r\n/g, "\n") === String(b).replace(/\r\n/g, "\n");
+
+/**
+ * Governance-bearing differences an incoming bundle would apply: any added or
+ * modified file under safety/ or policies/, any tasks/<id>/yolo.json, diagnosis.json
+ * or events.jsonl, workspace/schema.json or workspace/index.json, and any task.json
+ * that turns YOLO on.
+ * @returns {Array<{ rel: string, change: string }>}
+ */
+export function policyBearingChanges(localFiles, incomingFiles) {
+	const changes = [];
+	for (const [rel, content] of Object.entries(incomingFiles)) {
+		const local = localFiles[rel];
+		if (local !== undefined && sameText(local, content)) continue;
+		const change = local === undefined ? "added" : "modified";
+		const name = folded(rel);
+		if (POLICY_DIRS.some((dir) => name.toLowerCase().startsWith(dir)) || TASK_AUTHORITY_FILE_RE.test(name) || WORKSPACE_AUTHORITY_FILE_RE.test(name)) {
+			changes.push({ rel, change });
+		} else if (TASK_FILE_RE.test(name) && taskEnablesYolo(content) && !(local !== undefined && taskEnablesYolo(local))) {
+			changes.push({ rel, change: "enables YOLO" });
+		}
+	}
+	return changes.sort((a, b) => (a.rel < b.rel ? -1 : 1));
 }
 
 /** Stable content hash: same files -> same sha, independent of encryption randomness. */
@@ -184,8 +274,15 @@ export function contentSha256(files) {
 	return createHash("sha256").update(canonical).digest("hex");
 }
 
+// A name must be the name it is written under. join() drops empty and "." segments, and Windows resolves
+// alternate-data streams, 8.3 "~1" aliases, and segments ending in a dot or space to another file name.
+// Refuse every ambiguous spelling before policy classification or any write, so (for example)
+// tasks/<id>/yolo.json. cannot alias tasks/<id>/yolo.json on a Windows restore.
+const NON_CANONICAL_SEGMENT = /[\u0000-\u001f:]|~\d|[. ]$/;
+
 function isAllowedRel(rel) {
 	if (rel.includes("..") || rel.includes("\\") || rel.startsWith("/")) return false;
+	if (!rel.split("/").every((part) => part && part !== "." && !NON_CANONICAL_SEGMENT.test(part))) return false;
 	return (
 		INCLUDE_DIRS.some((dir) => rel.startsWith(`${dir}/`)) ||
 		INCLUDE_FILES.includes(rel)
@@ -198,11 +295,14 @@ function isAllowedRel(rel) {
  */
 export function writeBundleFiles(workspaceRoot, files) {
 	const heliDir = workspaceHeliDir(workspaceRoot);
-	let written = 0;
+	// Check every entry before writing any, so a refused bundle leaves the workspace untouched.
 	for (const [rel, content] of Object.entries(files)) {
 		if (!isAllowedRel(rel) || typeof content !== "string") {
 			throw new Error(`Refusing bundle entry outside the portable subset: ${rel}`);
 		}
+	}
+	let written = 0;
+	for (const [rel, content] of Object.entries(files)) {
 		const path = join(heliDir, ...rel.split("/"));
 		mkdirSync(dirname(path), { recursive: true });
 		writeFileSync(path, content);

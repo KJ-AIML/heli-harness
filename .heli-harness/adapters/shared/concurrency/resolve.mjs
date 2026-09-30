@@ -8,6 +8,7 @@ import {
 	pathsFor,
 	taskPaths,
 	canonicalizePath,
+	isWindows,
 } from "./paths.mjs";
 import { isConcurrentMode, readWorkspaceSchema } from "./schema.mjs";
 import { readTask, listTasks, listTaskIds, listActiveTasks, readTaskMarkdown } from "./task.mjs";
@@ -30,6 +31,7 @@ import { effectiveSessionAuthority } from "./authority.mjs";
 import { resolveYolo } from "./yolo-scope.mjs";
 import { readDiagnosis } from "./diagnosis.mjs";
 import { isLinkedWorkspace } from "./project-binding.mjs";
+import { classifyToolPaths } from "./protected-paths.mjs";
 import {
 	acquireResourceWriteAuthority,
 	readResourceLeaseForWorktree,
@@ -602,19 +604,26 @@ export function readPlanGateForContext(ctx) {
 	return null;
 }
 
-export function isTaskStateWriteForContext(ctx, paths) {
-	const normalized = (paths || []).map((p) => p.replaceAll("\\", "/").toLowerCase());
-	if (!normalized.length) return false;
-	const globalSuffixes = [
-		".heli-harness/state/current-task.md",
-		".heli-harness/state/plan.md",
-		".heli-harness/workspace/target.json",
-		".heli-harness/state/yolo.json",
-	];
-	const taskPrefix = ctx.taskId ? `.heli-harness/tasks/${ctx.taskId.toLowerCase()}/` : null;
-	return normalized.every((path) => {
-		if (globalSuffixes.some((suffix) => path.endsWith(suffix))) return true;
-		if (taskPrefix && path.includes(taskPrefix)) return true;
+/**
+ * True when EVERY path is a narrative state file the caller may write without
+ * holding write authority: the shared state/ ledger (current-task.md, plan.md,
+ * decisions.md, reports/, runs/) or the same files in the caller's OWN task
+ * directory. Paths are normalized first (cwd-relative resolution, `..`
+ * collapse, realpath, Windows casing), so `tasks/../../src/x` or another
+ * task's files never qualify. Authority-bearing files never qualify either.
+ * A path that cannot be classified is not exempt: the ownership gate applies.
+ */
+export function isTaskStateWriteForContext(ctx, paths, { cwd = process.cwd(), env = process.env, cache } = {}) {
+	if (!ctx?.workspaceRoot || !Array.isArray(paths) || paths.length === 0) return false;
+	const sameTask = (a, b) => (isWindows() ? a.toLowerCase() === b.toLowerCase() : a === b);
+	const ownTask = ctx.taskId ? String(ctx.taskId) : null;
+	try {
+		return classifyToolPaths(paths, { workspaceRoot: ctx.workspaceRoot, cwd, env, cache }).every(
+			(entry) =>
+				entry.kind === "narrative" &&
+				(entry.taskId == null || (ownTask !== null && sameTask(entry.taskId, ownTask))),
+		);
+	} catch {
 		return false;
-	});
+	}
 }

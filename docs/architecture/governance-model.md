@@ -1,7 +1,7 @@
-# Heli-Harness Governance Model — v0.10.3
+# Heli-Harness Governance Model — v0.10.4
 
 **Status:** Current canonical governance model
-**Current release:** `v0.10.3`
+**Current release:** `v0.10.4`
 **Architecture index:** [README.md](README.md)
 **Convergence contract:** [Heli v1 Architecture Convergence RFC](../superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md)
 
@@ -117,7 +117,9 @@ Policy sources have different trust roles:
 
 Project policy may narrow the trusted ceiling. A repository cannot grant itself more power by editing its own policy or manifest.
 
-Hard-deny classes remain hard denies unless an explicitly different trusted policy contract says otherwise. Normal temporary grants do not bypass T6 hard-deny rules.
+Hard-deny classes remain hard denies unless an explicitly different trusted policy contract says otherwise. Normal temporary grants do not bypass T6 hard-deny rules, and the kernel's built-in T6 floor cannot be removed by project rules.
+
+Grants and YOLO are issued by a human at an interactive terminal. The governed agent cannot issue its own: the hooks hard-deny agent-run `heli grant issue` / `heli yolo on`, and the Heli state that encodes authority is not agent-writable.
 
 ## Scoped grants
 

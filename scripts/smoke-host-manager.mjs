@@ -11,11 +11,19 @@ import {
 	claudePluginState,
 	renderOperation,
 } from "../lib/cli/host.mjs";
+import { createHermeticEnv } from "./lib/hermetic-env.mjs";
 
 const root = process.cwd();
+// Host inspection spawns host CLIs: run against fakes only, never the real ones.
+const hermetic = createHermeticEnv({ prefix: "heli-host-manager-" });
+const restoreProcessEnv = hermetic.applyToProcess();
+process.on("exit", () => {
+	restoreProcessEnv();
+	hermetic.cleanup();
+});
 const env = {
-	...process.env,
-	HELI_ANTIGRAVITY_PLUGIN_DIR: join(root, ".test-antigravity-plugins"),
+	...hermetic.env,
+	HELI_ANTIGRAVITY_PLUGIN_DIR: join(hermetic.root, "antigravity-plugins"),
 };
 
 for (const id of ["codex", "pi", "claude", "grok", "opencode", "kimi", "cursor", "axga", "antigravity"]) {
@@ -111,6 +119,10 @@ assert.deepEqual(planHostInstall(root, "generic", { env }), []);
 assert.deepEqual(planHostRemove(root, "generic", { env }), []);
 
 const hosts = inspectHosts(root, { env });
+const fakeCalls = hermetic.readLog().map((entry) => [entry.host, ...entry.args].join(" "));
+for (const expected of ["claude plugin list --json", "codex plugin list", "pi list", "axga list"]) {
+	assert.ok(fakeCalls.includes(expected), `inventory must probe "${expected}" through the fake CLI; saw:\n${fakeCalls.join("\n")}`);
+}
 for (const id of ["codex", "pi", "claude", "grok", "opencode", "kimi", "cursor", "axga", "antigravity", "generic"]) {
 	assert.ok(hosts.some((item) => item.id === id), `host inventory missing ${id}`);
 }
@@ -121,7 +133,7 @@ const unavailableEnv = {
 	...env,
 	PATH: "",
 	Path: "",
-	HELI_HOST_HOME: join(root, ".test-host-unavailable-home"),
+	HELI_HOST_HOME: join(hermetic.root, "unavailable-home"),
 };
 const kimiUnavailable = inspectHost(root, "kimi", { env: unavailableEnv });
 assert.equal(kimiUnavailable.cliPresent, false);

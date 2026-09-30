@@ -1,41 +1,97 @@
 #!/usr/bin/env node
 /**
  * Grok Build PreToolUse hook.
+ *
+ * Fail-closed contract: a crashed or timed-out hook lets the tool run, so every
+ * failure path denies through Grok's deny channel (JSON + exit code 2). The
+ * decision is written BEFORE any audit/observation side effect, and each side
+ * effect is isolated. Heli modules are imported inside the try block so even
+ * an import-time failure denies.
  */
 import { stdin } from "node:process";
-import { evaluatePreToolUse } from "./hook-core.mjs";
-import { observeRuntimeCapability } from "./concurrency/attestation.mjs";
-import { recordGuardDecision } from "./concurrency/governance-decision.mjs";
 
-const input = await new Promise((resolve) => {
-	let data = "";
-	stdin.setEncoding("utf8");
-	stdin.on("data", (chunk) => { data += chunk; });
-	stdin.on("end", () => resolve(data));
-});
-
-const host = process.env.HELI_ADAPTER_ID || "grok";
-const event = input.trim() ? JSON.parse(input) : {};
-const toolName = String(event?.tool_name ?? event?.toolName ?? "");
-const toolInput = event?.tool_input ?? event?.toolInput ?? {};
-const result = evaluatePreToolUse({ cwd: process.cwd(), toolName, toolInput, host, hookPayload: event });
-if (result.ctx?.workspaceRoot && result.ctx?.sessionId) {
-	observeRuntimeCapability(result.ctx.workspaceRoot, result.ctx.sessionId, { host, capability: "pre_tool", source: "PreToolUse" });
-	observeRuntimeCapability(result.ctx.workspaceRoot, result.ctx.sessionId, { host, capability: "structured_tool_input", source: "PreToolUse" });
+function readStdin() {
+	return new Promise((resolve, reject) => {
+		let data = "";
+		stdin.setEncoding("utf8");
+		stdin.on("data", (chunk) => {
+			data += chunk;
+		});
+		stdin.on("end", () => resolve(data));
+		stdin.on("error", reject);
+	});
 }
-recordGuardDecision(result, { host, toolName, source: "PreToolUse" });
 
-if (result.deny) {
+function parseHookEvent(input) {
+	if (!String(input ?? "").trim()) throw new Error("empty PreToolUse payload");
+	const event = JSON.parse(input);
+	if (!event || typeof event !== "object" || Array.isArray(event)) throw new Error("PreToolUse payload is not a JSON object");
+	const toolName = String(event.tool_name ?? event.toolName ?? "").trim();
+	if (!toolName) throw new Error("PreToolUse payload has no tool name");
+	return { event, toolName, toolInput: event.tool_input ?? event.toolInput ?? {} };
+}
+
+function failClosedReason(error) {
+	const detail = `${error?.code ? `${error.code}: ` : ""}${error?.message || String(error)}`;
+	return `Heli-Harness could not evaluate this action (${detail}); denying (fail-closed). Run \`heli doctor\`.`;
+}
+
+function deny(reason) {
 	process.stdout.write(
 		JSON.stringify({
 			decision: "deny",
-			reason: result.reason,
+			reason,
 			hookSpecificOutput: {
 				hookEventName: "PreToolUse",
 				permissionDecision: "deny",
-				permissionDecisionReason: result.reason,
+				permissionDecisionReason: reason,
 			},
 		}),
 	);
-	process.exit(2);
+	// Grok's deny channel is exit code 2. Set it instead of calling
+	// process.exit() so the stdout write is never cut short.
+	process.exitCode = 2;
+}
+
+const host = process.env.HELI_ADAPTER_ID || "grok";
+let parsed = null;
+let result = null;
+try {
+	parsed = parseHookEvent(await readStdin());
+	const { evaluatePreToolUse } = await import("./hook-core.mjs");
+	result = evaluatePreToolUse({
+		cwd: process.cwd(),
+		toolName: parsed.toolName,
+		toolInput: parsed.toolInput,
+		host,
+		hookPayload: parsed.event,
+	});
+} catch (error) {
+	const reason = failClosedReason(error);
+	process.stderr.write(`${reason}\n`);
+	deny(reason);
+}
+
+if (result) {
+	// 1. Decision first — nothing below may change or delay it.
+	if (result.deny) deny(result.reason);
+	// 2. Evidence side effects, each isolated.
+	const sideEffect = async (label, fn) => {
+		try {
+			await fn();
+		} catch (error) {
+			process.stderr.write(`Heli-Harness: ${label} failed after the decision was issued (${error?.code || error?.message || error}).\n`);
+		}
+	};
+	if (result.ctx?.workspaceRoot && result.ctx?.sessionId) {
+		await sideEffect("runtime observation", async () => {
+			const { observeRuntimeCapability } = await import("./concurrency/attestation.mjs");
+			observeRuntimeCapability(result.ctx.workspaceRoot, result.ctx.sessionId, { host, capability: "pre_tool", source: "PreToolUse" });
+			observeRuntimeCapability(result.ctx.workspaceRoot, result.ctx.sessionId, { host, capability: "structured_tool_input", source: "PreToolUse" });
+		});
+	}
+	await sideEffect("decision receipt", async () => {
+		const { recordGuardDecision } = await import("./concurrency/governance-decision.mjs");
+		recordGuardDecision(result, { host, toolName: parsed.toolName, source: "PreToolUse" });
+	});
 }
