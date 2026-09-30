@@ -596,17 +596,24 @@ try {
 			repos: [
 				{ name: "viaext", path: "repos/viaext", remote: `ext::node ${extHelper}` },
 				{ name: "local", path: "repos/local", remote: remoteRepo },
+				// No dot in this path, but the folder `aliased` is a junction (a symlink outside Windows) into Heli's own state.
+				{ name: "viajunction", path: "aliased/profiles/evil", remote: remoteRepo },
 			],
 		})}\n`,
 	);
 	ok(await cli(["push", "--force"], { ...cfgA, ...passphrase }, { cwd: wsA }), "push a repo map with an ext:: remote");
 	const wsG = join(root, "ws-g");
-	ok(
+	mkdirSync(wsG);
+	ok(await cli(["install", wsG], cfgA), "install ws-g");
+	symlinkSync(join(wsG, ".heli-harness"), join(wsG, "aliased"), "junction");
+	const initG = ok(
 		await asHuman("init", ["lab", "--dir", wsG, "--clone", "--accept-policy-changes"], { ...cfgA, ...passphrase, GIT_CONFIG_GLOBAL: hostileGitConfig }),
 		"init --clone under a hostile git config",
 	);
 	assert.equal(existsSync(extMarker), false, "the ext:: transport must not run a command");
 	assert.ok(existsSync(join(wsG, "repos", "local", "README.md")), "a local clone still works when the user's git config forbids the file transport");
+	assert.equal(existsSync(join(wsG, ".heli-harness", "profiles", "evil")), false, "a folder that leads into Heli's own state is not a clone target");
+	assert.match(initG.stderr, /"aliased\/profiles\/evil" in workspace\/index\.json leads into Heli's own state/);
 	const { gitCloneArgs } = await import("../lib/cli/cloud.mjs");
 	assert.deepEqual(
 		gitCloneArgs("https://example.invalid/r.git", "/t/r"),
