@@ -8,7 +8,7 @@
  * the client<->core contract; the CF shell (cloud/worker.mjs) stays thin.
  */
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -295,7 +295,9 @@ try {
 	assert.ok(storedBundle, "server stores v6 blob");
 	const { gunzipSync } = await import("node:zlib");
 	const outer = JSON.parse(gunzipSync(Buffer.from(storedBundle)).toString("utf8"));
-	assert.equal(outer.encryption, "aes-256-gcm-scrypt", "stored bundle is encrypted");
+	assert.equal(outer.encryption, "aes-256-gcm-scrypt-bound", "stored bundle is encrypted and bound");
+	assert.equal(outer.workspaceId, syncState.workspaceId, "ciphertext is bound to its sync workspace");
+	assert.equal(outer.version, 6, "ciphertext is bound to the version it was stored as");
 	assert.ok(!JSON.stringify(outer).includes("secret contents"), "no plaintext on the server");
 
 	// Device B was logged out above — log back in first, then test passphrase paths.
@@ -341,6 +343,325 @@ try {
 	const pushUnlinked = await cli(["push"], { ...cfgA, ...passphrase }, { cwd: wsC });
 	assert.equal(pushUnlinked.status, 1, "push after unlink must fail");
 	assert.match(pushUnlinked.stderr, /not linked/);
+
+	// ---- Hardening: a hostile or broken server cannot downgrade, roll back,
+	// relabel, or silently change governance through a pull ----
+	const wsId = syncState.workspaceId;
+	const tokenA = JSON.parse(readFileSync(join(root, "cfg-a", "credentials.json"), "utf8")).token;
+	const authA = { authorization: `Bearer ${tokenA}` };
+	const headVersion = async () => (await (await fetch(new URL(`/ws/${wsId}/versions`, url), { headers: authA })).json()).currentVersion;
+	const pushRaw = async (bytes) => {
+		const response = await fetch(new URL(`/ws/${wsId}/push`, url), {
+			method: "POST",
+			headers: { ...authA, "content-type": "application/octet-stream", "x-base-version": String(await headVersion()) },
+			body: bytes,
+		});
+		const text = await response.text();
+		assert.equal(response.status, 200, text);
+		return JSON.parse(text).version;
+	};
+	const { packBundle } = await import("../lib/cli/cloud-bundle.mjs");
+
+	// E2E is latched on for B, so a plaintext head is refused and nothing is written.
+	assert.equal(JSON.parse(readFileSync(join(wsB, ".heli-harness", "state", "sync.json"), "utf8")).e2e, true);
+	const plaintextVersion = await pushRaw(packBundle({ "profiles/demo.md": "# downgraded\n" }));
+	const downgrade = await cli(["pull", "--force"], { ...cfgB, ...passphrase }, { cwd: wsB });
+	assert.equal(downgrade.status, 1, "plaintext must be refused when E2E is on");
+	assert.match(downgrade.stderr, /Refusing an unencrypted bundle/);
+	assert.equal(readFileSync(join(wsB, ".heli-harness", "profiles", "demo.md"), "utf8"), "# demo v6 secret contents\n");
+
+	// A proper encrypted head on top of it; B applies it.
+	ok(await cli(["push", "--force"], { ...cfgA, ...passphrase }, { cwd: wsA }), "encrypted push over the injected plaintext");
+	const goodHead = await headVersion();
+	assert.equal(goodHead, plaintextVersion + 1);
+	ok(await cli(["pull", "--force"], { ...cfgB, ...passphrase }, { cwd: wsB }), "pull the encrypted head");
+
+	// Rollback: the server claims an older head -> refused; an explicit --version restore still works.
+	const wsKey = (await store.list("ws:")).find(({ value }) => value.id === wsId).key;
+	const wsRecord = await store.get(wsKey);
+	await store.put(wsKey, { ...wsRecord, currentVersion: 6 });
+	const rollback = await cli(["pull", "--force"], { ...cfgB, ...passphrase }, { cwd: wsB });
+	assert.equal(rollback.status, 1, "an older head must be refused");
+	assert.match(rollback.stderr, /possible rollback/);
+	ok(await cli(["pull", "--version", "6", "--force"], { ...cfgB, ...passphrase }, { cwd: wsB }), "deliberate restore of v6");
+	await store.put(wsKey, wsRecord);
+
+	// Relabel: the server serves v6's ciphertext as the head -> AES-GCM binding fails.
+	const headBlob = await store.blobGet(`bundle:${wsId}:${goodHead}`);
+	await store.blobPut(`bundle:${wsId}:${goodHead}`, await store.blobGet(`bundle:${wsId}:6`));
+	const relabeled = await cli(["pull", "--force"], { ...cfgB, ...passphrase }, { cwd: wsB });
+	assert.equal(relabeled.status, 1, "a relabeled bundle must not decrypt");
+	assert.match(relabeled.stderr, /different workspace or version/);
+	await store.blobPut(`bundle:${wsId}:${goodHead}`, headBlob);
+
+	// Governance-bearing changes need explicit acceptance; a refused pull writes nothing.
+	writeFileSync(join(wsA, ".heli-harness", "safety", "command-rules.json"), `${JSON.stringify({ version: 1, rules: [] })}\n`);
+	writeFileSync(join(wsA, ".heli-harness", "tasks", "portable-restore", "yolo.json"), `${JSON.stringify({ enabled: true })}\n`);
+	ok(await cli(["push", "--force"], { ...cfgA, ...passphrase }, { cwd: wsA }), "push governance changes");
+	const policyPull = await cli(["pull", "--force"], { ...cfgB, ...passphrase }, { cwd: wsB });
+	assert.equal(policyPull.status, 1, "governance changes must not apply silently");
+	assert.match(policyPull.stderr, /safety\/command-rules\.json \(modified\)/);
+	assert.match(policyPull.stderr, /tasks\/portable-restore\/yolo\.json \(added\)/);
+	assert.match(policyPull.stderr, /--accept-policy-changes/);
+	assert.equal(existsSync(join(wsB, ".heli-harness", "tasks", "portable-restore", "yolo.json")), false, "a refused pull writes nothing");
+	ok(await cli(["pull", "--force", "--accept-policy-changes"], { ...cfgB, ...passphrase }, { cwd: wsB }), "accept governance changes");
+	assert.deepEqual(JSON.parse(readFileSync(join(wsB, ".heli-harness", "safety", "command-rules.json"), "utf8")).rules, []);
+
+	// init --clone: index.json paths/remotes from the server cannot escape the
+	// workspace or inject git options; a safe local remote still clones.
+	const remoteRepo = join(root, "remote-repo");
+	const git = (...gitArgs) => {
+		const result = spawnSync("git", gitArgs, { encoding: "utf8" });
+		assert.equal(result.status, 0, result.stderr);
+	};
+	git("init", "-q", remoteRepo);
+	writeFileSync(join(remoteRepo, "README.md"), "# remote\n");
+	git("-C", remoteRepo, "add", "README.md");
+	git("-C", remoteRepo, "-c", "user.name=heli", "-c", "user.email=heli@example.invalid", "commit", "-q", "-m", "init");
+	writeFileSync(
+		join(wsA, ".heli-harness", "workspace", "index.json"),
+		`${JSON.stringify({
+			schemaVersion: 1,
+			workspaceRoot: ".",
+			repos: [
+				{ name: "good", path: "repos/good", remote: remoteRepo },
+				{ name: "escape", path: "../escaped", remote: remoteRepo },
+				{ name: "option", path: "repos/option", remote: "--upload-pack=touch pwned" },
+				{ name: "dash", path: "-rf", remote: remoteRepo },
+			],
+		})}\n`,
+	);
+	ok(await cli(["push", "--force"], { ...cfgA, ...passphrase }, { cwd: wsA }), "push repo index");
+	const wsD = join(root, "ws-d");
+	const initD = ok(await cli(["init", "lab", "--dir", wsD, "--clone", "--accept-policy-changes"], { ...cfgA, ...passphrase }), "init --clone");
+	const initOutput = `${initD.stdout}\n${initD.stderr}`;
+	assert.ok(existsSync(join(wsD, "repos", "good", "README.md")), "a safe remote is cloned");
+	assert.equal(existsSync(join(root, "escaped")), false, "a ../ path must not be cloned outside the workspace");
+	assert.equal(existsSync(join(wsD, "repos", "option")), false, "an option-shaped remote must not reach git");
+	assert.match(initOutput, /unsafe path "\.\.\/escaped"/);
+	assert.match(initOutput, /unsafe remote "--upload-pack=touch pwned"/);
+	assert.match(initOutput, /unsafe path "-rf"/);
+
+	// Browser activation: a link cannot approve a device in one click, and the
+	// OAuth state is random, single-use and bound to the confirming browser.
+	{
+		const githubCalls = [];
+		const fakeGitHub = async (target) => {
+			githubCalls.push(String(target));
+			if (String(target).startsWith("https://github.com/login/oauth/access_token")) return Response.json({ access_token: "gho_fake" });
+			if (String(target) === "https://api.github.com/user") return Response.json({ id: 42, login: "octo" });
+			throw new Error(`unexpected fetch: ${target}`);
+		};
+		const oauthApi = createApi(memoryStore(), { githubClientId: "client-id", githubClientSecret: "client-secret", fetchImpl: fakeGitHub });
+		const origin = "https://sync.example";
+		const call = (path, init = {}) => oauthApi.fetch(new Request(`${origin}${path}`, init));
+		const device = await (await call("/auth/device/code", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ device_name: "attacker-laptop" }),
+		})).json();
+		const pollToken = async () => (await call("/auth/device/token", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ device_code: device.device_code }),
+		})).json();
+		const confirm = (fromOrigin = origin) => call("/activate/confirm", {
+			method: "POST",
+			headers: { origin: fromOrigin, "content-type": "application/x-www-form-urlencoded" },
+			body: `code=${device.user_code}`,
+		});
+		const issued = (response) => ({
+			state: new URL(response.headers.get("location")).searchParams.get("state"),
+			cookie: /heli_activate=([0-9a-f]+)/.exec(response.headers.get("set-cookie") || "")?.[1],
+		});
+
+		const page = await call(`/activate?code=${device.user_code}`);
+		assert.equal(page.status, 200);
+		assert.equal(page.headers.get("location"), null, "GET /activate must never redirect to GitHub");
+		// Chromium applies form-action to the redirect that answers the confirm POST, so the GitHub origin must be listed.
+		assert.match(page.headers.get("content-security-policy"), /form-action 'self' https:\/\/github\.com;/, "the CSP must let the confirm redirect reach GitHub");
+		const pageHtml = await page.text();
+		assert.ok(pageHtml.includes(device.user_code) && pageHtml.includes("attacker-laptop"), "the page shows the code and device");
+		assert.match(pageHtml, /<form method="POST" action="\/activate\/confirm">/);
+		assert.equal((await call(`/auth/github/callback?code=gh&state=${device.user_code}`)).status, 400, "state = user code approves nothing");
+		assert.equal((await confirm("https://evil.example")).status, 403, "cross-site confirm is refused");
+
+		const first = await confirm();
+		assert.equal(first.status, 303);
+		const unbound = issued(first);
+		assert.match(unbound.state, /^[0-9a-f]{64}$/);
+		assert.notEqual(unbound.state, device.user_code);
+		assert.match(first.headers.get("set-cookie"), /HttpOnly/);
+		assert.match(first.headers.get("set-cookie"), /SameSite=Lax/);
+		assert.equal((await call(`/auth/github/callback?code=gh&state=${unbound.state}`)).status, 400, "no cookie -> refused");
+		const wrong = issued(await confirm());
+		assert.equal((await call(`/auth/github/callback?code=gh&state=${wrong.state}`, { headers: { cookie: `heli_activate=${"0".repeat(64)}` } })).status, 400, "wrong cookie -> refused");
+		assert.equal(githubCalls.length, 0, "unbound states never reach GitHub");
+		assert.equal((await pollToken()).error, "authorization_pending");
+
+		const good = issued(await confirm());
+		const callback = await call(`/auth/github/callback?code=gh&state=${good.state}`, { headers: { cookie: `heli_activate=${good.cookie}` } });
+		assert.equal(callback.status, 200, await callback.text());
+		const token = await pollToken();
+		assert.equal(token.login, "octo");
+		assert.ok(token.token);
+		assert.equal((await call(`/auth/github/callback?code=gh&state=${good.state}`, { headers: { cookie: `heli_activate=${good.cookie}` } })).status, 400, "a state is single-use");
+	}
+
+	// ---- Direct checks of guards the runs above only reach indirectly or not at all ----
+	{
+		const { gzipSync } = await import("node:zlib");
+		const { packBundle: pack, unpackBundle: unpack, policyBearingChanges, restoreTaskFilesForWorkspace, writeBundleFiles } = await import("../lib/cli/cloud-bundle.mjs");
+
+		// Ciphertext is bound to workspace AND version; the labels on the outside prove nothing.
+		const secret = "unit-test passphrase";
+		const sample = { "profiles/a.md": "# a\n" };
+		const bound = pack(sample, { passphrase: secret, workspaceId: "ws1", version: 3 });
+		assert.deepEqual(unpack(bound, { passphrase: secret, workspaceId: "ws1", version: 3 }), sample);
+		assert.throws(() => unpack(bound, { passphrase: secret, workspaceId: "ws2", version: 3 }), /different workspace or version/);
+		assert.throws(() => unpack(bound, { passphrase: secret, workspaceId: "ws1", version: 4 }), /different workspace or version/);
+		assert.throws(() => unpack(bound, { passphrase: secret }), /expected sync workspace id and version/);
+		const relabeledOuter = gzipSync(Buffer.from(JSON.stringify({ ...JSON.parse(gunzipSync(bound).toString("utf8")), workspaceId: "ws2", version: 4 })));
+		assert.throws(() => unpack(relabeledOuter, { passphrase: secret, workspaceId: "ws2", version: 4 }), /different workspace or version/);
+		assert.throws(() => pack(sample, { passphrase: secret }), /bound to its sync workspace id and version/);
+		assert.throws(() => pack(sample, { passphrase: secret, workspaceId: "ws1", version: 0 }), /bound to its sync workspace id and version/);
+		const legacy = gzipSync(Buffer.from(JSON.stringify({ format: "heli-bundle-v1", encryption: "aes-256-gcm-scrypt", salt: "", iv: "", data: "" })));
+		assert.throws(() => unpack(legacy, { passphrase: secret, workspaceId: "ws1", version: 3 }), /legacy end-to-end bundle/);
+		assert.throws(() => unpack(pack(sample), { requireEncryption: true }), /Refusing an unencrypted bundle/);
+
+		// Governance-bearing differences: what counts, what does not.
+		const taskJson = (extra) => `${JSON.stringify({ id: "t", ...extra }, null, 2)}\n`;
+		const localFiles = {
+			"safety/command-rules.json": '{"rules":[]}\n',
+			"policies/p.md": "# p\n",
+			"tasks/a/task.json": taskJson({ mode: "strict" }),
+			"tasks/b/task.json": taskJson({ yolo: { enabled: true } }),
+			"profiles/demo.md": "# demo\n",
+		};
+		assert.deepEqual(policyBearingChanges(localFiles, { ...localFiles }), [], "an identical bundle changes nothing");
+		assert.deepEqual(
+			policyBearingChanges(localFiles, { ...localFiles, "safety/command-rules.json": '{"rules":[]}\r\n', "profiles/demo.md": "# changed\n" }),
+			[],
+			"CRLF-only differences and non-governance files are not governance changes",
+		);
+		assert.deepEqual(
+			policyBearingChanges(localFiles, {
+				"safety/new.json": "{}\n",
+				"policies/p.md": "# p2\n",
+				"tasks/a/task.json": taskJson({ mode: "yolo" }),
+				"tasks/a/yolo.json": '{"enabled":false}\n',
+				"tasks/b/task.json": taskJson({ yolo: { enabled: true }, note: "already on locally" }),
+				"tasks/c/task.json": taskJson({ yolo: { enabled: true } }),
+				"tasks/d/task.json": taskJson({ mode: "strict" }),
+				"profiles/demo.md": "# whatever\n",
+			}),
+			[
+				{ rel: "policies/p.md", change: "modified" },
+				{ rel: "safety/new.json", change: "added" },
+				{ rel: "tasks/a/task.json", change: "enables YOLO" },
+				{ rel: "tasks/a/yolo.json", change: "added" },
+				{ rel: "tasks/c/task.json", change: "enables YOLO" },
+			],
+		);
+
+		// A bundle entry name must be the name it will be written under. join() and the filesystem resolve
+		// dot/empty segments, case, NTFS streams and 8.3 short names to another file, so a spelling that
+		// merely looks unlike tasks/<id>/yolo.json must not slip past the governance list or the writer.
+		const yoloOn = '{"enabled":true}\n';
+		assert.deepEqual(
+			policyBearingChanges({}, { "tasks/x/Task.json": taskJson({ mode: "yolo" }), "Tasks/x/yolo.json": yoloOn, "SAFETY/x.json": "{}\n", "tasks/x/YOLO.JSON": yoloOn }),
+			[
+				{ rel: "SAFETY/x.json", change: "added" },
+				{ rel: "Tasks/x/yolo.json", change: "added" },
+				{ rel: "tasks/x/Task.json", change: "enables YOLO" },
+				{ rel: "tasks/x/YOLO.JSON", change: "added" },
+			],
+			"governance names are matched case-insensitively",
+		);
+		assert.throws(() => restoreTaskFilesForWorkspace(wsB, { "tasks/x/Task.json": "{" }), /not valid JSON/, "a case-variant task.json still goes through restore");
+		const shadyNames = [
+			"tasks/x/./yolo.json",
+			"tasks//x/yolo.json",
+			"tasks/x//yolo.json",
+			"tasks/x/yolo.json::$DATA",
+			"tasks/x/yolo.json.",
+			"tasks/x/yolo.json ",
+			"tasks/x/YOLO~1.JSO",
+			"profiles/a:b.md",
+			"profiles/\u0001.md",
+			"tasks/x/",
+		];
+		for (const rel of shadyNames) {
+			assert.throws(
+				() => writeBundleFiles(wsB, { "profiles/canary.md": "x\n", [rel]: yoloOn }),
+				/outside the portable subset/,
+				`${JSON.stringify(rel)} must be refused`,
+			);
+		}
+		assert.equal(existsSync(join(wsB, ".heli-harness", "profiles", "canary.md")), false, "a refused bundle writes nothing, not even its valid entries");
+		assert.equal(existsSync(join(wsB, ".heli-harness", "tasks", "x")), false, "no aliased governance file was created");
+		assert.equal(
+			writeBundleFiles(wsB, { "profiles/notes v2 (draft).md": "n\n", "profiles/a.b.c.md.example": "e\n", "tasks/legit/evidence/log 1.txt": "l\n" }),
+			3,
+			"ordinary names still write",
+		);
+
+		// Activation edge cases: hostile device name, missing/null Origin, expired state, spent code.
+		let clock = 1_000_000;
+		const edgeStore = memoryStore();
+		const githubCalls = [];
+		const edgeApi = createApi(edgeStore, {
+			githubClientId: "client-id",
+			githubClientSecret: "client-secret",
+			now: () => clock,
+			fetchImpl: async (target) => {
+				githubCalls.push(String(target));
+				return String(target).startsWith("https://github.com/login/oauth/access_token") ? Response.json({ access_token: "gho_fake" }) : Response.json({ id: 7, login: "octo" });
+			},
+		});
+		const origin = "https://sync.example";
+		const call = (path, init = {}) => edgeApi.fetch(new Request(`${origin}${path}`, init));
+		const start = async (deviceName) => (await call("/auth/device/code", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ device_name: deviceName }),
+		})).json();
+		const confirm = (code, headers = { origin }) => call("/activate/confirm", {
+			method: "POST",
+			headers: { "content-type": "application/x-www-form-urlencoded", ...headers },
+			body: `code=${code}`,
+		});
+		const issued = (response) => ({
+			state: new URL(response.headers.get("location")).searchParams.get("state"),
+			cookie: /heli_activate=([0-9a-f]+)/.exec(response.headers.get("set-cookie") || "")?.[1],
+		});
+		const callbackFor = ({ state, cookie }) => call(`/auth/github/callback?code=gh&state=${state}`, { headers: { cookie: `heli_activate=${cookie}` } });
+
+		const hostile = await start("<img src=x onerror=alert(1)>");
+		const hostileHtml = await (await call(`/activate?code=${hostile.user_code}`)).text();
+		assert.ok(!hostileHtml.includes("<img"), "a hostile device name must be HTML-escaped");
+		assert.ok(hostileHtml.includes("&lt;img src=x onerror=alert(1)&gt;"));
+		assert.equal((await confirm(hostile.user_code, {})).status, 403, "a confirm without an Origin header is refused");
+		assert.equal((await confirm(hostile.user_code, { origin: "null" })).status, 403, "a confirm from an opaque origin is refused");
+		assert.equal((await confirm("ZZZZ-ZZZZ")).status, 400, "an unknown code is refused");
+		assert.equal((await edgeStore.list("oauthstate:")).length, 0, "refused confirms store no state");
+
+		const device = await start("laptop");
+		assert.equal((await call(`/activate?code=${encodeURIComponent(` ${device.user_code.toLowerCase()} `)}`)).status, 200, "codes are case- and space-insensitive");
+		const stale = issued(await confirm(device.user_code));
+		clock += 10 * 60 * 1000 + 1;
+		assert.equal((await callbackFor(stale)).status, 400, "an expired state is refused");
+		assert.equal(githubCalls.length, 0, "an expired state never reaches GitHub");
+		const retry = issued(await confirm(device.user_code));
+		assert.equal((await callbackFor(retry)).status, 200, "the same code can be confirmed again while it is still pending");
+		assert.equal((await confirm(device.user_code)).status, 400, "an approved code cannot be confirmed again");
+		assert.equal((await call(`/activate?code=${device.user_code}`)).status, 400, "an approved code shows no confirm page");
+
+		const old = await start("old");
+		clock += 15 * 60 * 1000 + 1;
+		assert.equal((await call(`/activate?code=${old.user_code}`)).status, 400, "an expired device code shows no confirm page");
+		assert.equal((await confirm(old.user_code)).status, 400, "an expired device code cannot be confirmed");
+	}
 
 	console.log("cloud sync smoke ok");
 } finally {

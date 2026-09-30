@@ -16,6 +16,8 @@
  */
 
 const DEVICE_CODE_TTL_MS = 15 * 60 * 1000;
+const ACTIVATION_STATE_TTL_MS = 10 * 60 * 1000;
+const ACTIVATE_COOKIE = "heli_activate";
 const MAX_BUNDLE_BYTES = 10 * 1024 * 1024;
 const RETAINED_VERSIONS = 10;
 const USER_CODE_ALPHABET = "BCDFGHJKMNPQRSTVWXZ23456789"; // no ambiguous chars
@@ -25,6 +27,32 @@ function json(data, status = 200, headers = {}) {
 		status,
 		headers: { "content-type": "application/json", ...headers },
 	});
+}
+
+function html(body, status = 200) {
+	return new Response(`<!doctype html><meta charset="utf-8"><title>Heli device activation</title>${body}`, {
+		status,
+		headers: {
+			"content-type": "text/html; charset=utf-8",
+			"cache-control": "no-store",
+			"x-frame-options": "DENY",
+			// Chromium applies form-action to the redirect that answers the confirm POST
+			// too, so the GitHub authorize origin must be listed or "Authorize" does nothing.
+			"content-security-policy": "default-src 'none'; form-action 'self' https://github.com; frame-ancestors 'none'",
+		},
+	});
+}
+
+function escapeHtml(value) {
+	return String(value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[ch]);
+}
+
+function readCookie(request, name) {
+	for (const part of (request.headers.get("cookie") || "").split(";")) {
+		const [key, ...value] = part.trim().split("=");
+		if (key === name) return value.join("=");
+	}
+	return null;
 }
 
 function randomHex(bytes) {
@@ -75,6 +103,19 @@ export function createApi(store, options = {}) {
 		if (!pending || pending.expiresAt < now()) return false;
 		await store.put(`pending:${deviceCode}`, { ...pending, approved: true, user });
 		return true;
+	}
+
+	/** Pending, unexpired, not-yet-approved device request for a user code. */
+	async function activatablePending(userCode) {
+		const deviceCode = userCode ? await store.get(`usercode:${userCode}`) : null;
+		if (!deviceCode) return null;
+		const pending = await store.get(`pending:${deviceCode}`);
+		if (!pending || pending.expiresAt < now() || pending.approved) return null;
+		return pending;
+	}
+
+	function normalizeUserCode(value) {
+		return String(value || "").trim().toUpperCase();
 	}
 
 	const routes = {
@@ -146,38 +187,92 @@ export function createApi(store, options = {}) {
 			return ok ? json({ ok: true }) : json({ error: "invalid_user_code" }, 400);
 		},
 
-		// Browser activation: enter/confirm the user code, then bounce via GitHub OAuth.
+		// Browser activation step 1: enter the code, then CONFIRM it on a page
+		// that shows the code and device. A link can no longer approve a device
+		// in one click (GET never redirects to GitHub).
 		"GET /activate": async (request) => {
-			const url = new URL(request.url);
-			const userCode = url.searchParams.get("code") || "";
 			if (!githubClientId) {
 				return new Response("Activation requires GitHub OAuth configuration.", { status: 503 });
 			}
+			const userCode = normalizeUserCode(new URL(request.url).searchParams.get("code"));
+			if (!userCode) {
+				return html(
+					'<form method="GET" action="/activate"><h1>Heli device activation</h1>' +
+						"<p>Enter the code shown in your terminal:</p>" +
+						'<input name="code" autofocus autocomplete="off" placeholder="XXXX-XXXX"> <button>Continue</button></form>',
+				);
+			}
+			const pending = await activatablePending(userCode);
+			if (!pending) return html("<h1>Activation code invalid or expired</h1><p>Re-run <code>heli auth login</code>.</p>", 400);
+			return html(
+				"<h1>Authorize this device?</h1>" +
+					`<p>Code: <strong>${escapeHtml(userCode)}</strong><br>Device: <strong>${escapeHtml(pending.deviceName)}</strong></p>` +
+					"<p>Only continue if <em>you</em> just ran <code>heli auth login</code> and your terminal shows this exact code. " +
+					"Authorizing gives that device access to your Heli sync workspaces.</p>" +
+					'<form method="POST" action="/activate/confirm">' +
+					`<input type="hidden" name="code" value="${escapeHtml(userCode)}"><button>Authorize this device</button></form>`,
+			);
+		},
+
+		// Browser activation step 2: explicit same-origin POST. Issues a random,
+		// single-use OAuth state bound to the user code and to a cookie in THIS
+		// browser, then sends the browser to GitHub.
+		"POST /activate/confirm": async (request) => {
+			if (!githubClientId) {
+				return new Response("Activation requires GitHub OAuth configuration.", { status: 503 });
+			}
+			const url = new URL(request.url);
+			// Browsers attach Origin to every POST; a cross-site auto-submitting form cannot forge ours.
+			if (request.headers.get("origin") !== url.origin) {
+				return html("<h1>Cross-site activation request refused</h1>", 403);
+			}
+			const form = new URLSearchParams(await request.text());
+			const userCode = normalizeUserCode(form.get("code"));
+			if (!(await activatablePending(userCode))) {
+				return html("<h1>Activation code invalid or expired</h1><p>Re-run <code>heli auth login</code>.</p>", 400);
+			}
+			const state = randomHex(32);
+			const browserNonce = randomHex(32);
+			await store.put(`oauthstate:${state}`, {
+				userCode,
+				browserHash: await sha256Hex(browserNonce),
+				expiresAt: now() + ACTIVATION_STATE_TTL_MS,
+			});
 			const redirect = new URL("https://github.com/login/oauth/authorize");
 			redirect.searchParams.set("client_id", githubClientId);
 			redirect.searchParams.set("scope", "read:user");
-			redirect.searchParams.set("state", userCode);
+			redirect.searchParams.set("state", state);
 			redirect.searchParams.set("redirect_uri", `${url.origin}/auth/github/callback`);
-			if (!userCode) {
-				return new Response(
-					"<!doctype html><title>Heli device activation</title>" +
-						'<form method="GET" action="/activate">' +
-						"<h1>Heli device activation</h1>" +
-						'<p>Enter the code shown in your terminal:</p>' +
-						'<input name="code" autofocus placeholder="XXXX-XXXX"> <button>Continue</button></form>',
-					{ headers: { "content-type": "text/html; charset=utf-8" } },
-				);
-			}
-			return Response.redirect(redirect.toString(), 302);
+			const secure = url.protocol === "https:" ? "; Secure" : "";
+			return new Response(null, {
+				status: 303,
+				headers: {
+					location: redirect.toString(),
+					"set-cookie": `${ACTIVATE_COOKIE}=${browserNonce}; Path=/auth/github/callback; HttpOnly; SameSite=Lax; Max-Age=${ACTIVATION_STATE_TTL_MS / 1000}${secure}`,
+					"cache-control": "no-store",
+				},
+			});
 		},
 
 		"GET /auth/github/callback": async (request) => {
 			const url = new URL(request.url);
 			const code = url.searchParams.get("code");
-			const userCode = url.searchParams.get("state");
-			if (!code || !userCode || !githubClientId || !githubClientSecret) {
+			const state = url.searchParams.get("state");
+			if (!code || !state || !githubClientId || !githubClientSecret) {
 				return new Response("Invalid activation callback.", { status: 400 });
 			}
+			// The state must be one we issued, unexpired, and bound to this
+			// browser's cookie. It is single-use: consumed before anything else.
+			const activation = await store.get(`oauthstate:${state}`);
+			await store.delete(`oauthstate:${state}`);
+			const browserNonce = readCookie(request, ACTIVATE_COOKIE);
+			if (!activation || activation.expiresAt < now() || !browserNonce || (await sha256Hex(browserNonce)) !== activation.browserHash) {
+				return new Response("Activation session invalid or expired. Open the link printed by heli auth login and confirm the code again.", {
+					status: 400,
+					headers: { "content-type": "text/plain; charset=utf-8" },
+				});
+			}
+			const userCode = activation.userCode;
 			const tokenResponse = await fetchImpl("https://github.com/login/oauth/access_token", {
 				method: "POST",
 				headers: { accept: "application/json", "content-type": "application/json" },
@@ -199,7 +294,13 @@ export function createApi(store, options = {}) {
 				ok
 					? "Device authorized. You can close this tab and return to your terminal."
 					: "Activation code invalid or expired. Re-run: heli auth login",
-				{ status: ok ? 200 : 400, headers: { "content-type": "text/plain; charset=utf-8" } },
+				{
+					status: ok ? 200 : 400,
+					headers: {
+						"content-type": "text/plain; charset=utf-8",
+						"set-cookie": `${ACTIVATE_COOKIE}=; Path=/auth/github/callback; HttpOnly; SameSite=Lax; Max-Age=0`,
+					},
+				},
 			);
 		},
 	};

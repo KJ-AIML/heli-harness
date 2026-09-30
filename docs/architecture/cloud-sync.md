@@ -2,6 +2,7 @@
 
 **Current baseline:** `v0.10.0`
 **Architecture status:** shipped optional service with historical v0.7 phase notes retained
+**Status:** Experimental — optional, off by default, and not part of Heli's governance security boundary. See [Integrity hardening](#integrity-hardening).
 **Current architecture:** [Current Heli architecture](README.md)
 
 > **v0.10 portability amendment:** linked project identity/config lives under `.heli/`, while live sessions, resource authority, grants, credentials, YOLO state, and runtime capability observations remain execution-local and are never made portable merely by sync. Portable work/evidence may move; authorization does not. The v0.7 implementation history below is retained as historical detail.
@@ -11,7 +12,7 @@ Owner decision record: workspace task `cloud-sync-design`
 
 > Phase 2 amendments (2026-08-07):
 >
-> 4. **E2E passphrase comes from the `HELI_E2E_PASSPHRASE` environment variable**, not an interactive prompt — every heli command stays non-interactive/agent-safe. Scheme: `aes-256-gcm-scrypt` (scrypt-derived 256-bit key, random salt+iv per bundle, GCM tag appended). Pulling an encrypted bundle latches `e2e: on` in the machine-local sync state so a device cannot silently downgrade the workspace to plaintext.
+> 4. **E2E passphrase comes from the `HELI_E2E_PASSPHRASE` environment variable**, not an interactive prompt — every heli command stays non-interactive/agent-safe. Scheme: `aes-256-gcm-scrypt-bound` (scrypt-derived 256-bit key, random salt+iv per bundle, GCM tag appended, sync workspace id + version bound as additional authenticated data; the original unbound `aes-256-gcm-scrypt` bundles are refused). Pulling an encrypted bundle latches `e2e: on` in the machine-local sync state so a device cannot silently downgrade the workspace to plaintext.
 > 5. **Dirty detection hashes canonical content, not wire bytes** (`lastContentSha`) — encrypted bundles are non-deterministic, so the wire hash no longer identifies "same content".
 > 6. **Repo re-cloning** uses an optional `remote` field on `workspace/index.json` repo entries (`heli init --clone`); entries without a remote are listed as manual follow-ups.
 
@@ -107,6 +108,12 @@ Durable Object — API core (cloud/core.mjs, portable Request/Response)
 
 - `heli auth login` requests a device code from the Worker, prints
   `code + https://heli.<domain>/activate`, and polls.
+- `GET /activate?code=…` only renders a confirmation page showing the code and the
+  requesting device name; it never redirects. The user must press **Authorize**, a
+  same-origin `POST /activate/confirm` (cross-origin posts are refused), which
+  stores a random single-use OAuth `state` (10 min TTL) bound to the user code and to
+  an `HttpOnly; SameSite=Lax` cookie in that browser. The GitHub callback approves the
+  device only when the state exists, is unexpired and matches that cookie.
 - The activation page authenticates the user via **GitHub OAuth** (identity provider
   only — no passwords stored, no GitHub repo scopes requested; `read:user` only).
 - On approval the Worker mints a **heli token** (random 256-bit, stored hashed in DO
@@ -190,6 +197,8 @@ ver:<workspace-id>:<version>    → { version, size, sha256, pushedBy, createdAt
                                    is version order)
 pending:<device-code>           → in-flight device-flow grant (15 min TTL)
 usercode:<user-code>            → device-code lookup for the activation page
+oauthstate:<state>              → { userCode, browserHash, expiresAt } single-use
+                                  activation state (10 min TTL)
 
 R2 blob: bundle:<workspace-id>:<version> → the opaque snapshot bytes
 ```
@@ -230,11 +239,11 @@ DELETE /ws/:id                → soft-delete (versions retained 30 days)
 ```
 heli auth login [--url <server>] | logout | status | devices
 heli ws create <name> | link <name> | unlink | list | versions | delete <name>
-heli push [--force] [--allow-secrets]     heli pull [--version N] [--force]
+heli push [--force] [--allow-secrets]     heli pull [--version N] [--force] [--accept-policy-changes]
 heli sync                     # push if ahead, pull if behind, error on divergence
 heli sync auto on|off         # auto-push after `heli task complete`
 heli sync e2e on|off          # client-side encryption (HELI_E2E_PASSPHRASE)
-heli init <name> [--dir path] [--clone]
+heli init <name> [--dir path] [--clone] [--accept-policy-changes]
                               # one command: install if absent → link → pull →
                               # list (or --clone) repos/ from index.json remotes
 ```
@@ -247,7 +256,7 @@ heli init <name> [--dir path] [--clone]
   `--allow-secrets` opt-out mirrors `HELI_ALLOW_COMMAND` semantics.
 - **Optional E2E encryption** (shipped in Phase 2): `heli sync e2e on` plus a
   `HELI_E2E_PASSPHRASE` environment variable (never an interactive prompt — every heli
-  command stays agent-safe). Scheme `aes-256-gcm-scrypt`: a scrypt-derived 256-bit key
+  command stays agent-safe). Scheme `aes-256-gcm-scrypt-bound`: a scrypt-derived 256-bit key
   with a random salt+iv per bundle and the GCM tag appended, applied to the gzip'd
   `heli-bundle-v1` bytes client-side; the server then stores ciphertext only. The bundle
   format carries an `encryption` field from Phase 1, so this was additive, not a
@@ -255,6 +264,36 @@ heli init <name> [--dir path] [--clone]
   won because it adds no dependency.)*
 - Tokens hashed at rest; TLS only; no workspace content in logs; R2 bucket private.
 - Deleting a workspace or account hard-deletes R2 objects after the 30-day soft window.
+
+## Integrity hardening
+
+The sync server is treated as untrusted for governance purposes:
+
+- **No downgrade:** when E2E is on for a workspace (set locally or latched by pulling
+  ciphertext), `heli pull` refuses plaintext bundles.
+- **No relabeling:** encrypted bundles authenticate the sync workspace id and version
+  as AES-GCM additional data, so a bundle cannot be served under another version or
+  workspace.
+- **No silent rollback:** a pull that would apply a version older than the one this
+  machine already applied is refused unless the user asks for it explicitly with
+  `heli pull --version N`.
+- **No silent governance changes:** a pull that would add or change anything under
+  `safety/` or `policies/`, add or change a `tasks/*/yolo.json`, or turn a task's YOLO
+  mode on is refused as a whole (nothing is written) and lists the files; re-run with
+  `--accept-policy-changes` after reviewing them. `heli init` forwards the flag.
+- **No aliased paths:** bundle entry names must be canonical (empty segments, a trailing
+  dot or space, `:`, control characters and 8.3 `~1` names are refused) and governance
+  files are matched case-insensitively, so a spelling such as `tasks/x/./yolo.json` or
+  `tasks/x/Yolo.json` cannot reach `tasks/<id>/yolo.json` unlisted. A bundle with any
+  refused entry writes nothing.
+- **No option injection:** `heli init --clone` skips repo entries whose path is
+  absolute, contains `..` or starts with `-`, or whose remote starts with `-`, and runs
+  `git clone -- <remote> <path>`.
+
+Limits: without E2E the bundle version comes from the server's response, so the rollback
+check only catches a server that admits to serving an older version, and a device with no
+sync history (a fresh `heli init`) has no baseline to compare against. The governance
+gate does not depend on either.
 
 ## Risks
 

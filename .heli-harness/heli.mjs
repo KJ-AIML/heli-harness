@@ -75,10 +75,11 @@ Machine output:
   diagnosis show: add --json
   diagnosis mutations: add --json --payload-json '<object>'
 
-  auth login|logout|status|devices     (cloud sync)
-  ws create|link|unlink|list|versions|delete  (cloud sync; unlink = back to local-only)
-  push | pull | sync [auto|e2e on|off] (cloud sync)
-  init <name> [--dir p] [--clone]      (cloud sync: full device restore)
+Experimental cloud sync (optional; see docs/architecture/cloud-sync.md):
+  auth login|logout|status|devices
+  ws create|link|unlink|list|versions|delete  (unlink = back to local-only)
+  push | pull [--version N] [--accept-policy-changes] | sync [auto|e2e on|off]
+  init <name> [--dir p] [--clone] [--accept-policy-changes]  (full device restore)
 
   heli yolo on|off|status [path] [--hours N]
 `);
