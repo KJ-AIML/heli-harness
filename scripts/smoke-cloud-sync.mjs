@@ -15,9 +15,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createApi } from "../cloud/core.mjs";
+import { runCloud } from "../lib/cli/cloud.mjs";
 import { canonicalizePath } from "../lib/concurrency/index.mjs";
 
-const heliPath = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "heli.mjs");
+const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+const heliPath = join(packageRoot, "bin", "heli.mjs");
 
 // ---------------------------------------------------------------- test server
 
@@ -103,6 +105,40 @@ function cli(args, env, opts = {}) {
 function ok(result, label) {
 	assert.equal(result.status, 0, `${label}: ${result.stderr || result.stdout}`);
 	return result;
+}
+
+/**
+ * Runs a cloud command in THIS process as a human at a terminal would. The terminal is a function
+ * argument (the seam heli's grant/yolo tests use); no environment variable or flag stands in for it.
+ * Same { status, stdout, stderr } shape as cli(). Async on purpose: the API server lives in this process.
+ */
+async function asHuman(command, args, env = {}, { terminal = { stdin: true, stdout: true } } = {}) {
+	const saved = new Map();
+	for (const [name, value] of Object.entries(env)) {
+		saved.set(name, process.env[name]);
+		process.env[name] = value;
+	}
+	const original = { log: console.log, warn: console.warn, error: console.error };
+	let stdout = "";
+	let stderr = "";
+	console.log = (...parts) => {
+		stdout += `${parts.join(" ")}\n`;
+	};
+	console.warn = console.error = (...parts) => {
+		stderr += `${parts.join(" ")}\n`;
+	};
+	try {
+		await runCloud(command, args, packageRoot, { terminal });
+		return { status: 0, stdout, stderr };
+	} catch (error) {
+		return { status: 1, stdout, stderr: `${stderr}Error: ${error.message}\n`, error };
+	} finally {
+		Object.assign(console, original);
+		for (const [name, value] of saved) {
+			if (value === undefined) delete process.env[name];
+			else process.env[name] = value;
+		}
+	}
 }
 
 /** Spawn `heli auth login`, activate via the TEST_LOGIN endpoint while it polls. */
@@ -404,7 +440,27 @@ try {
 	assert.match(policyPull.stderr, /tasks\/portable-restore\/yolo\.json \(added\)/);
 	assert.match(policyPull.stderr, /--accept-policy-changes/);
 	assert.equal(existsSync(join(wsB, ".heli-harness", "tasks", "portable-restore", "yolo.json")), false, "a refused pull writes nothing");
-	ok(await cli(["pull", "--force", "--accept-policy-changes"], { ...cfgB, ...passphrase }, { cwd: wsB }), "accept governance changes");
+	// Accepting them is a human decision: without a terminal the flag is refused before anything else runs,
+	// and no environment variable stands in for one (an agent's shell has neither).
+	const acceptRefusal = /`heli pull --accept-policy-changes` must be run by a human in an interactive terminal/;
+	const noTerminal = await cli(["pull", "--force", "--accept-policy-changes"], { ...cfgB, ...passphrase }, { cwd: wsB });
+	assert.equal(noTerminal.status, 1, "--accept-policy-changes needs a human terminal");
+	assert.match(noTerminal.stderr, acceptRefusal);
+	const bypassEnv = { HELI_YOLO: "1", HELI_GUARDS: "off", HELI_ALLOW_COMMAND: "heli-privileged-command", HELI_HUMAN: "1", HELI_TERMINAL: "1", FORCE_TTY: "1", CI: "1", TERM: "xterm" };
+	const bypassed = await cli(["pull", "--force", "--accept-policy-changes"], { ...cfgB, ...passphrase, ...bypassEnv }, { cwd: wsB });
+	assert.equal(bypassed.status, 1, "no environment variable stands in for a human");
+	assert.match(bypassed.stderr, acceptRefusal);
+	const halfTerminal = await asHuman("pull", [wsB, "--force", "--accept-policy-changes"], { ...cfgB, ...passphrase }, { terminal: { stdin: true, stdout: false } });
+	assert.equal(halfTerminal.status, 1, "stdin and stdout must both be a terminal");
+	assert.equal(halfTerminal.error?.code, "HUMAN_TERMINAL_REQUIRED");
+	assert.equal(existsSync(join(wsB, ".heli-harness", "tasks", "portable-restore", "yolo.json")), false, "a refused acceptance writes nothing");
+	const syncRefusal = await cli(["sync", "--accept-policy-changes"], { ...cfgB, ...passphrase }, { cwd: wsB });
+	assert.equal(syncRefusal.status, 1);
+	assert.match(syncRefusal.stderr, /`heli sync --accept-policy-changes` must be run by a human/);
+	const pushRefusal = await cli(["push", "--accept-policy-changes"], { ...cfgB, ...passphrase }, { cwd: wsB });
+	assert.equal(pushRefusal.status, 1, "the flag is human-only whichever command carries it");
+	assert.match(pushRefusal.stderr, /`heli push --accept-policy-changes` must be run by a human/);
+	ok(await asHuman("pull", [wsB, "--force", "--accept-policy-changes"], { ...cfgB, ...passphrase }), "accept governance changes");
 	assert.deepEqual(JSON.parse(readFileSync(join(wsB, ".heli-harness", "safety", "command-rules.json"), "utf8")).rules, []);
 
 	// init --clone: index.json paths/remotes from the server cannot escape the
@@ -433,7 +489,11 @@ try {
 	);
 	ok(await cli(["push", "--force"], { ...cfgA, ...passphrase }, { cwd: wsA }), "push repo index");
 	const wsD = join(root, "ws-d");
-	const initD = ok(await cli(["init", "lab", "--dir", wsD, "--clone", "--accept-policy-changes"], { ...cfgA, ...passphrase }), "init --clone");
+	const initRefused = await cli(["init", "lab", "--dir", wsD, "--clone", "--accept-policy-changes"], { ...cfgA, ...passphrase });
+	assert.equal(initRefused.status, 1, "init --accept-policy-changes needs a human terminal");
+	assert.match(initRefused.stderr, /`heli init --accept-policy-changes` must be run by a human in an interactive terminal/);
+	assert.equal(existsSync(wsD), false, "a refused init does nothing, not even create the folder");
+	const initD = ok(await asHuman("init", ["lab", "--dir", wsD, "--clone", "--accept-policy-changes"], { ...cfgA, ...passphrase }), "init --clone");
 	const initOutput = `${initD.stdout}\n${initD.stderr}`;
 	assert.ok(existsSync(join(wsD, "repos", "good", "README.md")), "a safe remote is cloned");
 	assert.equal(existsSync(join(root, "escaped")), false, "a ../ path must not be cloned outside the workspace");

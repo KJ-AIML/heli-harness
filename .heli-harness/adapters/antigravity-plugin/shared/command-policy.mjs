@@ -26,7 +26,8 @@
  * - Analysis runs inside a deterministic budget (COMMAND_ANALYSIS_LIMITS). A
  *   command over it is refused fail-closed, never analyzed in part and allowed.
  * - Heli's own privilege commands (`heli grant issue`, `heli yolo on`, takeovers, write
- *   transfers, removing Heli or its host plugins) are built-in T6 rules: the agent Heli
+ *   transfers, removing Heli or its host plugins, and any Heli invocation that carries
+ *   `--accept-policy-changes`) are built-in T6 rules: the agent Heli
  *   governs may never run them, in any invocation form. shellWriteTargets lists the paths
  *   a command writes, for the protected-state check in hook-core.
  */
@@ -715,6 +716,18 @@ function yoloTaskMode(args) {
 	);
 }
 
+/**
+ * The flag that lets `heli pull|sync|init` apply changes to Heli's own governance files that a sync
+ * server sent (lib/cli/cloud.mjs). Accepting them is a human decision, like a grant, so ANY Heli
+ * invocation carrying it is a privilege command, whatever its subcommand (the `=value` spelling too:
+ * a hard deny must not depend on how far the CLI's parser goes).
+ */
+const ACCEPT_POLICY_FLAG = "--accept-policy-changes";
+
+function carriesAcceptPolicyFlag(args) {
+	return args.some((arg) => arg === ACCEPT_POLICY_FLAG || arg.startsWith(`${ACCEPT_POLICY_FLAG}=`));
+}
+
 /** Heli subcommands that grant authority, bypass guards or remove Heli. */
 function privilegedHeliCommand(args) {
 	const [command, sub] = args;
@@ -728,6 +741,7 @@ function privilegedHeliCommand(args) {
 	if (command === "session" && sub === "transfer-write") return "heli session transfer-write";
 	if (command === "host" && (sub === "remove" || sub === "uninstall")) return `heli host ${sub}`;
 	if (command === "uninstall") return "heli uninstall";
+	if (carriesAcceptPolicyFlag(args)) return `heli ${command.startsWith("-") ? "" : `${command} `}${ACCEPT_POLICY_FLAG}`;
 	return null;
 }
 

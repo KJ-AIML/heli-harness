@@ -4,7 +4,9 @@
  *
  * Talks to the heli sync service (cloud/core.mjs contract). Strictly optional:
  * no governance path imports this module — a workspace works fully offline and
- * unauthenticated. Design: docs/architecture/cloud-sync.md.
+ * unauthenticated. Design: docs/architecture/cloud-sync.md. A pull never applies
+ * governance changes (safety/, policies/, task YOLO/diagnosis/event files) unless a
+ * human passes --accept-policy-changes in an interactive terminal.
  *
  * Local files:
  *   <config dir>/credentials.json          { url, token, login }   (per device;
@@ -19,6 +21,7 @@ import { isAbsolute, join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { findWorkspaceRoot, pathsFor } from "../adapters/shared/concurrency/paths.mjs";
 import { readJson, writeJsonAtomic } from "../adapters/shared/concurrency/fs-atomic.mjs";
+import { assertHumanTerminal } from "./human-gate.mjs";
 import {
 	collectBundleFiles,
 	contentSha256,
@@ -32,6 +35,9 @@ import {
 } from "./cloud-bundle.mjs";
 
 const POLL_TIMEOUT_MS = 15 * 60 * 1000;
+// Applies governance changes a sync server sent (safety/, policies/, task YOLO/diagnosis/event files).
+// A human decision, like a grant: needs an interactive terminal, and is a hard deny for an agent's shell.
+const ACCEPT_POLICY_FLAG = "--accept-policy-changes";
 
 function configDir() {
 	return process.env.HELI_CONFIG_DIR || join(homedir(), ".heli");
@@ -411,11 +417,11 @@ async function runPull(args) {
 	});
 	const files = restoreTaskFilesForWorkspace(workspaceRoot, unpackedFiles);
 	const policyChanges = policyBearingChanges(collectBundleFiles(workspaceRoot), files);
-	if (policyChanges.length && !args.includes("--accept-policy-changes")) {
+	if (policyChanges.length && !args.includes(ACCEPT_POLICY_FLAG)) {
 		for (const change of policyChanges) console.error(`  governance change: ${change.rel} (${change.change})`);
 		throw new Error(
 			`Pull refused: v${version} changes ${policyChanges.length} governance file(s) (safety/, policies/ or task YOLO state). ` +
-				"Nothing was written. Review the list above, then re-run with --accept-policy-changes to apply it.",
+				`Nothing was written. Review the list above, then run it again with ${ACCEPT_POLICY_FLAG} in your own terminal to apply it (an agent cannot accept it for you).`,
 		);
 	}
 	// If the server bundle was encrypted, latch e2e on locally so this machine's
@@ -512,7 +518,7 @@ async function runInit(args, packageRoot) {
 	const ws = list.find((w) => w.name === name || w.id === name);
 	if (!ws) throw new Error(`No sync workspace named "${name}". Run: heli ws list`);
 	linkWorkspace(dir, { ...ws, currentVersion: 0 });
-	await runPull([dir, "--force", ...(args.includes("--accept-policy-changes") ? ["--accept-policy-changes"] : [])]);
+	await runPull([dir, "--force", ...(args.includes(ACCEPT_POLICY_FLAG) ? [ACCEPT_POLICY_FLAG] : [])]);
 
 	// Offer the product repos back: entries with a `remote` can be re-cloned.
 	// index.json comes from the sync server, so its paths/remotes are untrusted.
@@ -546,7 +552,18 @@ async function runInit(args, packageRoot) {
 	console.log(`\nWorkspace "${ws.name}" restored at ${dir}. Next: open your agent from this folder.`);
 }
 
-export async function runCloud(command, args, packageRoot = null) {
+/**
+ * @param {string} command
+ * @param {string[]} args
+ * @param {string|null} [packageRoot]
+ * @param {{ terminal?: { stdin: boolean, stdout: boolean } }} [options]
+ *   terminal: test seam only; the CLI entry never passes it, so the real TTY state decides.
+ */
+export async function runCloud(command, args, packageRoot = null, { terminal } = {}) {
+	// Applying governance changes a sync server sent is a human decision, like a grant or YOLO. Refuse
+	// before any credential is read, any request is made or any file is written. (For an agent's shell the
+	// Heli hook already hard-denies the flag, command-policy.mjs; this is the second layer.)
+	if (args.includes(ACCEPT_POLICY_FLAG)) assertHumanTerminal(`heli ${command} ${ACCEPT_POLICY_FLAG}`, terminal);
 	switch (command) {
 		case "auth":
 			return runAuth(args);

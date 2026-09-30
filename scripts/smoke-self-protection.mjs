@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Heli protects itself from the agent it governs:
- *  - agent-run privilege commands (grants, YOLO, takeovers, Heli removal) are
- *    hard-denied in every invocation form;
+ *  - agent-run privilege commands (grants, YOLO, takeovers, Heli removal, and the
+ *    --accept-policy-changes flag of a sync pull) are hard-denied in every invocation form;
  *  - `heli grant issue` / `heli yolo on` refuse to run without a human terminal;
  *  - Heli authority state is never agent-writable, whatever the path spelling;
  *  - narrative task files stay writable by their owner;
@@ -88,6 +88,18 @@ try {
 		"echo ok && heli grant issue --action env.write",
 		"bash -c 'heli yolo on'",
 		"pwsh -Command \"heli grant issue --action git.push\"",
+		// Accepting governance changes pulled from a sync server is a human decision too.
+		"heli pull --accept-policy-changes",
+		"heli pull --force --accept-policy-changes",
+		"heli sync --accept-policy-changes",
+		"heli init lab --dir ../ws --clone --accept-policy-changes",
+		"node .heli-harness/heli.mjs pull --accept-policy-changes",
+		"npx heli-harness pull --accept-policy-changes",
+		"heli-harness pull --force --accept-policy-changes",
+		"echo ok && heli pull --force --accept-policy-changes",
+		"bash -c 'heli pull --accept-policy-changes'",
+		"pwsh -Command \"heli pull --accept-policy-changes\"",
+		"heli pull --accept-policy-changes # sure",
 		"claude plugin uninstall heli-harness@heli-harness",
 		"claude plugin disable heli-harness@heli-harness",
 		"codex plugin remove heli-harness@heli-harness",
@@ -105,6 +117,45 @@ try {
 	for (const command of ["heli grant list", "heli grant revoke heli-grant-x", "heli yolo off", "heli yolo status", "heli task claim t1 --mode write", "heli task create t2", "heli status", "heli host status", "heli doctor", "cd .heli-harness && ls"]) {
 		const result = evaluate(legacy, "Bash", { command });
 		assert.equal(result.deny, false, `${command}: ${result.reason}`);
+	}
+	// Only the flag is human-only: a plain pull or init stays allowed (they refuse governance changes on their own),
+	// and a plain sync stays approvable (T5) rather than hard-denied.
+	for (const command of [
+		"heli pull",
+		"heli pull --force",
+		"heli pull --version 3 --force",
+		"heli init lab --dir ../ws --clone",
+		"npx heli-harness pull",
+		"bash -c 'heli pull --force'",
+		// Text that only mentions the flag is not the flag: a comment, another command in the line, data inside a longer word.
+		"heli pull # --accept-policy-changes",
+		"heli pull\n# --accept-policy-changes is for a human",
+		"heli pull && echo --accept-policy-changes",
+		"echo --accept-policy-changes | heli pull",
+		"heli task create t2 --title \"docs: --accept-policy-changes needs a terminal\"",
+		"heli pull --accept-policy-changes-now",
+	]) {
+		const result = evaluate(legacy, "Bash", { command });
+		assert.equal(result.deny, false, `${command}: ${result.reason}`);
+	}
+	for (const command of [["heli", "pull", "--force"], ["bash", "-lc", "heli pull"]]) {
+		const result = evaluate(legacy, "Bash", { command });
+		assert.equal(result.deny, false, `${JSON.stringify(command)}: ${result.reason}`);
+	}
+	assert.equal(evaluate(legacy, "Bash", { command: "heli sync" }).code, "TIER_APPROVAL_REQUIRED", "a plain sync is a T5 approval, not a hard deny");
+	// A command given as an argv list (Codex's shell tool) is read as its shell-quoted join, so the flag is found there too.
+	for (const command of [
+		["heli", "pull", "--accept-policy-changes"],
+		["heli", "pull", "--force", "--accept-policy-changes"],
+		["bash", "-lc", "heli pull --force --accept-policy-changes"],
+		["node", ".heli-harness/heli.mjs", "init", "lab", "--accept-policy-changes"],
+		["npx", "heli-harness", "sync", "--accept-policy-changes"],
+	]) {
+		for (const extraEnv of [{}, { HELI_YOLO: "1", HELI_ALLOW_COMMAND: "heli-privileged-command" }]) {
+			const result = evaluate(legacy, "Bash", { command }, extraEnv);
+			assert.equal(result.code, "TIER_BLOCKED", `${JSON.stringify(command)}: ${result.reason}`);
+			assert.match(result.reason, /human in their own terminal/, JSON.stringify(command));
+		}
 	}
 
 	// 2. The CLI refuses grant issue / yolo on without a human terminal.
@@ -262,6 +313,35 @@ try {
 		"sudo -s 'codex plugin remove heli-harness@heli-harness'",
 		"claude plugin marketplace remove heli-harness",
 		"axga remove heli-harness",
+		// The flag that accepts synced governance changes, in every one of those forms.
+		"pnpm dlx heli-harness pull --accept-policy-changes",
+		"bunx heli-harness sync --accept-policy-changes",
+		"yarn dlx heli-harness init lab --accept-policy-changes",
+		"npm exec heli-harness -- pull --accept-policy-changes",
+		"npx -y heli-harness@latest pull --accept-policy-changes",
+		"npx -y github:KJ-AIML/heli-harness#main pull --accept-policy-changes",
+		"deno run -A npm:heli-harness pull --accept-policy-changes",
+		"bun .heli-harness/heli.mjs pull --accept-policy-changes",
+		"./node_modules/.bin/heli pull --accept-policy-changes",
+		"node C:\\tools\\heli\\bin\\heli.mjs pull --force --accept-policy-changes",
+		"\"C:\\Program Files\\nodejs\\node.exe\" .heli-harness\\heli.mjs pull --accept-policy-changes",
+		"heli.cmd pull --accept-policy-changes",
+		"heli.exe pull --accept-policy-changes",
+		"heli.ps1 sync --accept-policy-changes",
+		"sudo heli pull --accept-policy-changes",
+		"env HELI_X=1 heli pull --accept-policy-changes",
+		"time heli pull --accept-policy-changes",
+		"heli pull --accept-policy-changes=true",
+		"heli --accept-policy-changes pull",
+		"heli pull -- --accept-policy-changes",
+		"heli pull \"--accept-policy-changes\"",
+		"heli --json pull --accept-policy-changes",
+		"ssh host 'heli pull --accept-policy-changes'",
+		"su -c 'node .heli-harness/heli.mjs pull --accept-policy-changes'",
+		"docker exec c sh -c 'heli sync --accept-policy-changes'",
+		"watch 'heli pull --accept-policy-changes'",
+		"ssh host 'npx heli-harness pull --accept-policy-changes'",
+		"ssh host 'pnpm dlx heli-harness pull --accept-policy-changes'",
 	]) {
 		assert.ok(privilegeRules(legacy, command).length > 0, command);
 	}
@@ -280,6 +360,16 @@ try {
 		"ssh host 'heli yolo on'",
 		"ssh host 'heli-harness grant issue --action git.push'",
 		"su -c 'node .heli-harness/heli.mjs yolo on'",
+		"ssh host 'heli pull --accept-policy-changes'",
+		"ssh host 'heli-harness sync --accept-policy-changes'",
+		"su -c 'node .heli-harness/heli.mjs init lab --accept-policy-changes'",
+		"ssh host 'npx heli-harness pull --accept-policy-changes'",
+		"ssh host 'npm exec heli-harness -- pull --accept-policy-changes'",
+		"ssh host 'pnpm dlx heli-harness pull --accept-policy-changes'",
+		"ssh host 'yarn dlx heli-harness pull --accept-policy-changes'",
+		"ssh host 'bunx heli-harness pull --accept-policy-changes'",
+		"ssh host 'deno run -A npm:heli-harness pull --accept-policy-changes'",
+		"ssh host './.heli-harness/heli.mjs pull --accept-policy-changes'",
 		"ssh host 'npx heli-harness yolo on'",
 		"ssh host 'npm exec heli-harness -- yolo on'",
 		"ssh host 'pnpm dlx heli-harness yolo on'",
@@ -307,6 +397,12 @@ try {
 		"echo 'heli grant issue is blocked'",
 		"git commit -m \"docs: heli yolo on needs a terminal\"",
 		"grep -rn 'heli grant issue' docs",
+		"ssh host 'heli pull'",
+		"ssh host 'heli pull --force'",
+		"echo 'heli pull --accept-policy-changes is blocked'",
+		"git commit -m \"docs: heli pull --accept-policy-changes needs a terminal\"",
+		"grep -rn 'accept-policy-changes' docs",
+		"heli pull && echo done",
 		"claude plugin list",
 		"claude plugin install heli-harness@heli-harness",
 		"pi list",
