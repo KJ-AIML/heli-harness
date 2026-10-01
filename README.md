@@ -5,11 +5,19 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/KJ-AIML/heli-harness/releases/download/v0.10.4/heli-harness-launch.mp4"><img src="assets/heli-harness-launch-poster.png" alt="Heli-Harness launch film (57 s): switch AI coding CLIs and keep the task thread" width="100%"></a>
+  <br>
+  <sub><a href="https://github.com/KJ-AIML/heli-harness/releases/download/v0.10.4/heli-harness-launch.mp4">Watch the launch film (MP4, 57 s)</a> · Voiceover: ElevenLabs</sub>
+</p>
+
+<p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.10.4-informational"></a>
   <a href="https://github.com/KJ-AIML/heli-harness/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/KJ-AIML/heli-harness/ci.yml?branch=main&label=CI"></a>
   <a href="docs/ADAPTER_SUPPORT_MATRIX.md"><img alt="Adapters" src="https://img.shields.io/badge/adapters-evidence--backed-8A2BE2"></a>
 </p>
+
+**Switch tools. Keep the thread.** Current Task and Profile carry your work across AI CLIs (Claude Code, Codex, Grok Build, OpenCode, Kimi Code CLI, Pi) with the same context and task state, and Heli's skills make the agent verify the premise and fix from evidence instead of guessing.
 
 **Portable governance for coding agents.** Heli-Harness v0.10.4 is a small governance and coordination kernel that gives heterogeneous coding hosts the same policy, resource-authority, approval, evidence, and explanation semantics without becoming the agent runtime.
 
@@ -46,10 +54,10 @@ See the [current architecture index](docs/architecture/README.md) and [governanc
 
 ## Install v0.10.4
 
-The current GitHub release is `v0.10.4`. Until the npm registry has `heli-harness@0.10.4`, use the pinned GitHub package for the global CLI:
+Install the global CLI from npm:
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.4
+npm install -g heli-harness
 heli --version
 heli setup
 heli host install all
