@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/KJ-AIML/heli-harness/releases/download/v0.10.4/heli-harness-launch.mp4"><img src="assets/heli-harness-launch-poster.png" alt="Heli-Harness launch film (57 s): switch AI coding CLIs and keep the task thread" width="100%"></a>
   <br>
-  <sub><a href="https://github.com/KJ-AIML/heli-harness/releases/download/v0.10.4/heli-harness-launch.mp4">Watch the launch film (MP4, 57 s)</a> · Voiceover: ElevenLabs</sub>
+  <sub><a href="https://github.com/KJ-AIML/heli-harness/releases/download/v0.10.4/heli-harness-launch.mp4">Watch the launch film (MP4, 57 s)</a><br>Made with code using <a href="https://www.remotion.dev">Remotion</a> and Grok Bot · Voiceover: ElevenLabs · Video skill: <a href="https://github.com/KJ-AIML/product-launch-film">product-launch-film</a></sub>
 </p>
 
 <p align="center">
