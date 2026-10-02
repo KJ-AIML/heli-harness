@@ -16,6 +16,7 @@ import {
 } from "../lib/concurrency/project-binding.mjs";
 import { acquireResourceWriteAuthority, resourceIdForWorktree } from "../lib/concurrency/resource-authority.mjs";
 import { createSession } from "../lib/concurrency/session.mjs";
+import { writeBinding } from "../lib/concurrency/binding.mjs";
 import { evaluateOwnershipGate, resolveExecutionContext } from "../lib/concurrency/resolve.mjs";
 import { evaluatePreToolUse } from "../.heli-harness/adapters/shared/hook-core.mjs";
 
@@ -91,6 +92,7 @@ try {
 
 	createSession(checkoutB, { sessionId: "cli-b", host: "cli", mode: "write", worktreePath: checkoutB });
 	createSession(checkoutB, { sessionId: "grok-b", host: "grok", mode: "write", worktreePath: checkoutB });
+	writeBinding(checkoutB, { worktreePath: checkoutB, sessionId: "grok-b", host: "grok", mode: "write" });
 	const authority = acquireResourceWriteAuthority(checkoutB, { sessionId: "grok-b", worktreePath: checkoutB });
 	assert.equal(authority.resource.id, resourceIdForWorktree(checkoutB));
 	const leasePath = join(rootB.resourceLocksDir, `${authority.resource.id}.write.lock`, "lease.json");
@@ -99,6 +101,29 @@ try {
 	assert.equal(existsSync(join(rootB.sessionsDir, "grok-b.json")), true);
 	assert.equal(rootB.sessionsDir.includes("executions"), true);
 	assert.equal(existsSync(join(rootA.tasksDir, "grok-b.json")), false);
+
+	const hostPayloadContext = resolveExecutionContext({
+		cwd: checkoutB,
+		host: "grok",
+		createIfMissing: false,
+		hookPayload: { session_id: "grok-b", toolUseId: "call-grok-b", tool_name: "Write" },
+	});
+	assert.equal(hostPayloadContext.sessionId, "grok-b", "PreToolUse session id resumes the SessionStart host binding");
+	assert.equal(hostPayloadContext.identitySource, "host-binding");
+	const mismatchedHostPayloadContext = resolveExecutionContext({
+		cwd: checkoutB,
+		host: "grok",
+		createIfMissing: false,
+		hookPayload: { session_id: "some-other-host-session", toolUseId: "call-mismatch", tool_name: "Write" },
+	});
+	assert.equal(mismatchedHostPayloadContext.sessionId, null, "an unbound session id cannot claim a worktree binding");
+	const authPayloadContext = resolveExecutionContext({
+		cwd: checkoutA,
+		host: "grok",
+		createIfMissing: false,
+		hookPayload: { session_id: "fresh-host-session-a", toolUseId: "call-grok-a", tool_name: "Write" },
+	});
+	assert.notEqual(authPayloadContext.sessionId, hostPayloadContext.sessionId, "another worktree resolves its own host binding");
 
 	const explained = JSON.parse(run(["explain", "authority", "--json"], {
 		cwd: checkoutB,
@@ -133,7 +158,7 @@ try {
 		env,
 		toolName: "Write",
 		toolInput: { file_path: join(checkoutB, "conflict-probe.txt") },
-		hookPayload: { session_id: "writer-on-a" },
+		hookPayload: { session_id: "grok-b", toolUseId: "call-cross", tool_name: "Write" },
 	});
 	assert.equal(cross.deny, true, cross.reason);
 	assert.equal(cross.code, "RESOURCE_WRITER_HELD");
@@ -144,7 +169,12 @@ try {
 	const started = spawnSync(
 		process.execPath,
 		[join(packageRoot, ".heli-harness", "adapters", "shared", "grok-style-session-start.mjs")],
-		{ cwd: checkoutA, encoding: "utf8", env: { ...env, HELI_ADAPTER_ID: "grok" } },
+		{
+			cwd: checkoutA,
+			encoding: "utf8",
+			input: JSON.stringify({ session_id: "fresh-host-session-a", hook_event_name: "SessionStart" }),
+			env: { ...env, HELI_ADAPTER_ID: "grok" },
+		},
 	);
 	assert.equal(started.status, 0, `${started.stdout}\n${started.stderr}`);
 	const sessionFiles = readdirSync(rootA.sessionsDir).filter((name) => name.endsWith(".json"));

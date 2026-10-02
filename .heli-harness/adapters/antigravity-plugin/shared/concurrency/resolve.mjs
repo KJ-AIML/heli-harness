@@ -174,6 +174,9 @@ export function resolveExecutionContext({
 	// default so CLI readers such as `heli explain` see the host session.
 	if (!session) {
 		const binding = readBinding(workspaceRoot, worktreeRoot);
+		const payloadHostSessionId = String(
+			hookPayload?.sessionId || hookPayload?.session_id || hookPayload?.session?.id || hookPayload?.session?.sessionId || "",
+		).trim();
 		const resumeBound = (candidateId, source) => {
 			if (!candidateId) return false;
 			const bound = readSession(workspaceRoot, candidateId);
@@ -191,6 +194,25 @@ export function resolveExecutionContext({
 		const hostBoundId = host && binding?.hostBindings?.[host]?.sessionId;
 		if (!resumeBound(hostBoundId, "host-binding") && !externalHostSessionId) {
 			resumeBound(binding?.defaultSessionId, "worktree-binding");
+		}
+		// Some native hosts identify their conversation only in PreToolUse's
+		// session_id/tool-call envelope. When that id first appears after
+		// SessionStart, bind it to the already-created session for this host and
+		// worktree. Refuse to attach a foreign id or any other host's session.
+		if (!session && payloadHostSessionId) {
+			const bindingSessionIds = [hostBoundId, binding?.hostBindings?.cli?.sessionId, binding?.defaultSessionId].filter(Boolean);
+			for (const candidateId of new Set(bindingSessionIds)) {
+				const bound = readSession(workspaceRoot, candidateId);
+				if (!bound || bound.status !== "active") continue;
+				if (bound.host && host && bound.host !== host && bound.host !== "unknown") continue;
+				if (bound.externalHostSessionId && bound.externalHostSessionId !== payloadHostSessionId) continue;
+				bound.externalHostSessionId = payloadHostSessionId;
+				writeSession(workspaceRoot, bound);
+				session = readSession(workspaceRoot, candidateId);
+				sessionId = candidateId;
+				identitySource = "host-binding-payload-session-id";
+				break;
+			}
 		}
 	}
 
