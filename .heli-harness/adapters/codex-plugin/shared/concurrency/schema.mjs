@@ -7,8 +7,8 @@ export const TASK_SCHEMA_VERSION = 1;
 export const SESSION_SCHEMA_VERSION = 2;
 export const LEASE_SCHEMA_VERSION = 1;
 
-export function readWorkspaceSchema(workspaceRoot) {
-	const { schemaPath } = pathsFor(workspaceRoot);
+export function readWorkspaceSchema(workspaceRoot, { env = process.env } = {}) {
+	const { schemaPath } = pathsFor(workspaceRoot, { env });
 	if (!pathExists(schemaPath)) {
 		const binding = readProjectBinding(workspaceRoot);
 		if (binding) {
@@ -34,8 +34,8 @@ export function readWorkspaceSchema(workspaceRoot) {
 	};
 }
 
-export function writeWorkspaceSchema(workspaceRoot, { mode = "legacy" } = {}) {
-	const { schemaPath, workspaceDir } = pathsFor(workspaceRoot);
+export function writeWorkspaceSchema(workspaceRoot, { mode = "legacy", env = process.env } = {}) {
+	const { schemaPath, workspaceDir } = pathsFor(workspaceRoot, { env });
 	ensureDir(workspaceDir);
 	const payload = {
 		schemaVersion: WORKSPACE_SCHEMA_VERSION,
@@ -46,6 +46,6 @@ export function writeWorkspaceSchema(workspaceRoot, { mode = "legacy" } = {}) {
 	return payload;
 }
 
-export function isConcurrentMode(workspaceRoot) {
-	return readWorkspaceSchema(workspaceRoot).mode === "concurrent";
+export function isConcurrentMode(workspaceRoot, options = {}) {
+	return readWorkspaceSchema(workspaceRoot, options).mode === "concurrent";
 }

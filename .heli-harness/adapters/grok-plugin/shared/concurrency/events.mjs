@@ -9,8 +9,8 @@ export const EVENT_SCHEMA_VERSION = 2;
  * v2 keeps legacy top-level payload fields for old readers while also storing
  * the exact payload under `payload` for deterministic machine consumers.
  */
-export function appendTaskEvent(workspaceRoot, taskId, type, payload = {}) {
-	const { eventsJsonl } = taskPaths(workspaceRoot, taskId);
+export function appendTaskEvent(workspaceRoot, taskId, type, payload = {}, { env = process.env } = {}) {
+	const { eventsJsonl } = taskPaths(workspaceRoot, taskId, { env });
 	const eventPayload = payload && typeof payload === "object" && !Array.isArray(payload) ? { ...payload } : {};
 	const record = {
 		...eventPayload,

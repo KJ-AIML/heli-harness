@@ -67,8 +67,8 @@ export function resolveWorkspaceRelativePath(workspaceRoot, relativePath) {
 	return isPathInside(root, candidate) ? candidate : null;
 }
 
-export function readWorkspaceIndex(workspaceRoot) {
-	return readJson(pathsFor(workspaceRoot).indexPath, { repos: [] }) || { repos: [] };
+export function readWorkspaceIndex(workspaceRoot, { env = process.env } = {}) {
+	return readJson(pathsFor(workspaceRoot, { env }).indexPath, { repos: [] }) || { repos: [] };
 }
 
 function indexRepos(workspaceIndex) {

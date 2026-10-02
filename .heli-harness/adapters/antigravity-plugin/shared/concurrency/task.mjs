@@ -10,7 +10,7 @@ import {
 	listDirNames,
 } from "./fs-atomic.mjs";
 import { pathsFor, taskPaths, tasksDirFor, gitBranch, gitRevParse, canonicalizePath } from "./paths.mjs";
-import { linkedWorkspaceExecutionsDir, resolveWorkspaceLayout } from "./project-binding.mjs";
+import { globalDataDir, linkedWorkspaceExecutionsDir, resolveWorkspaceLayout } from "./project-binding.mjs";
 import { fingerprintSource, slugTaskId } from "./ids.mjs";
 import { TASK_SCHEMA_VERSION, writeWorkspaceSchema, readWorkspaceSchema } from "./schema.mjs";
 import { appendTaskEvent } from "./events.mjs";
@@ -23,13 +23,15 @@ const migratedWorkspaces = new Set();
  * Move a missing workspace copy once. Never overwrite a workspace task, and
  * never move sessions, locks, grants, or observations.
  */
-export function migrateExecutionScopedTasks(workspaceRoot) {
-	const layout = resolveWorkspaceLayout(workspaceRoot);
+export function migrateExecutionScopedTasks(workspaceRoot, { env = process.env } = {}) {
+	const layout = resolveWorkspaceLayout(workspaceRoot, { env });
 	const workspaceId = layout?.binding?.workspaceId;
-	if (layout?.mode !== "linked" || !workspaceId || migratedWorkspaces.has(workspaceId)) return;
-	const destRoot = tasksDirFor(workspaceRoot);
-	for (const executionId of listDirNames(linkedWorkspaceExecutionsDir(workspaceId))) {
-		const sourceRoot = join(linkedWorkspaceExecutionsDir(workspaceId), executionId, "heli", "tasks");
+	if (layout?.mode !== "linked" || !workspaceId) return;
+	const migrationKey = `${globalDataDir(env)}|${workspaceId}`;
+	if (migratedWorkspaces.has(migrationKey)) return;
+	const destRoot = tasksDirFor(workspaceRoot, { env });
+	for (const executionId of listDirNames(linkedWorkspaceExecutionsDir(workspaceId, env))) {
+		const sourceRoot = join(linkedWorkspaceExecutionsDir(workspaceId, env), executionId, "heli", "tasks");
 		for (const taskId of listDirNames(sourceRoot)) {
 			const from = join(sourceRoot, taskId);
 			if (!pathExists(join(from, "task.json"))) continue;
@@ -43,37 +45,37 @@ export function migrateExecutionScopedTasks(workspaceRoot) {
 			}
 		}
 	}
-	migratedWorkspaces.add(workspaceId);
+	migratedWorkspaces.add(migrationKey);
 }
 
-export function listTaskIds(workspaceRoot) {
-	migrateExecutionScopedTasks(workspaceRoot);
-	const { tasksDir } = pathsFor(workspaceRoot);
-	return listDirNames(tasksDir).filter((id) => pathExists(taskPaths(workspaceRoot, id).taskJson));
+export function listTaskIds(workspaceRoot, { env = process.env } = {}) {
+	migrateExecutionScopedTasks(workspaceRoot, { env });
+	const { tasksDir } = pathsFor(workspaceRoot, { env });
+	return listDirNames(tasksDir).filter((id) => pathExists(taskPaths(workspaceRoot, id, { env }).taskJson));
 }
 
-export function readTask(workspaceRoot, taskId) {
-	migrateExecutionScopedTasks(workspaceRoot);
-	const p = taskPaths(workspaceRoot, taskId).taskJson;
+export function readTask(workspaceRoot, taskId, { env = process.env } = {}) {
+	migrateExecutionScopedTasks(workspaceRoot, { env });
+	const p = taskPaths(workspaceRoot, taskId, { env }).taskJson;
 	return readJson(p, null);
 }
 
-export function listTasks(workspaceRoot) {
-	return listTaskIds(workspaceRoot)
-		.map((id) => readTask(workspaceRoot, id))
+export function listTasks(workspaceRoot, { env = process.env } = {}) {
+	return listTaskIds(workspaceRoot, { env })
+		.map((id) => readTask(workspaceRoot, id, { env }))
 		.filter(Boolean);
 }
 
-export function listActiveTasks(workspaceRoot) {
-	return listTasks(workspaceRoot).filter((t) => {
+export function listActiveTasks(workspaceRoot, { env = process.env } = {}) {
+	return listTasks(workspaceRoot, { env }).filter((t) => {
 		const s = String(t.status || "").toLowerCase();
 		return s && s !== "complete" && s !== "closed" && s !== "abandoned" && s !== "cancelled";
 	});
 }
 
-function ensureTaskDirs(workspaceRoot, taskId) {
-	migrateExecutionScopedTasks(workspaceRoot);
-	const tp = taskPaths(workspaceRoot, taskId);
+function ensureTaskDirs(workspaceRoot, taskId, env = process.env) {
+	migrateExecutionScopedTasks(workspaceRoot, { env });
+	const tp = taskPaths(workspaceRoot, taskId, { env });
 	ensureDir(tp.dir);
 	ensureDir(tp.reportsDir);
 	ensureDir(tp.runsDir);
@@ -126,12 +128,12 @@ Task ID: ${task.taskId}
 /**
  * Find active tasks that look like duplicates of the proposed work item.
  */
-export function findDuplicateTasks(workspaceRoot, { workItemKey, planPath, repositoryId, fingerprint }) {
+export function findDuplicateTasks(workspaceRoot, { workItemKey, planPath, repositoryId, fingerprint, env = process.env }) {
 	const fp =
 		fingerprint ||
 		fingerprintSource({ planPath, workItemKey, repositoryId });
 	const key = String(workItemKey || "").toLowerCase();
-	return listActiveTasks(workspaceRoot).filter((t) => {
+	return listActiveTasks(workspaceRoot, { env }).filter((t) => {
 		const s = t.source || {};
 		// Exact work-item fingerprint match (plan + key + repo — not title).
 		if (s.fingerprint && s.fingerprint === fp) return true;
@@ -170,9 +172,10 @@ export function createTask(workspaceRoot, {
 	pathClaims = null,
 	allowDuplicate = false,
 	sessionId = null,
+	env = process.env,
 } = {}) {
 	const id = slugTaskId(taskId);
-	const existing = readTask(workspaceRoot, id);
+	const existing = readTask(workspaceRoot, id, { env });
 	if (existing) {
 		const err = new Error(`task already exists: ${id}`);
 		err.code = "TASK_EXISTS";
@@ -190,6 +193,7 @@ export function createTask(workspaceRoot, {
 		planPath,
 		repositoryId,
 		fingerprint: fp,
+		env,
 	});
 	if (dups.length && !allowDuplicate) {
 		const err = new Error(
@@ -212,7 +216,7 @@ export function createTask(workspaceRoot, {
 			baseSha: baseSha || (wt ? gitRevParse(wt, "HEAD") : null),
 			headSha: null,
 		},
-		readWorkspaceIndex(workspaceRoot),
+		readWorkspaceIndex(workspaceRoot, { env }),
 	);
 	const task = {
 		schemaVersion: TASK_SCHEMA_VERSION,
@@ -235,16 +239,16 @@ export function createTask(workspaceRoot, {
 		updatedAt: now,
 	};
 
-	const tp = ensureTaskDirs(workspaceRoot, id);
+	const tp = ensureTaskDirs(workspaceRoot, id, env);
 	writeJsonAtomic(tp.taskJson, task);
 	writeTextAtomic(tp.currentTaskMd, defaultCurrentTaskMd(task));
 	if (!pathExists(tp.planMd)) writeTextAtomic(tp.planMd, `# Plan: ${task.title}\n\n`);
 	if (!pathExists(tp.decisionsMd)) writeTextAtomic(tp.decisionsMd, `# Decisions — ${task.taskId}\n\n`);
 
 	// concurrent mode on first task create
-	const schema = readWorkspaceSchema(workspaceRoot);
+	const schema = readWorkspaceSchema(workspaceRoot, { env });
 	if (schema.mode !== "concurrent") {
-		writeWorkspaceSchema(workspaceRoot, { mode: "concurrent" });
+		writeWorkspaceSchema(workspaceRoot, { mode: "concurrent", env });
 	}
 
 	appendTaskEvent(workspaceRoot, id, "task_created", {
@@ -253,7 +257,7 @@ export function createTask(workspaceRoot, {
 		workItemKey: task.source.workItemKey,
 		fingerprint: task.source.fingerprint,
 		allowDuplicate: !!allowDuplicate,
-	});
+	}, { env });
 
 	return task;
 }
@@ -261,8 +265,8 @@ export function createTask(workspaceRoot, {
 /**
  * CAS update of task.json — expectedRevision must match.
  */
-export function updateTask(workspaceRoot, taskId, mutator, { expectedRevision, sessionId = null } = {}) {
-	const current = readTask(workspaceRoot, taskId);
+export function updateTask(workspaceRoot, taskId, mutator, { expectedRevision, sessionId = null, env = process.env } = {}) {
+	const current = readTask(workspaceRoot, taskId, { env });
 	if (!current) {
 		const err = new Error(`task not found: ${taskId}`);
 		err.code = "TASK_NOT_FOUND";
@@ -280,24 +284,24 @@ export function updateTask(workspaceRoot, taskId, mutator, { expectedRevision, s
 	next.revision = (current.revision || 0) + 1;
 	next.updatedAt = new Date().toISOString();
 	next.taskId = current.taskId;
-	writeJsonAtomic(taskPaths(workspaceRoot, taskId).taskJson, next);
+	writeJsonAtomic(taskPaths(workspaceRoot, taskId, { env }).taskJson, next);
 	appendTaskEvent(workspaceRoot, taskId, "task_state_updated", {
 		sessionId,
 		fromRevision: current.revision,
 		toRevision: next.revision,
-	});
+	}, { env });
 	return next;
 }
 
-export function writeTaskMarkdown(workspaceRoot, taskId, { currentTaskMd, planMd, decisionsMd } = {}) {
-	const tp = taskPaths(workspaceRoot, taskId);
+export function writeTaskMarkdown(workspaceRoot, taskId, { currentTaskMd, planMd, decisionsMd, env = process.env } = {}) {
+	const tp = taskPaths(workspaceRoot, taskId, { env });
 	if (currentTaskMd != null) writeTextAtomic(tp.currentTaskMd, currentTaskMd);
 	if (planMd != null) writeTextAtomic(tp.planMd, planMd);
 	if (decisionsMd != null) writeTextAtomic(tp.decisionsMd, decisionsMd);
 }
 
-export function readTaskMarkdown(workspaceRoot, taskId) {
-	const tp = taskPaths(workspaceRoot, taskId);
+export function readTaskMarkdown(workspaceRoot, taskId, { env = process.env } = {}) {
+	const tp = taskPaths(workspaceRoot, taskId, { env });
 	return {
 		currentTaskMd: readText(tp.currentTaskMd, ""),
 		planMd: readText(tp.planMd, ""),
@@ -305,7 +309,7 @@ export function readTaskMarkdown(workspaceRoot, taskId) {
 	};
 }
 
-export function setTaskYolo(workspaceRoot, taskId, enabled, { sessionId = null, expectedRevision } = {}) {
+export function setTaskYolo(workspaceRoot, taskId, enabled, { sessionId = null, expectedRevision, env = process.env } = {}) {
 	const task = updateTask(
 		workspaceRoot,
 		taskId,
@@ -315,13 +319,13 @@ export function setTaskYolo(workspaceRoot, taskId, enabled, { sessionId = null, 
 			else if (t.mode === "yolo" || t.mode === "unguarded" || t.mode === "dangerous") t.mode = "strict";
 			return t;
 		},
-		{ expectedRevision, sessionId },
+		{ expectedRevision, sessionId, env },
 	);
-	appendTaskEvent(workspaceRoot, taskId, "yolo_changed", { sessionId, enabled: !!enabled });
+	appendTaskEvent(workspaceRoot, taskId, "yolo_changed", { sessionId, enabled: !!enabled }, { env });
 	return task;
 }
 
-export function setTaskTarget(workspaceRoot, taskId, targetPatch, { sessionId = null, expectedRevision } = {}) {
+export function setTaskTarget(workspaceRoot, taskId, targetPatch, { sessionId = null, expectedRevision, env = process.env } = {}) {
 	const task = updateTask(
 		workspaceRoot,
 		taskId,
@@ -335,23 +339,23 @@ export function setTaskTarget(workspaceRoot, taskId, targetPatch, { sessionId = 
 				delete t.target.workspaceRelativeRepositoryPath;
 				t.target.repositoryPath = targetPatch.repositoryPath || "";
 			}
-			t.target = addPortableTargetPaths(workspaceRoot, t.target, readWorkspaceIndex(workspaceRoot));
+			t.target = addPortableTargetPaths(workspaceRoot, t.target, readWorkspaceIndex(workspaceRoot, { env }));
 			delete t.target.restoreStatus;
 			return t;
 		},
-		{ expectedRevision, sessionId },
+		{ expectedRevision, sessionId, env },
 	);
-	appendTaskEvent(workspaceRoot, taskId, "target_changed", { sessionId, target: task.target });
+	appendTaskEvent(workspaceRoot, taskId, "target_changed", { sessionId, target: task.target }, { env });
 	return task;
 }
 
 /**
  * Import legacy global state into one task and enable concurrent mode.
  */
-export function migrateLegacyTask(workspaceRoot, taskId, { title, repositoryId } = {}) {
-	const { legacyTaskPath, legacyPlanPath, legacyDecisionsPath, legacyYoloPath, targetPath } = pathsFor(workspaceRoot);
+export function migrateLegacyTask(workspaceRoot, taskId, { title, repositoryId, env = process.env } = {}) {
+	const { legacyTaskPath, legacyPlanPath, legacyDecisionsPath, legacyYoloPath, targetPath } = pathsFor(workspaceRoot, { env });
 	const id = slugTaskId(taskId);
-	if (readTask(workspaceRoot, id)) {
+	if (readTask(workspaceRoot, id, { env })) {
 		const err = new Error(`task already exists: ${id}`);
 		err.code = "TASK_EXISTS";
 		throw err;
@@ -379,25 +383,26 @@ export function migrateLegacyTask(workspaceRoot, taskId, { title, repositoryId }
 		repositoryPath: target?.targetGitRoot || "",
 		mode: yolo?.enabled ? "yolo" : "strict",
 		allowDuplicate: true,
+		env,
 	});
 
-	const tp = taskPaths(workspaceRoot, id);
+	const tp = taskPaths(workspaceRoot, id, { env });
 	if (legacyTask.trim()) writeTextAtomic(tp.currentTaskMd, legacyTask);
 	if (legacyPlan.trim()) writeTextAtomic(tp.planMd, legacyPlan);
 	if (legacyDecisions.trim()) writeTextAtomic(tp.decisionsMd, legacyDecisions);
 
-	appendTaskEvent(workspaceRoot, id, "task_migrated_from_legacy", {});
-	writeConcurrentProjection(workspaceRoot);
-	return readTask(workspaceRoot, id);
+	appendTaskEvent(workspaceRoot, id, "task_migrated_from_legacy", {}, { env });
+	writeConcurrentProjection(workspaceRoot, { env });
+	return readTask(workspaceRoot, id, { env });
 }
 
 /**
  * Neutral or single-task projection into legacy state/current-task.md location.
  * One-way: never authoritative in concurrent mode.
  */
-export function writeConcurrentProjection(workspaceRoot) {
-	const active = listActiveTasks(workspaceRoot);
-	const { legacyTaskPath, stateDir } = pathsFor(workspaceRoot);
+export function writeConcurrentProjection(workspaceRoot, { env = process.env } = {}) {
+	const active = listActiveTasks(workspaceRoot, { env });
+	const { legacyTaskPath, stateDir } = pathsFor(workspaceRoot, { env });
 	ensureDir(stateDir);
 	if (active.length === 0) {
 		writeTextAtomic(
@@ -407,7 +412,7 @@ export function writeConcurrentProjection(workspaceRoot) {
 		return;
 	}
 	if (active.length === 1) {
-		const md = readText(taskPaths(workspaceRoot, active[0].taskId).currentTaskMd, "");
+		const md = readText(taskPaths(workspaceRoot, active[0].taskId, { env }).currentTaskMd, "");
 		const header = `<!-- Heli concurrent projection of task ${active[0].taskId}; authoritative copy is under tasks/${active[0].taskId}/ -->\n`;
 		writeTextAtomic(legacyTaskPath, header + md);
 		return;
