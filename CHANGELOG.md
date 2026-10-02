@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- One `once` grant is spent at most once per host tool call. Grok runs the global Heli hook and the installed plugin on the same call; the later evaluation replays the recorded approval instead of denying.
+- `heli host install grok` keeps one Heli hook source: with the plugin registered it skips the global hooks file, and `heli host repair grok` removes a duplicate global file. Status reports the hook topology and names duplicates.
+- Human grants are workspace-wide by default (workspace + action + resource + usage/expiry) and match from any checkout of the workspace; `heli grant issue --execution <id>` pins one explicitly.
+- A missing host binding names the host-plugin route first; the CLI write session is the fallback for hosts without the plugin.
+
 ## v0.10.6 - Workspace-shared task coordination
 
 ### Changed
