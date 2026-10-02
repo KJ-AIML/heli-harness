@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.10.6 - Workspace-shared task coordination
 
 ### Changed
 

@@ -1,6 +1,6 @@
 {
   "name": "heli-harness",
-  "version": "0.10.5",
+  "version": "0.10.6",
   "description": "Heli-Harness workspace governance for Codex.",
   "skills": "./skills/",
   "hooks": "./hooks/hooks.json",

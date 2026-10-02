@@ -1,9 +1,9 @@
-# Kimi Code CLI Install — Heli v0.10.5
+# Kimi Code CLI Install — Heli v0.10.6
 
 ## Project setup
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.5
+npm install -g github:KJ-AIML/heli-harness#v0.10.6
 heli setup
 cd /path/to/project
 heli link
