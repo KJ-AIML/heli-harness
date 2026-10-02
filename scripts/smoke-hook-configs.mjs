@@ -79,6 +79,8 @@ try {
 		const result = spawnSync(process.execPath, [join(adapters, installer)], { encoding: "utf8", env });
 		assert.equal(result.status, 0, result.stderr || result.stdout);
 	}
+	// No Heli plugin is installed in this hermetic home, so the grok installer's
+	// duplicate rule (issue #35) must fall back to writing the global hooks file.
 	const grokUser = JSON.parse(readFileSync(join(home, ".grok", "hooks", "heli-harness.json"), "utf8"));
 	for (const hook of preToolHooks(grokUser)) assert.ok(hook.timeout >= MIN_TIMEOUT_SECONDS, `grok user hook timeout ${hook.timeout}`);
 	const kimiConfig = readFileSync(join(home, ".kimi-code", "config.toml"), "utf8");
