@@ -31,6 +31,10 @@ import { resolveWorktreeRoot, findWorkspaceRoot, canonicalizePath } from "../ada
 import { isConcurrentMode } from "../adapters/shared/concurrency/schema.mjs";
 import { evaluateDiagnosisCompletion, readDiagnosis } from "../adapters/shared/concurrency/diagnosis.mjs";
 import {
+	declareDependency,
+	evaluateTaskCoordination,
+} from "../adapters/shared/concurrency/handoff.mjs";
+import {
 	claimTaskTransition,
 	releaseTaskTransition,
 	takeoverTaskTransition,
@@ -60,6 +64,8 @@ function parseArgs(args) {
 		else if (a === "--confirm") flags.confirm = true;
 		else if (a === "--session" && args[i + 1]) flags.sessionId = args[++i];
 		else if (a === "--host" && args[i + 1]) flags.host = args[++i];
+		else if (a === "--on" && args[i + 1]) flags.on = args[++i];
+		else if (a === "--artifact" && args[i + 1]) flags.artifact = args[++i];
 		else if (a === "--yolo") flags.yolo = true;
 		else if (a.startsWith("--")) flags[a.slice(2)] = true;
 		else positional.push(a);
@@ -72,6 +78,28 @@ export function runTask(args) {
 	const { flags, positional } = parseArgs(rest);
 
 	switch (sub) {
+		case "depends": {
+			const consumerTaskId = positional[0];
+			const producerTaskId = flags.on;
+			const artifactName = flags.artifact;
+			if (!consumerTaskId || !producerTaskId || !artifactName) {
+				console.log("Usage: heli task depends <consumer-task> --on <producer-task> --artifact <artifact-name> [path]");
+				return;
+			}
+			const cwd = positional[1] || flags.path || process.cwd();
+			const workspaceRoot = requireWorkspace(cwd);
+			const result = declareDependency(workspaceRoot, {
+				consumerTaskId,
+				producerTaskId,
+				artifactName,
+				sessionId: process.env.HELI_SESSION_ID || null,
+			});
+			console.log(`${result.created ? "Declared" : "Already declared"} dependency ${result.dependency.consumerTaskId} -> ${result.dependency.producerTaskId}/${result.dependency.artifactName}`);
+			const coordination = evaluateTaskCoordination(workspaceRoot, consumerTaskId);
+			console.log(`  coordinationState: ${coordination.coordinationState}`);
+			if (coordination.blockedOn.length) console.log(`  blocked_on: ${coordination.blockedOn.join(", ")}`);
+			return;
+		}
 		case "create": {
 			const taskId = positional[0] || flags.id;
 			if (!taskId) {
@@ -122,7 +150,14 @@ export function runTask(args) {
 				const lease = readLease(workspaceRoot, t.taskId);
 				const writer =
 					lease && !isLeaseExpired(lease) ? lease.sessionId : lease ? `stale:${lease.sessionId}` : "none";
-				console.log(`- ${t.taskId}  status=${t.status}  mode=${t.mode}  writer=${writer}  repo=${t.target?.repositoryId || ""}`);
+				const coordination = evaluateTaskCoordination(workspaceRoot, t.taskId);
+				console.log(`- ${t.taskId}  status=${t.status}  coordination=${coordination.coordinationState}  mode=${t.mode}  writer=${writer}  repo=${t.target?.repositoryId || ""}`);
+				if (coordination.blockedOn.length) console.log(`    blocked_on: ${coordination.blockedOn.join(", ")}`);
+				for (const dependency of coordination.dependencies) {
+					if (dependency.state === "satisfied") {
+						console.log(`    dependency: ${dependency.producerTaskId}/${dependency.artifactName} state=satisfied ref=${dependency.ref} path=${dependency.path || "(none)"}`);
+					}
+				}
 			}
 			return;
 		}
@@ -139,7 +174,8 @@ export function runTask(args) {
 				console.log(`Task not found: ${taskId}`);
 				return;
 			}
-			console.log(JSON.stringify(task, null, 2));
+			const coordination = evaluateTaskCoordination(workspaceRoot, taskId);
+			console.log(JSON.stringify({ ...task, coordinationState: coordination.coordinationState, dependencies: coordination.dependencies, blocked_on: coordination.blockedOn }, null, 2));
 			const md = readTaskMarkdown(workspaceRoot, taskId);
 			if (md.currentTaskMd) {
 				console.log("\n--- current-task.md ---\n" + md.currentTaskMd);

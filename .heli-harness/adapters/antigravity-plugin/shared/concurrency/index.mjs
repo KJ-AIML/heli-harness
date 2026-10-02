@@ -23,3 +23,4 @@ export * from "./project-binding.mjs";
 export * from "./resource-authority.mjs";
 export * from "./policy-composition.mjs";
 export * from "./grant.mjs";
+export * from "./handoff.mjs";

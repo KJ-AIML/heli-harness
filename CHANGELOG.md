@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Workspace-scoped task dependencies and artifact handoffs with explicit `blocked` / `ready` coordination state, Git-ref snapshots, idempotent declaration/publication, and human + JSON CLI surfaces.
+
+### Fixed
+
+- Task/path/schema/event helpers honor fixture data-directory overrides so hermetic tests cannot spill linked workspace state into the user's real `~/.heli`; fixture cleanup refuses non-owned state roots.
+- Native SessionStart callbacks retain host-session identity for later PreToolUse resolution without weakening worktree writer isolation.
+- Release validation checks that runtime task/session/binding/lock directories are excluded from the npm allowlist instead of requiring live checkout state to be empty.
+
 ## v0.10.7 - Reliable approvals and host integration
 
 ### Fixed

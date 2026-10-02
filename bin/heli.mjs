@@ -21,7 +21,8 @@ import { runSetup } from "../lib/cli/setup.mjs";
 import { runLink } from "../lib/cli/link.mjs";
 import { runGrant } from "../lib/cli/grant.mjs";
 import { runHost } from "../lib/cli/host.mjs";
-import { runTargetMachine, runTaskMachine, runDiagnosisMachine, runConflictsMachine } from "../lib/cli/machine.mjs";
+import { runHandoff } from "../lib/cli/handoff.mjs";
+import { runTargetMachine, runTaskMachine, runHandoffMachine, runDiagnosisMachine, runConflictsMachine } from "../lib/cli/machine.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [command, ...args] = process.argv.slice(2);
@@ -61,7 +62,8 @@ Commands:
   install | update | uninstall
   target | status | yolo
   doctor [path]  (workspace health: plugins, target, leases, sessions, sync)
-  task create|list|show|migrate-legacy|claim|release|takeover
+  task create|list|show|depends|migrate-legacy|claim|release|takeover
+  handoff publish|list|show
   diagnosis show|init|record|route|gate
   session start|attach|transfer-write|status|list|close
   conflicts [--task id]
@@ -98,6 +100,7 @@ try {
 		case "setup": runSetup(args); break;
 		case "link": runLink(packageRoot, args); break;
 		case "host": runHost(packageRoot, args); break;
+		case "handoff": protocolJsonRequested(command, args) ? runHandoffMachine(args) : runHandoff(args); break;
 		case "grant": runGrant(args); break;
 		case "install": runInstall(packageRoot, args); break;
 		case "update": runUpdate(packageRoot, args); break;

@@ -34,6 +34,7 @@ import {
 	startDiagnosis,
 } from "../adapters/shared/concurrency/diagnosis.mjs";
 import { listActiveTasks } from "../adapters/shared/concurrency/task.mjs";
+import { declareDependency, evaluateTaskCoordination, listHandoffs, publishHandoff, readHandoff } from "../adapters/shared/concurrency/handoff.mjs";
 import { listRepos, showTarget, setTarget, clearTarget } from "./target.mjs";
 import { protocolOk, protocolError } from "../protocol/result.mjs";
 import { printProtocolResult } from "./output.mjs";
@@ -61,7 +62,7 @@ function parse(args, { payload = false } = {}) {
 		const value = args[i];
 		if (value === "--json" || value === "--output-json") flags.outputJson = true;
 		else if (value === "--payload-json" && args[i + 1]) flags.payloadJson = args[++i];
-		else if (["--mode", "--title", "--work-item", "--repo", "--worktree", "--id", "--session", "--host", "--type", "--route", "--reason"].includes(value) && args[i + 1]) flags[value.slice(2)] = args[++i];
+		else if (["--mode", "--title", "--work-item", "--repo", "--worktree", "--id", "--session", "--host", "--type", "--route", "--reason", "--on", "--artifact", "--task", "--name", "--ref", "--path"].includes(value) && args[i + 1]) flags[value.slice(2)] = args[++i];
 		else if (["--allow-duplicate", "--reuse", "--confirm", "--force", "--yolo"].includes(value)) flags[value.slice(2)] = true;
 		else if (value.startsWith("--")) flags[value.slice(2)] = true;
 		else positional.push(value);
@@ -157,15 +158,64 @@ export function runDiagnosisMachine(args = []) {
 	return emit(`diagnosis.${sub}`, { workspaceRoot, taskId, diagnosis: result });
 }
 
+export function runHandoffMachine(args = []) {
+	const clean = args.filter((item) => item !== "--json" && item !== "--output-json");
+	const [sub, ...rest] = clean;
+	const { flags, positional } = parse(rest);
+	const cwd = positional.at(-1) || process.cwd();
+	const workspaceRoot = requireWorkspace(cwd);
+	if (sub === "publish") {
+		if (!flags.task || !flags.name || !flags.ref) {
+			throw Object.assign(new Error("handoff publish requires --task, --name, and --ref"), { code: "HANDOFF_ARGUMENTS_REQUIRED" });
+		}
+		const result = publishHandoff(workspaceRoot, {
+			producerTaskId: flags.task,
+			artifactName: flags.name,
+			ref: flags.ref,
+			path: typeof flags.path === "string" ? flags.path : null,
+			sessionId: flags.session || process.env.HELI_SESSION_ID || null,
+		});
+		return emit("handoff.publish", { workspaceRoot, ...result });
+	}
+	if (sub === "list") {
+		return emit("handoff.list", { workspaceRoot, handoffs: listHandoffs(workspaceRoot) });
+	}
+	if (sub === "show") {
+		const identity = positional.find((item) => item.includes("/"));
+		if (!identity) throw Object.assign(new Error("handoff show requires <producer-task>/<artifact-name>"), { code: "HANDOFF_IDENTITY_REQUIRED" });
+		const slash = identity.indexOf("/");
+		const publication = readHandoff(workspaceRoot, identity.slice(0, slash), identity.slice(slash + 1));
+		if (!publication) throw Object.assign(new Error(`handoff not found: ${identity}`), { code: "HANDOFF_NOT_FOUND" });
+		return emit("handoff.show", { workspaceRoot, publication });
+	}
+	throw Object.assign(new Error(`unknown handoff command: ${sub || "(missing)"}`), { code: "UNKNOWN_HANDOFF_COMMAND" });
+}
+
 export function runTaskMachine(args = []) {
 	const [sub, ...rest] = args;
 	const { flags, positional } = parse(rest);
+	if (sub === "depends") {
+		const consumerTaskId = positional[0];
+		if (!consumerTaskId || !flags.on || !flags.artifact) {
+			throw Object.assign(new Error("Usage: heli task depends <consumer-task> --on <producer-task> --artifact <artifact-name> [path]"), { code: "DEPENDENCY_ARGUMENTS_REQUIRED" });
+		}
+		const cwd = positional.slice(1).at(-1) || process.cwd();
+		const workspaceRoot = requireWorkspace(cwd);
+		const result = declareDependency(workspaceRoot, {
+			consumerTaskId,
+			producerTaskId: flags.on,
+			artifactName: flags.artifact,
+			sessionId: flags.session || process.env.HELI_SESSION_ID || null,
+		});
+		return emit("task.depends", { workspaceRoot, ...result, coordination: evaluateTaskCoordination(workspaceRoot, consumerTaskId) });
+	}
 	if (sub === "list") {
 		const cwd = positional[0] || process.cwd();
 		const workspaceRoot = requireWorkspace(cwd);
 		const tasks = listTasks(workspaceRoot).map((task) => {
 			const lease = readLease(workspaceRoot, task.taskId);
-			return { ...task, leaseState: !lease ? "none" : lease.invalid ? "invalid" : isLeaseExpired(lease) ? "stale" : "active", writerSessionId: lease?.sessionId || null };
+			const coordination = evaluateTaskCoordination(workspaceRoot, task.taskId);
+			return { ...task, ...coordination, leaseState: !lease ? "none" : lease.invalid ? "invalid" : isLeaseExpired(lease) ? "stale" : "active", writerSessionId: lease?.sessionId || null };
 		});
 		return emit("task.list", { workspaceRoot, tasks });
 	}
@@ -176,7 +226,9 @@ export function runTaskMachine(args = []) {
 		const workspaceRoot = requireWorkspace(cwd);
 		const task = readTask(workspaceRoot, taskId);
 		if (!task) throw Object.assign(new Error(`task not found: ${taskId}`), { code: "TASK_NOT_FOUND" });
-		return emit("task.show", { workspaceRoot, task, markdown: readTaskMarkdown(workspaceRoot, taskId), lease: readLease(workspaceRoot, taskId) });
+		const coordination = evaluateTaskCoordination(workspaceRoot, taskId);
+		const { taskId: coordinationTaskId, ...coordinationFields } = coordination;
+		return emit("task.show", { workspaceRoot, task: { ...task, ...coordinationFields }, markdown: readTaskMarkdown(workspaceRoot, taskId), lease: readLease(workspaceRoot, taskId) });
 	}
 	if (sub === "create") {
 		const taskId = positional[0] || flags.id;

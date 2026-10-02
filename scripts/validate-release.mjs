@@ -866,18 +866,19 @@ if (isFile(join(root, ".heli-harness", "state", "yolo.json"))) {
 	pass("no yolo.json in package seed");
 }
 
+// The source checkout may carry ignored user runtime state. The package allowlist
+// (verified by smoke-pack-artifact) must exclude these paths; requiring the live
+// checkout directories themselves to be empty rejects harmless Grok SessionStart
+// evidence and can tempt destructive cleanup of runtime state.
+const packageFileAllowlist = pkg?.files || [];
 for (const dirName of ["sessions", "tasks", "bindings", "locks"]) {
-	const dir = join(root, ".heli-harness", dirName);
-	if (isDir(dir)) {
-		const entries = readdirSync(dir).filter((n) => n !== ".gitkeep");
-		if (entries.length > 0) {
-			fail(`.heli-harness/${dirName}/`, `must be empty for packaging (found: ${entries.slice(0, 3).join(", ")})`);
-		} else {
-			pass(`.heli-harness/${dirName}/ empty or absent`);
-		}
-	} else {
-		pass(`.heli-harness/${dirName}/ absent`);
-	}
+	const rel = `.heli-harness/${dirName}`;
+	const included = packageFileAllowlist.some((entry) => {
+		const normalized = String(entry).replaceAll("\\", "/").replace(/\/$/, "");
+		return normalized === rel || normalized.startsWith(`${rel}/`) || normalized.startsWith(`${rel}/**`);
+	});
+	if (included) fail(`${rel}/`, "must not be included in package.json files allowlist");
+	else pass(`${rel}/ excluded by package.json files allowlist`);
 }
 
 const pollutionMarkers = [

@@ -76,6 +76,41 @@ try {
 	const shown = invoke(packageCli, ["task", "show", "machine-smoke", "--json", workspace]);
 	assert.equal(shown.command, "task.show");
 	assert.equal(shown.data.task.taskId, "machine-smoke");
+	assert.equal(shown.data.task.status, "active");
+	assert.equal(shown.data.task.coordinationState, "ready");
+	assert.deepEqual(shown.data.task.dependencies, []);
+	assert.deepEqual(shown.data.task.blockedOn, []);
+
+	// Layer 2 CLI surfaces: dependency declaration is idempotent and machine
+	// inspection exposes coordination independently of execution status.
+	const producer = invoke(packageCli, ["task", "create", "machine-producer", "--repo", "demo", "--json", workspace]);
+	assert.equal(producer.ok, true);
+	const dependency = invoke(packageCli, ["task", "depends", "machine-smoke", "--on", "machine-producer", "--artifact", "machine-contract", "--json", workspace]);
+	assert.equal(dependency.command, "task.depends");
+	assert.equal(dependency.data.created, true);
+	assert.equal(dependency.data.coordination.coordinationState, "blocked");
+	const duplicateDependency = invoke(packageCli, ["task", "depends", "machine-smoke", "--on", "machine-producer", "--artifact", "machine-contract", "--json", workspace]);
+	assert.equal(duplicateDependency.data.created, false);
+	const blocked = invoke(packageCli, ["task", "show", "machine-smoke", "--json", workspace]);
+	assert.equal(blocked.data.task.status, "active", "dependency readiness must not alter execution status");
+	assert.equal(blocked.data.task.coordinationState, "blocked");
+	assert.deepEqual(blocked.data.task.blockedOn, ["machine-producer/machine-contract"]);
+	const published = invoke(packageCli, ["handoff", "publish", "--task", "machine-producer", "--name", "machine-contract", "--ref", "abc1234", "--path", "docs/contract.md", "--json", workspace]);
+	assert.equal(published.command, "handoff.publish");
+	assert.equal(published.data.created, true);
+	const replayedPublish = invoke(packageCli, ["handoff", "publish", "--task", "machine-producer", "--name", "machine-contract", "--ref", "abc1234", "--path", "docs/contract.md", "--json", workspace]);
+	assert.equal(replayedPublish.data.created, false);
+	const ready = invoke(packageCli, ["task", "show", "machine-smoke", "--json", workspace]);
+	assert.equal(ready.data.task.status, "active");
+	assert.equal(ready.data.task.coordinationState, "ready");
+	assert.equal(ready.data.task.dependencies[0].state, "satisfied");
+	assert.equal(ready.data.task.dependencies[0].ref, "abc1234");
+	assert.equal(ready.data.task.dependencies[0].path, "docs/contract.md");
+	const handoffShown = invoke(packageCli, ["handoff", "show", "machine-producer/machine-contract", "--json", workspace]);
+	assert.equal(handoffShown.command, "handoff.show");
+	assert.equal(handoffShown.data.publication.ref, "abc1234");
+	const handoffListed = invoke(packageCli, ["handoff", "list", "--json", workspace]);
+	assert.equal(handoffListed.data.handoffs.length, 1);
 
 	// Machine lifecycle uses the same canonical transitions as human CLI.
 	// Takeover may mint/attach a session exactly like the human surface.
@@ -125,6 +160,8 @@ try {
 	// Sanity-check that the authoritative task file agrees with the projection.
 	const task = JSON.parse(readFileSync(join(harness, "tasks", "machine-smoke", "task.json"), "utf8"));
 	assert.equal(task.taskId, "machine-smoke");
+	assert.equal(task.status, "complete", "the earlier explicit completion remains the execution state");
+	assert.equal(task.coordinationState, undefined, "coordination must not be persisted over execution lifecycle status");
 
 	console.log("machine cli smoke ok");
 } finally {
