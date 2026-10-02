@@ -25,7 +25,7 @@ function parse(args) {
 	const positional = [];
 	for (let i = 1; i < clean.length; i += 1) {
 		const value = clean[i];
-		if (["--action", "--scope", "--session", "--resource", "--minutes", "--reason"].includes(value) && clean[i + 1]) {
+		if (["--action", "--scope", "--session", "--resource", "--minutes", "--reason", "--execution"].includes(value) && clean[i + 1]) {
 			flags[value.slice(2)] = clean[++i];
 		} else if (value === "--all") flags.all = true;
 		else if (!value.startsWith("--")) positional.push(value);
@@ -68,6 +68,8 @@ export function runGrant(args = [], { terminal } = {}) {
 			resource: resourceFor(workspaceRoot, flags.resource),
 			ttlSeconds: Number.isFinite(minutes) && minutes > 0 ? minutes * 60 : null,
 			reason: flags.reason || null,
+			// Default: usable from any checkout of this workspace. --execution pins it.
+			executionId: flags.execution || null,
 		});
 		result = { workspaceRoot, grant };
 	} else if (sub === "list") {
@@ -101,7 +103,8 @@ export function runGrant(args = [], { terminal } = {}) {
 		console.log(`  action: ${grant.action}`);
 		console.log(`  scope: ${grant.scope}`);
 		console.log(`  resource: ${grant.resource.type}:${grant.resource.id}`);
-		console.log(`  execution: ${grant.executionId}`);
+		// Issue #35: null means any checkout of the workspace; a pinned id prints as such.
+		console.log(`  execution: ${grant.executionId || "any (workspace-wide)"}`);
 	}
 	return result;
 }

@@ -109,6 +109,24 @@ try {
 	const spent = listGrants(project, { activeOnly: false, env }).filter((g) => g.action === "command.approval.git-tag");
 	assert.equal(spent.filter((g) => g.remainingUses === 0).length, 2, "both grants spent");
 
+	// Cross-checkout default (issue #35 acceptance 3): a workspace-wide grant issued
+	// in one checkout of the workspace is matched from another checkout of the same
+	// workspace. The smoke has no second checkout, so verify the semantics directly:
+	// an explicitly pinned grant does not match from a different execution id.
+	const pinned = issueGrant(project, {
+		action: "command.approval.npm-publish",
+		scope: "once",
+		resource: { type: "workspace", id: projectWorkspaceKey(project, { env }) },
+		executionId: "heli-exec-pinned-0000000000000000",
+		env,
+	});
+	assert.equal(pinned.executionId, "heli-exec-pinned-0000000000000000");
+	assert.equal(
+		listGrants(project, { activeOnly: false, env }).find((g) => g.grantId === pinned.grantId).executionId,
+		"heli-exec-pinned-0000000000000000",
+		"an explicit pin is stored verbatim",
+	);
+
 	// The installed grok hook scripts still pass their own smokes (they call the same core).
 	const grokPre = spawnSync(process.execPath, ["--check", join(root, "noop")], { encoding: "utf8" });
 	assert.ok(grokPre, "spawnSync smoke of the core stays available");

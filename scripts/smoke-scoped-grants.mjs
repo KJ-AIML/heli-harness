@@ -128,10 +128,9 @@ try {
 		"trusted user ceiling must not be widened by project/request",
 	);
 
-	assert.equal(
-		String(listGrants(project, { activeOnly: false, env })[0].executionId).startsWith("heli-exec-"),
-		true,
-	);
+	// Default grant model (issue #35): a grant is workspace-wide; executionId is
+	// null unless the issuer pins one explicitly.
+	assert.equal(listGrants(project, { activeOnly: false, env })[0].executionId, null);
 	console.log("scoped grants smoke ok");
 } finally {
 	if (oldConfig == null) delete process.env.HELI_CONFIG_DIR;

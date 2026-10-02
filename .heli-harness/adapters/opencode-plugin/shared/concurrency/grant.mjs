@@ -84,13 +84,15 @@ export function localExecutionGrantIdentity(workspaceRoot, { env = process.env }
 export function grantStorePaths(workspaceRoot, { env = process.env } = {}) {
 	const workspaceKey = projectWorkspaceKey(workspaceRoot, { env });
 	const executionId = localExecutionGrantIdentity(workspaceRoot, { env });
+	// Grant store is per workspace, not per execution (issue #35): a grant binds to
+	// workspace + action + resource + usage/expiry, so every checkout of the same
+	// workspace reads the same store. The caller's execution id stays on the paths
+	// for matching explicitly pinned grants and for new pinned records.
 	const dir = join(
 		globalDataDir(env),
 		"grants",
 		"workspaces",
 		workspaceKey,
-		"executions",
-		executionId,
 	);
 	return {
 		workspaceKey,
@@ -159,6 +161,9 @@ export function issueGrant(workspaceRoot, {
 	expiresAt = null,
 	ttlSeconds = null,
 	reason = null,
+	// Explicit execution pin (issue #35): null means the grant is usable from any
+	// checkout of this workspace+resource. Passing an execution id narrows it.
+	executionId = null,
 	env = process.env,
 } = {}) {
 	if (!action) throw error("GRANT_ACTION_REQUIRED", "grant action required");
@@ -185,7 +190,10 @@ export function issueGrant(workspaceRoot, {
 			resource: normalizeResource(resource, paths),
 			scope,
 			subjectSessionId: subjectSessionId || null,
-			executionId: paths.executionId,
+			// Default grant model (issue #35): the grant binds to workspace + action +
+			// resource + usage/expiry. An execution pin is an explicit narrower choice,
+			// not the place the user happened to run `heli grant issue` from.
+			executionId: executionId || null,
 			workspaceKey: paths.workspaceKey,
 			issuedAt: now,
 			expiresAt: expiresAtFor({ scope, expiresAt, ttlSeconds }),
@@ -224,7 +232,10 @@ function grantMatches(grant, {
 	now = Date.now(),
 }) {
 	if (!activeGrant(grant, now)) return false;
-	if (grant.executionId !== paths.executionId) return false;
+	// Execution pin (issue #35): only grants explicitly pinned to an execution are
+	// execution-scoped. The default grant is usable from any checkout of the
+	// workspace because it binds to workspace + action + resource + usage/expiry.
+	if (grant.executionId && grant.executionId !== paths.executionId) return false;
 	if (!actionMatchesPattern(action, grant.action) && !actionMatchesPattern(grant.action, action)) return false;
 	if (!resourceMatches(grant.resource, resource, paths.workspaceKey)) return false;
 	if (grant.scope === "session" && grant.subjectSessionId !== sessionId) return false;
