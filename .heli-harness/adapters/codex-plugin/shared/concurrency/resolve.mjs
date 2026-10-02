@@ -343,7 +343,10 @@ export function evaluateForeignWorktreeWrite(ctx, rawPaths, { cwd = process.cwd(
 		return {
 			deny: true,
 			code: "NO_SESSION",
-			reason: `Heli linked mode: write targets worktree resource ${resourceId}, and no active host/session identity is bound to that worktree. Start the coding host with the Heli plugin loaded in that worktree, or run \`heli session start --mode write\` there before mutation.`,
+			// Host binding UX (issue #35 acceptance 5): the host/plugin route comes
+			// first; the CLI write session is the fallback for hosts without the
+			// plugin, not the primary recommendation.
+			reason: `Heli linked mode: write targets worktree resource ${resourceId}, and no active host/session identity is bound to that worktree. Start the coding host in that worktree with the Heli plugin loaded (its SessionStart binds the writer), or, for hosts without the plugin, run \`heli session start --mode write\` there before mutation.`,
 		};
 	}
 	return { deny: false };
@@ -369,7 +372,12 @@ export function evaluateOwnershipGate(ctx, { isWrite = false } = {}) {
 					authority: existing,
 				};
 			}
-			return { deny: true, code: "NO_SESSION", reason: "Heli linked mode: no active host/session identity is bound to this worktree. Start the coding host with the Heli plugin loaded, or run `heli session start --mode write` before mutation." };
+			return {
+			deny: true,
+			code: "NO_SESSION",
+			// Host binding UX (issue #35 acceptance 5): host plugin first, CLI session fallback.
+			reason: "Heli linked mode: no active host/session identity is bound to this worktree. Start the coding host here with the Heli plugin loaded (its SessionStart binds the writer), or, for hosts without the plugin, run `heli session start --mode write` before mutation.",
+		};
 		}
 		if (!ctx.worktreeRoot) return { deny: true, code: "RESOURCE_UNRESOLVED", reason: "Heli linked mode: current worktree resource could not be resolved." };
 		const existing = readResourceLeaseForWorktree(ctx.workspaceRoot, ctx.worktreeRoot);
