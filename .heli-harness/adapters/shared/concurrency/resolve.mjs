@@ -1,6 +1,7 @@
 /**
  * Shared execution-context resolver used by all runtime adapters.
  */
+import { isAbsolute, resolve } from "node:path";
 import { pathExists, readJson, readText } from "./fs-atomic.mjs";
 import {
 	findWorkspaceRoot,
@@ -30,12 +31,13 @@ import {
 import { effectiveSessionAuthority } from "./authority.mjs";
 import { resolveYolo } from "./yolo-scope.mjs";
 import { readDiagnosis } from "./diagnosis.mjs";
-import { isLinkedWorkspace } from "./project-binding.mjs";
+import { isLinkedWorkspace, readProjectBinding } from "./project-binding.mjs";
 import { classifyToolPaths } from "./protected-paths.mjs";
 import {
 	acquireResourceWriteAuthority,
 	readResourceLeaseForWorktree,
 	isResourceLeaseExpired,
+	resourceIdForWorktree,
 } from "./resource-authority.mjs";
 
 /**
@@ -302,6 +304,49 @@ export function resolveExecutionContext({
 	};
 }
 
+function resourceHeldReason(existing, resourceId) {
+	const resource = resourceId || existing?.resource?.id || "unknown";
+	const task = existing?.taskId ? ` (work record ${existing.taskId})` : "";
+	return `Heli linked mode: worktree resource ${resource} is held by session ${existing.sessionId}${task} until ${existing.expiresAt}.`;
+}
+
+/**
+ * A write whose path resolves inside another checkout of the same workspace
+ * must name that checkout's writer. Resource authority stays per worktree.
+ */
+export function evaluateForeignWorktreeWrite(ctx, rawPaths, { cwd = process.cwd() } = {}) {
+	if (!ctx?.workspaceRoot || !isLinkedWorkspace(ctx.workspaceRoot)) return { deny: false };
+	const local = readProjectBinding(ctx.workspaceRoot);
+	if (!local?.workspaceId) return { deny: false };
+	const localRoot = canonicalizePath(ctx.workspaceRoot);
+	for (const raw of rawPaths || []) {
+		const text = String(raw ?? "").trim();
+		if (!text) continue;
+		const abs = canonicalizePath(isAbsolute(text) ? text : resolve(cwd, text));
+		if (!abs) continue;
+		const foreign = findWorkspaceRoot(abs);
+		if (!foreign || foreign === localRoot || !isLinkedWorkspace(foreign)) continue;
+		const other = readProjectBinding(foreign);
+		if (!other || other.workspaceId !== local.workspaceId) continue;
+		const resourceId = resourceIdForWorktree(foreign);
+		const existing = readResourceLeaseForWorktree(foreign, foreign);
+		if (existing && !existing.invalid && !isResourceLeaseExpired(existing)) {
+			return {
+				deny: true,
+				code: "RESOURCE_WRITER_HELD",
+				reason: resourceHeldReason(existing, resourceId),
+				authority: existing,
+			};
+		}
+		return {
+			deny: true,
+			code: "NO_SESSION",
+			reason: `Heli linked mode: write targets worktree resource ${resourceId}, and no active host/session identity is bound to that worktree. Start the coding host with the Heli plugin loaded in that worktree, or run \`heli session start --mode write\` there before mutation.`,
+		};
+	}
+	return { deny: false };
+}
+
 /**
  * Ownership gate for write tools in concurrent mode.
  * YOLO must never skip this.
@@ -313,13 +358,22 @@ export function evaluateOwnershipGate(ctx, { isWrite = false } = {}) {
 	if (isLinkedWorkspace(ctx.workspaceRoot)) {
 		if (!isWrite) return { deny: false, linked: true };
 		if (!ctx.sessionId || !ctx.session || ctx.session.status !== "active") {
+			const existing = ctx.worktreeRoot ? readResourceLeaseForWorktree(ctx.workspaceRoot, ctx.worktreeRoot) : null;
+			if (existing && !existing.invalid && !isResourceLeaseExpired(existing)) {
+				return {
+					deny: true,
+					code: "RESOURCE_WRITER_HELD",
+					reason: resourceHeldReason(existing, resourceIdForWorktree(ctx.worktreeRoot)),
+					authority: existing,
+				};
+			}
 			return { deny: true, code: "NO_SESSION", reason: "Heli linked mode: no active host/session identity is bound to this worktree. Start the coding host with the Heli plugin loaded, or run `heli session start --mode write` before mutation." };
 		}
 		if (!ctx.worktreeRoot) return { deny: true, code: "RESOURCE_UNRESOLVED", reason: "Heli linked mode: current worktree resource could not be resolved." };
 		const existing = readResourceLeaseForWorktree(ctx.workspaceRoot, ctx.worktreeRoot);
 		if (existing?.invalid) return { deny: true, code: "MALFORMED_LEASE", reason: `Heli linked mode: malformed resource authority (${existing.reason}).`, authority: existing };
 		if (existing && !isResourceLeaseExpired(existing) && existing.sessionId !== ctx.sessionId) {
-			return { deny: true, code: "RESOURCE_WRITER_HELD", reason: `Heli linked mode: worktree authority is held by session ${existing.sessionId}${existing.taskId ? ` (work record ${existing.taskId})` : ""} until ${existing.expiresAt}.`, authority: existing };
+			return { deny: true, code: "RESOURCE_WRITER_HELD", reason: resourceHeldReason(existing, resourceIdForWorktree(ctx.worktreeRoot)), authority: existing };
 		}
 		if (existing && isResourceLeaseExpired(existing) && existing.sessionId !== ctx.sessionId) {
 			return { deny: true, code: "STALE_RESOURCE_AUTHORITY", reason: `Heli linked mode: stale resource authority from session ${existing.sessionId} requires an explicit takeover before a different actor may write.`, authority: existing };

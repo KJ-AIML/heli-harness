@@ -37,6 +37,10 @@ Heli does not become an agent runtime, planner, scheduler, sandbox implementatio
 - Linked portability that carries evidence/work records without carrying live authorization.
 - Fail-closed migration from embedded v0.8.x-compatible workspaces (historical).
 - Cross-platform CI on Ubuntu/Windows with Node 20/22.
+- Workspace-scoped task records: every checkout of a workspace lists the same tasks.
+- Execution-scoped sessions, writer leases, resource authority, grants, and capability observations.
+- A linked write into another checkout names the session and resource that hold it.
+- SessionStart records a `session_start` observation.
 
 ## Now
 

@@ -20,6 +20,21 @@ import { resolvePolicyComposition } from "../adapters/shared/concurrency/policy-
 import { listGrants } from "../adapters/shared/concurrency/grant.mjs";
 import { isLinkedWorkspace } from "../adapters/shared/concurrency/project-binding.mjs";
 import { readResourceLeaseForWorktree, isResourceLeaseExpired, resourceIdForWorktree } from "../adapters/shared/concurrency/resource-authority.mjs";
+import { readSession } from "../adapters/shared/concurrency/session.mjs";
+
+function sessionIdentity(session, fallback = null) {
+	if (session?.sessionId) {
+		return { sessionId: session.sessionId, host: session.host || null, mode: session.mode || null };
+	}
+	return fallback;
+}
+
+function formatIdentity(identity) {
+	if (!identity?.sessionId) return "none";
+	const host = identity.host || "unknown";
+	const mode = identity.mode || "unknown";
+	return `${identity.sessionId} (host ${host}, mode ${mode})`;
+}
 
 function readJson(path, fallback = null) {
 	try {
@@ -53,15 +68,21 @@ function authorityExplanation(ctx) {
 		const available = !activeLease && !lease?.invalid;
 		const reasons = [];
 		if (lease?.invalid) reasons.push(`resource authority is malformed: ${lease.reason}`);
-		else if (owned) reasons.push("current session holds resource-scoped write authority");
+		else if (owned) reasons.push("current CLI session holds resource-scoped write authority");
 		else if (activeLease) reasons.push(`resource authority is held by session ${activeLease.sessionId}`);
 		else if (!ctx.sessionId) reasons.push("no host/session is bound in this CLI invocation; authority is available and will be acquired conflict-safely by the first guarded host mutation");
-		else reasons.push("current session does not yet hold authority; the first guarded mutation may acquire the available resource");
+		else reasons.push("current CLI session does not yet hold authority; the first guarded mutation may acquire the available resource");
+		const cliSession = sessionIdentity(ctx.session, ctx.sessionId ? { sessionId: ctx.sessionId, host: ctx.host || null, mode: ctx.mode || null } : null);
+		const hostWriter = activeLease
+			? sessionIdentity(readSession(ctx.workspaceRoot, activeLease.sessionId), { sessionId: activeLease.sessionId, host: null, mode: null })
+			: null;
 		return {
 			workspaceRoot: ctx.workspaceRoot,
 			workspaceMode: "linked",
 			authorityModel: "resource-scoped",
 			sessionId: ctx.sessionId || null,
+			cliSession,
+			hostWriter,
 			taskId: ctx.taskId || null,
 			target: ctx.target?.targetRepo || null,
 			worktree: ctx.worktreeRoot || null,
@@ -219,9 +240,9 @@ export function runExplain(args = []) {
 			console.log("Authority model: resource-scoped");
 			console.log(`Resource: ${data.worktree || "n/a"}`);
 			console.log(`Resource ID: ${data.resourceId || "n/a"}`);
-			console.log(`Session: ${data.sessionId || "none"}`);
+			console.log(`CLI session: ${formatIdentity(data.cliSession)}`);
+			console.log(`Host writer: ${formatIdentity(data.hostWriter)}`);
 			console.log(`Work record: ${data.taskId || "none"}`);
-			console.log(`Current writer: ${data.lease?.active ? data.lease.owner : "none"}`);
 			console.log(`Generation / revision: ${data.lease?.generation || 0} / ${data.lease?.revision || 0}`);
 			console.log(`Effective write authority: ${data.writable ? "held" : data.available ? "available, not held" : "denied"}`);
 		} else {

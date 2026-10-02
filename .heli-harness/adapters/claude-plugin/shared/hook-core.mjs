@@ -11,11 +11,13 @@ import { join, resolve } from "node:path";
 import {
 	resolveExecutionContext,
 	evaluateOwnershipGate,
+	evaluateForeignWorktreeWrite,
 	buildConcurrentSessionContext,
 	readTaskGateForContext,
 	readPlanGateForContext,
 	isTaskStateWriteForContext,
 } from "./concurrency/resolve.mjs";
+import { observeRuntimeCapability } from "./concurrency/attestation.mjs";
 import { resolveYolo, allowGitPushScoped, allowEnvWriteScoped } from "./concurrency/yolo-scope.mjs";
 import { sessionHoldsWriteLease, refreshLease } from "./concurrency/lease.mjs";
 import { findWorkspaceRoot } from "./concurrency/paths.mjs";
@@ -114,7 +116,7 @@ export function appendSkillUsageBootstrap(contextText) {
 	return `${text}\n\n${bootstrap}`;
 }
 
-export function buildSessionContext(cwd, { host = "unknown", hookPayload = null, env = process.env } = {}) {
+export function buildSessionContext(cwd, { host = "unknown", hookPayload = null, env = process.env, recordSessionStart = false } = {}) {
 	const ctx = resolveExecutionContext({
 		cwd,
 		environment: env,
@@ -123,6 +125,17 @@ export function buildSessionContext(cwd, { host = "unknown", hookPayload = null,
 		createIfMissing: true,
 		refreshLeaseOnResolve: true,
 	});
+	if (recordSessionStart && ctx.workspaceRoot && ctx.sessionId) {
+		try {
+			observeRuntimeCapability(ctx.workspaceRoot, ctx.sessionId, {
+				host,
+				capability: "session_start",
+				source: "SessionStart",
+			});
+		} catch {
+			// Evidence must not block the host from receiving session context.
+		}
+	}
 
 	if (ctx.concurrentMode) {
 		return appendSkillUsageBootstrap(buildConcurrentSessionContext(ctx));
@@ -634,6 +647,20 @@ export function evaluatePreToolUse({
 
 	// Ownership gates — NEVER bypassed by YOLO.
 	if (isWrite && !taskStateOnly) {
+		const foreignPaths = [
+			...structuredPaths,
+			...shellEntries.map((entry) => entry.normalized).filter(Boolean),
+		];
+		const foreign = evaluateForeignWorktreeWrite(ctx, foreignPaths, { cwd: baseCwd });
+		if (foreign.deny) {
+			return {
+				deny: true,
+				reason: withCliHint(foreign.reason),
+				code: foreign.code,
+				ctx,
+				coverage: shellMutation ? "shell-mutation-best-effort" : "structured-write",
+			};
+		}
 		ownershipDecision = evaluateOwnershipGate(ctx, { isWrite: true });
 		if (ownershipDecision.deny) {
 			return {

@@ -5,7 +5,7 @@
  * one execution namespace under HELI_DATA_DIR (default ~/.heli). The optional
  * registry is only a locator cache and is never consulted to grant authority.
  */
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
@@ -258,6 +258,14 @@ export function resolveExecutionIdentity(workspaceRoot, { env = process.env } = 
 	};
 }
 
+export function linkedWorkspaceTasksDir(workspaceId, env = process.env) {
+	return join(globalDataDir(env), "state", "workspaces", safeIdentity(workspaceId), "tasks");
+}
+
+export function linkedWorkspaceExecutionsDir(workspaceId, env = process.env) {
+	return join(globalDataDir(env), "state", "workspaces", safeIdentity(workspaceId), "executions");
+}
+
 export function linkedOperationalRoot(workspaceRoot, { env = process.env } = {}) {
 	const identity = resolveExecutionIdentity(workspaceRoot, { env });
 	if (!identity) return null;
@@ -339,12 +347,24 @@ export function unregisterWorkspace(workspaceRoot, { env = process.env } = {}) {
 	};
 	ensureDir(join(globalDataDir(env), "registry"));
 	writeJsonAtomic(workspaceRegistryPath(env), next);
+	const workspaceId = binding?.workspaceId || null;
 	const operationalRoot = linkedOperationalRoot(workspaceRoot, { env });
 	const dataDir = globalDataDir(env);
 	if (operationalRoot && operationalRoot.startsWith(dataDir)) {
 		rmSync(dirname(operationalRoot), { recursive: true, force: true });
 	}
-	return { workspaceId: binding?.workspaceId || null, path: canonicalPath };
+	// Task records are workspace-scoped. Drop them only when this was the last
+	// execution and the last registry row; another checkout still needs them.
+	if (workspaceId) {
+		const stillRegistered = next.workspaces.some((item) => item.workspaceId === workspaceId);
+		const executionsDir = linkedWorkspaceExecutionsDir(workspaceId, env);
+		const executionsLeft = existsSync(executionsDir) && readdirSync(executionsDir).length > 0;
+		if (!stillRegistered && !executionsLeft) {
+			const tasksDir = linkedWorkspaceTasksDir(workspaceId, env);
+			if (tasksDir.startsWith(dataDir)) rmSync(tasksDir, { recursive: true, force: true });
+		}
+	}
+	return { workspaceId, path: canonicalPath };
 }
 
 export function projectPolicyDir(workspaceRoot) {

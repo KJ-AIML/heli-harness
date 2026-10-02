@@ -18,6 +18,7 @@ import {
 	registerWorkspace,
 	resolveExecutionIdentity,
 	linkedOperationalRoot,
+	linkedWorkspaceTasksDir,
 	workspaceManifestPath,
 	workspaceLockPath,
 } from "../adapters/shared/concurrency/project-binding.mjs";
@@ -185,7 +186,9 @@ export function linkProject(packageRoot, projectRoot, {
 		// never copy sessions, bindings, locks, yolo, sync state, grants, or
 		// capability observations into the linked execution namespace.
 		for (const name of PORTABLE_OPERATIONAL_DIRS) {
-			copyIfMissing(join(embeddedRoot, name), join(operationalRoot, name));
+			// Tasks are workspace-scoped. Workspace index/target stays execution-local.
+			const dest = name === "tasks" ? linkedWorkspaceTasksDir(id, env) : join(operationalRoot, name);
+			copyIfMissing(join(embeddedRoot, name), dest);
 		}
 		ensureDir(join(operationalRoot, "state"));
 		for (const name of PORTABLE_STATE_FILES) {

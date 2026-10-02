@@ -16,6 +16,7 @@ import {
 	projectSafetyDir,
 	projectProfilesDir,
 	projectSkillsDir,
+	linkedWorkspaceTasksDir,
 } from "./project-binding.mjs";
 
 export const DEFAULT_LEASE_TTL_SECONDS = 14400;
@@ -118,6 +119,19 @@ export function heliDir(workspaceRoot) {
 	return layout.operationalRoot;
 }
 
+/**
+ * Linked task records are shared by every checkout of one workspace id.
+ * Sessions, leases, grants, and observations stay on the execution root.
+ * Embedded compatibility tasks stay inside `.heli-harness/tasks`.
+ */
+export function tasksDirFor(workspaceRoot) {
+	const layout = resolveWorkspaceLayout(workspaceRoot);
+	if (layout.mode === "linked" && layout.binding?.workspaceId) {
+		return linkedWorkspaceTasksDir(layout.binding.workspaceId);
+	}
+	return join(layout.operationalRoot, "tasks");
+}
+
 export function pathsFor(workspaceRoot) {
 	const layout = resolveWorkspaceLayout(workspaceRoot);
 	const root = layout.operationalRoot;
@@ -145,7 +159,7 @@ export function pathsFor(workspaceRoot) {
 		legacyDiagnosisPath: join(root, "state", "diagnosis.json"),
 		legacyDiagnosisEventsPath: join(root, "state", "diagnosis-events.jsonl"),
 		legacyYoloPath: join(root, "state", "yolo.json"),
-		tasksDir: join(root, "tasks"),
+		tasksDir: tasksDirFor(workspaceRoot),
 		sessionsDir: join(root, "sessions"),
 		bindingsDir: join(root, "bindings", "worktrees"),
 		locksDir: join(root, "locks", "tasks"),
@@ -154,7 +168,7 @@ export function pathsFor(workspaceRoot) {
 }
 
 export function taskPaths(workspaceRoot, taskId) {
-	const base = join(heliDir(workspaceRoot), "tasks", taskId);
+	const base = join(tasksDirFor(workspaceRoot), taskId);
 	return {
 		dir: base,
 		taskJson: join(base, "task.json"),

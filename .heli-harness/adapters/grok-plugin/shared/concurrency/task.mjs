@@ -1,3 +1,5 @@
+import { renameSync } from "node:fs";
+import { join } from "node:path";
 import {
 	ensureDir,
 	pathExists,
@@ -7,18 +9,51 @@ import {
 	writeTextAtomic,
 	listDirNames,
 } from "./fs-atomic.mjs";
-import { pathsFor, taskPaths, gitBranch, gitRevParse, canonicalizePath } from "./paths.mjs";
+import { pathsFor, taskPaths, tasksDirFor, gitBranch, gitRevParse, canonicalizePath } from "./paths.mjs";
+import { linkedWorkspaceExecutionsDir, resolveWorkspaceLayout } from "./project-binding.mjs";
 import { fingerprintSource, slugTaskId } from "./ids.mjs";
 import { TASK_SCHEMA_VERSION, writeWorkspaceSchema, readWorkspaceSchema } from "./schema.mjs";
 import { appendTaskEvent } from "./events.mjs";
 import { addPortableTargetPaths, readWorkspaceIndex } from "./portable-targets.mjs";
 
+const migratedWorkspaces = new Set();
+
+/**
+ * Task records written before workspace scope lived under each execution.
+ * Move a missing workspace copy once. Never overwrite a workspace task, and
+ * never move sessions, locks, grants, or observations.
+ */
+export function migrateExecutionScopedTasks(workspaceRoot) {
+	const layout = resolveWorkspaceLayout(workspaceRoot);
+	const workspaceId = layout?.binding?.workspaceId;
+	if (layout?.mode !== "linked" || !workspaceId || migratedWorkspaces.has(workspaceId)) return;
+	const destRoot = tasksDirFor(workspaceRoot);
+	for (const executionId of listDirNames(linkedWorkspaceExecutionsDir(workspaceId))) {
+		const sourceRoot = join(linkedWorkspaceExecutionsDir(workspaceId), executionId, "heli", "tasks");
+		for (const taskId of listDirNames(sourceRoot)) {
+			const from = join(sourceRoot, taskId);
+			if (!pathExists(join(from, "task.json"))) continue;
+			const to = join(destRoot, taskId);
+			if (pathExists(to)) continue;
+			ensureDir(destRoot);
+			try {
+				renameSync(from, to);
+			} catch (error) {
+				if (error?.code !== "ENOENT" && error?.code !== "EEXIST") throw error;
+			}
+		}
+	}
+	migratedWorkspaces.add(workspaceId);
+}
+
 export function listTaskIds(workspaceRoot) {
+	migrateExecutionScopedTasks(workspaceRoot);
 	const { tasksDir } = pathsFor(workspaceRoot);
 	return listDirNames(tasksDir).filter((id) => pathExists(taskPaths(workspaceRoot, id).taskJson));
 }
 
 export function readTask(workspaceRoot, taskId) {
+	migrateExecutionScopedTasks(workspaceRoot);
 	const p = taskPaths(workspaceRoot, taskId).taskJson;
 	return readJson(p, null);
 }
@@ -37,6 +72,7 @@ export function listActiveTasks(workspaceRoot) {
 }
 
 function ensureTaskDirs(workspaceRoot, taskId) {
+	migrateExecutionScopedTasks(workspaceRoot);
 	const tp = taskPaths(workspaceRoot, taskId);
 	ensureDir(tp.dir);
 	ensureDir(tp.reportsDir);

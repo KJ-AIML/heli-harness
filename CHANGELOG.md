@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Linked task records are stored once per workspace. Every checkout of that workspace lists the same tasks. Sessions, writer leases, resource authority, grants, and capability observations stay on the execution.
+- `heli explain authority` names the CLI session and the host writer separately.
+- A linked write into a worktree that already has a writer names that session and resource.
+- SessionStart records a `session_start` observation on the session it binds.
+
 ## v0.10.5 - Align linked host sessions and CLI state
 
 ### Fixed
