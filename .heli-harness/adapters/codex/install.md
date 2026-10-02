@@ -1,11 +1,11 @@
-# Codex Install — Heli v0.10.6
+# Codex Install — Heli v0.10.7
 
 ## Current project setup
 
 Use shared/global Heli distribution and link the project first:
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.6
+npm install -g github:KJ-AIML/heli-harness#v0.10.7
 heli setup
 cd /path/to/project
 heli link

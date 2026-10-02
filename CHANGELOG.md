@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.10.7 - Reliable approvals and host integration
 
 ### Fixed
 

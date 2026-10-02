@@ -1,4 +1,4 @@
-# Cursor Install — Heli v0.10.6
+# Cursor Install — Heli v0.10.7
 
 ## Project setup
 
