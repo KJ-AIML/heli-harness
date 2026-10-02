@@ -22,6 +22,7 @@ import { resolveYolo, allowGitPushScoped, allowEnvWriteScoped } from "./concurre
 import { sessionHoldsWriteLease, refreshLease } from "./concurrency/lease.mjs";
 import { findWorkspaceRoot } from "./concurrency/paths.mjs";
 import { consumeApplicableGrant, findUsableGrants } from "./concurrency/grant.mjs";
+import { hashText } from "./concurrency/ids.mjs";
 import { resourceIdForWorktree } from "./concurrency/resource-authority.mjs";
 import { evaluateDiagnosisWriteGate, readActionPolicy, readDiagnosis } from "./concurrency/diagnosis.mjs";
 import {
@@ -406,6 +407,22 @@ function taskRiskTier(ctx) {
 	return field(readFileSync(taskPath, "utf8"), "Risk tier") || "S1";
 }
 
+/**
+ * Idempotency key for grant consumption (issue #35): one host tool call may run
+ * several identical hook sets (Grok global + plugin), each re-evaluating the same
+ * tool call. Grok's documented PreToolUse payload always carries toolUseId and
+ * sessionId. Keyed only when both are present: a payload without identity cannot
+ * be trusted to dedupe, so it consumes as before.
+ */
+function grantCallKey(ctx, action, env) {
+	const payload = ctx?.hookPayload && typeof ctx.hookPayload === "object" ? ctx.hookPayload : null;
+	if (!payload) return null;
+	const toolCallId = String(payload.toolUseId || payload.tool_use_id || "").trim();
+	const hostSessionId = String(payload.sessionId || payload.session_id || "").trim();
+	if (!toolCallId || !hostSessionId) return null;
+	return hashText(`${hostSessionId}|${toolCallId}|${action}`);
+}
+
 function grantRequest(ctx, action, env) {
 	return {
 		action,
@@ -426,7 +443,10 @@ function grantRequest(ctx, action, env) {
 function findScopedGrants(ctx, actions, env = process.env) {
 	if (!ctx?.workspaceRoot) return actions.map(() => null);
 	try {
-		return findUsableGrants(ctx.workspaceRoot, actions.map((action) => grantRequest(ctx, action, env)), { env });
+		return findUsableGrants(ctx.workspaceRoot, actions.map((action) => ({
+			...grantRequest(ctx, action, env),
+			callKey: grantCallKey(ctx, action, env),
+		})), { env });
 	} catch {
 		// Malformed local grant state fails closed (no grant).
 		return actions.map(() => null);
@@ -437,7 +457,10 @@ function findScopedGrants(ctx, actions, env = process.env) {
 function consumeScopedGrant(ctx, action, env = process.env) {
 	if (!ctx?.workspaceRoot || !action) return null;
 	try {
-		return consumeApplicableGrant(ctx.workspaceRoot, grantRequest(ctx, action, env));
+		return consumeApplicableGrant(ctx.workspaceRoot, {
+			...grantRequest(ctx, action, env),
+			callKey: grantCallKey(ctx, action, env),
+		});
 	} catch {
 		// Grant-store contention fails closed.
 		return null;
@@ -827,6 +850,9 @@ export function evaluatePreToolUse({
 						action: grant.action,
 						scope: grant.scope,
 						resource: grant.resource,
+						// true when this evaluation replayed an earlier consume of the
+						// same tool call (issue #35 duplicate-hook idempotency).
+						replayed: grant.replayed === true || undefined,
 					})),
 				}
 			: {}),

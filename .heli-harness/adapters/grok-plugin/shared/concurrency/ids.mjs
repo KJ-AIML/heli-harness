@@ -23,8 +23,12 @@ export function newGrantId() {
 	return `heli-grant-${randomUUID()}`;
 }
 
+export function hashText(text) {
+	return createHash("sha256").update(String(text)).digest("hex").slice(0, 24);
+}
+
 export function hashCanonicalPath(canonicalPath) {
-	return createHash("sha256").update(String(canonicalPath)).digest("hex").slice(0, 24);
+	return hashText(canonicalPath);
 }
 
 export function slugTaskId(raw) {

@@ -19,11 +19,54 @@ import {
 	resolveExecutionIdentity,
 } from "./project-binding.mjs";
 import { canonicalizePath } from "./paths.mjs";
-import { hashCanonicalPath, newGrantId } from "./ids.mjs";
+import { hashCanonicalPath, newGrantId, hashText } from "./ids.mjs";
 import { evaluateGrantPolicy, actionMatchesPattern } from "./policy-composition.mjs";
+import { appendJsonl, readText } from "./fs-atomic.mjs";
 
 export const GRANT_SCHEMA_VERSION = 1;
 const SCOPES = new Set(["once", "session", "workspace", "time"]);
+
+/**
+ * Consumption ledger for grant idempotency (issue #35): one host tool call may run
+ * several identical PreToolUse hooks (Grok global + installed plugin), and each would
+ * otherwise spend one `once` use of the same approval. The first consume of a call
+ * writes a ledger record keyed on hostSessionId + toolCallId + action; later hooks
+ * for the same key replay it instead of spending another use.
+ */
+const CONSUMPTION_LEDGER_TTL_MS = 24 * 60 * 60 * 1000;
+
+function consumptionLedgerPath(workspaceRoot, options) {
+	const paths = grantStorePaths(workspaceRoot, options);
+	return join(paths.dir, "consumed.jsonl");
+}
+
+function pruneConsumptionLedger(entries, now = Date.now()) {
+	const kept = [];
+	for (const entry of entries) {
+		const at = Date.parse(entry.consumedAt || "");
+		if (!Number.isNaN(at) && now - at > CONSUMPTION_LEDGER_TTL_MS) continue;
+		kept.push(entry);
+	}
+	return kept;
+}
+
+function readConsumptionLedger(workspaceRoot, options) {
+	const path = consumptionLedgerPath(workspaceRoot, options);
+	const text = readText(path, "");
+	if (!text.trim()) return [];
+	const entries = [];
+	for (const line of text.split("\n")) {
+		if (!line.trim()) continue;
+		try {
+			const value = JSON.parse(line);
+			if (value && typeof value === "object") entries.push(value);
+		} catch {
+			// A torn append never blocks the next evaluation; the store's use count
+			// is the authority, the ledger only dedupes within one call.
+		}
+	}
+	return entries;
+}
 
 function error(code, message, extra = {}) {
 	const value = new Error(message);
@@ -229,17 +272,29 @@ export function findUsableGrant(workspaceRoot, {
  * consuming would spend. Uses that earlier requests take are counted, so a `once` grant
  * (one use) is never counted for more requests than it can pay for. Entries are null where
  * no usable grant is left. Never creates directories and never consumes a use.
- * Requests are `{ action, sessionId, resource }` like findUsableGrant's.
+ * Requests are `{ action, sessionId, resource, callKey }` like findUsableGrant's.
+ * A request whose callKey already sits in the consumption ledger is planned from the
+ * recorded grant: this evaluation of the same tool call replays an earlier consume.
  */
 export function findUsableGrants(workspaceRoot, requests = [], { env = process.env } = {}) {
 	if (!requests.length) return [];
 	const paths = grantStorePaths(workspaceRoot, { env });
 	const store = readStore(workspaceRoot, { env });
+	const ledger = pruneConsumptionLedger(readConsumptionLedger(workspaceRoot, { env }));
 	const now = Date.now();
 	const taken = new Map();
-	return requests.map(({ action, sessionId = null, resource = null }) => {
+	return requests.map(({ action, sessionId = null, resource = null, callKey = null }) => {
 		const policy = evaluateGrantPolicy(workspaceRoot, action, { env });
 		if (!policy.grantable || policy.hardDenied) return null;
+		if (callKey) {
+			const replayed = ledger.find((entry) => entry.key === callKey);
+			if (replayed) {
+				const recorded = store.grants.find((grant) => grant.grantId === replayed.grantId);
+				return recorded
+					? { ...recorded, replayed: true }
+					: { grantId: replayed.grantId, action, scope: "once", resource: replayed.resource || null, replayed: true };
+			}
+		}
 		const grant = store.grants.find((candidate) =>
 			grantMatches(candidate, { action, sessionId, resource, paths, now }) &&
 			(candidate.scope !== "once" || Number(candidate.remainingUses || 0) > (taken.get(candidate.grantId) || 0)),
@@ -255,9 +310,25 @@ export function consumeApplicableGrant(workspaceRoot, {
 	sessionId = null,
 	resource = null,
 	env = process.env,
+	// Per-call identity from the host hook payload: one tool call may be evaluated
+	// by more than one registered hook set. Same key replays the first consume.
+	callKey = null,
 } = {}) {
 	const policy = evaluateGrantPolicy(workspaceRoot, action, { env });
 	if (!policy.grantable || policy.hardDenied) return null;
+	// Replay check BEFORE the active-grant probe: after the first hook of a call
+	// spent the `once` use, the store holds no active grant for the action, so the
+	// probe below would return null and the second hook would wrongly deny.
+	if (callKey) {
+		const replayed = pruneConsumptionLedger(readConsumptionLedger(workspaceRoot, { env }))
+			.find((entry) => entry.key === callKey);
+		if (replayed) {
+			const grantRecord = readStore(workspaceRoot, { env }).grants.find((grant) => grant.grantId === replayed.grantId);
+			return grantRecord
+				? { ...grantRecord, replayed: true }
+				: { grantId: replayed.grantId, action, scope: "once", resource: replayed.resource || null, replayed: true };
+		}
+	}
 	// Read-only probe first: hooks call this on every guarded action, and the
 	// mutex below creates the grant-store directory. No matching grant means
 	// nothing to consume, so never touch the filesystem in that case.
@@ -274,6 +345,16 @@ export function consumeApplicableGrant(workspaceRoot, {
 			if (grant.remainingUses === 0) grant.consumedAt = new Date().toISOString();
 			store.grants[index] = grant;
 			writeStore(workspaceRoot, store, { env });
+			if (callKey) {
+				appendJsonl(consumptionLedgerPath(workspaceRoot, { env }), {
+					schemaVersion: 1,
+					key: callKey,
+					grantId: grant.grantId,
+					action,
+					resource: grant.resource,
+					consumedAt: new Date().toISOString(),
+				});
+			}
 		}
 		return grant;
 	}, { env });
