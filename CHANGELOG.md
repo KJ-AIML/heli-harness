@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.10.8 - Workspace task dependencies and artifact handoffs
 
 ### Added
 

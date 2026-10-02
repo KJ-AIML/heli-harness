@@ -1,8 +1,8 @@
 # Heli-Harness Roadmap
 
-## Current Baseline: v0.10.7
+## Current Baseline: v0.10.8
 
-Latest stable release: `v0.10.7`
+Latest stable release: `v0.10.8`
 
 Heli is a **portable governance and coordination layer for coding agents**, implemented around a small policy/authority kernel with evidence-backed host integrations.
 
@@ -21,7 +21,7 @@ Current adapter evidence: [docs/ADAPTER_SUPPORT_MATRIX.md](docs/ADAPTER_SUPPORT_
 
 Heli does not become an agent runtime, planner, scheduler, sandbox implementation, process supervisor, model router, general memory platform, or transcript store.
 
-## Shipped in v0.10.7
+## Shipped in v0.10.8
 
 - Global/shared distribution with `heli setup`.
 - Explicit project binding with `heli link`.
