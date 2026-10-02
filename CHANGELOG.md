@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.10.5 - Align linked host sessions and CLI state
 
 ### Fixed
 

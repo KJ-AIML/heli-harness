@@ -1,9 +1,9 @@
-# Antigravity CLI Install — Heli v0.10.4
+# Antigravity CLI Install — Heli v0.10.5
 
 ## Project setup
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.4
+npm install -g github:KJ-AIML/heli-harness#v0.10.5
 heli setup
 cd /path/to/project
 heli link
