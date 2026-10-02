@@ -81,7 +81,12 @@ if (result) {
 	if (result.ctx?.workspaceRoot && result.ctx?.sessionId) {
 		await sideEffect("runtime observation", async () => {
 			const { observeRuntimeCapability } = await import("./concurrency/attestation.mjs");
-			observeRuntimeCapability(result.ctx.workspaceRoot, result.ctx.sessionId, { host, capability: "pre_tool", source: "PreToolUse" });
+			observeRuntimeCapability(result.ctx.workspaceRoot, result.ctx.sessionId, {
+				host,
+				capability: "pre_tool",
+				source: "PreToolUse",
+				details: { decision: result.deny ? "deny" : "allow" },
+			});
 			observeRuntimeCapability(result.ctx.workspaceRoot, result.ctx.sessionId, { host, capability: "structured_tool_input", source: "PreToolUse" });
 		});
 	}

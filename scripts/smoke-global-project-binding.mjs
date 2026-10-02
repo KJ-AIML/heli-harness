@@ -77,6 +77,10 @@ try {
 		existsSync(join(project, ".heli", "safety", "command-rules.json")),
 		"fresh linked project should receive built-in safety defaults without overwriting project-owned files",
 	);
+	assert.ok(
+		existsSync(join(project, ".heli", "skills", "using-heli-skills", "SKILL.md")),
+		"fresh linked project should receive package skills",
+	);
 	assert.equal(findWorkspaceRoot(join(project, "src")), canonicalizePath(project));
 
 	const firstPaths = pathsFor(project);
@@ -136,6 +140,75 @@ try {
 	const refused = run(["link", legacy, "--json"], 1);
 	const refusedJson = JSON.parse(refused.stdout);
 	assert.equal(refusedJson.errors[0].code, "LINK_ACTIVE_AUTHORITY");
+
+	const projectName = "project";
+	const targetSet = spawnSync(process.execPath, [heli, "target", "set", projectName, project], {
+		encoding: "utf8",
+		env,
+		cwd: project,
+	});
+	assert.equal(targetSet.status, 0, targetSet.stderr || targetSet.stdout);
+	const targetShow = spawnSync(process.execPath, [heli, "target", "show", project], { encoding: "utf8", env, cwd: project });
+	assert.equal(targetShow.status, 0, targetShow.stderr);
+	assert.match(targetShow.stdout, new RegExp(`Target repo: ${projectName}`));
+
+	const migrated = spawnSync(process.execPath, [heli, "task", "migrate-legacy", "--id", "nope", project], {
+		encoding: "utf8",
+		env,
+		cwd: project,
+	});
+	assert.notEqual(migrated.status, 0);
+	assert.match(`${migrated.stdout}\n${migrated.stderr}`, /NO_LEGACY_STATE|no legacy task state/);
+
+	const { yoloOn } = await import("../lib/cli/yolo.mjs");
+	const { resolveYolo } = await import("../lib/concurrency/yolo-scope.mjs");
+	const { createSession, writeBinding, resolveExecutionContext, observeRuntimeCapability } = await import("../lib/concurrency/index.mjs");
+	const { evaluatePreToolUse } = await import("../.heli-harness/adapters/shared/hook-core.mjs");
+	const { readSession } = await import("../lib/concurrency/session.mjs");
+	yoloOn(project, { hours: 1 });
+	assert.ok(existsSync(firstPaths.legacyYoloPath), "linked yolo state is execution-local");
+	assert.equal(existsSync(join(project, ".heli-harness")), false);
+	assert.equal(resolveYolo({ workspaceRoot: project, cwd: project, legacyMode: false }).active, true);
+
+	const session = createSession(project, { host: "grok", worktreePath: canonicalizePath(project), mode: "observe" });
+	writeBinding(project, {
+		worktreePath: canonicalizePath(project),
+		sessionId: session.sessionId,
+		host: "grok",
+		mode: "observe",
+	});
+	const resumed = resolveExecutionContext({
+		cwd: project,
+		host: "grok",
+		hookPayload: { session_id: "grok-host-session-1", tool_name: "write" },
+		createIfMissing: false,
+	});
+	assert.equal(resumed.sessionId, session.sessionId);
+	assert.equal(resumed.identitySource, "host-binding");
+	assert.equal(readSession(project, session.sessionId).externalHostSessionId, "grok-host-session-1");
+	const writeDecision = evaluatePreToolUse({
+		cwd: project,
+		toolName: "write",
+		toolInput: { file_path: join(project, "src", "app.js") },
+		host: "grok",
+		hookPayload: { session_id: "grok-host-session-1", tool_name: "write", tool_input: { file_path: join(project, "src", "app.js") } },
+	});
+	assert.equal(writeDecision.deny, false, writeDecision.reason);
+	observeRuntimeCapability(project, session.sessionId, {
+		host: "grok",
+		capability: "pre_tool",
+		source: "PreToolUse",
+		details: { decision: "allow" },
+	});
+	assert.equal(readSession(project, session.sessionId).runtimeAttestation.observedCapabilities.pre_tool.observed, true);
+	assert.equal(readSession(project, session.sessionId).runtimeAttestation.observedCapabilities.pre_tool.details.decision, "allow");
+
+	const updated = spawnSync(process.execPath, [heli, "update", project], { encoding: "utf8", env, cwd: project });
+	assert.equal(updated.status, 0, updated.stderr || updated.stdout);
+	assert.match(updated.stdout, /Updated linked Heli project/);
+	const removed = spawnSync(process.execPath, [heli, "uninstall", project], { encoding: "utf8", env, cwd: project });
+	assert.equal(removed.status, 0, removed.stderr || removed.stdout);
+	assert.equal(existsSync(join(project, ".heli")), false);
 
 	console.log("global project binding smoke ok");
 } finally {

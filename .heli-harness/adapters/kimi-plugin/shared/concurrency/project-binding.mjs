@@ -5,9 +5,9 @@
  * one execution namespace under HELI_DATA_DIR (default ~/.heli). The optional
  * registry is only a locator cache and is never consulted to grant authority.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, normalize, resolve } from "node:path";
+import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { ensureDir, readJson, safeRealpath, writeJsonAtomic } from "./fs-atomic.mjs";
 
@@ -327,6 +327,24 @@ export function registerWorkspace(workspaceRoot, { env = process.env } = {}) {
 	ensureDir(join(globalDataDir(env), "registry"));
 	writeJsonAtomic(workspaceRegistryPath(env), next);
 	return record;
+}
+
+export function unregisterWorkspace(workspaceRoot, { env = process.env } = {}) {
+	const binding = readProjectBinding(workspaceRoot);
+	const canonicalPath = canonicalLocalPath(workspaceRoot);
+	const registry = readWorkspaceRegistry(env);
+	const next = {
+		schemaVersion: 1,
+		workspaces: registry.workspaces.filter((item) => item.path !== canonicalPath),
+	};
+	ensureDir(join(globalDataDir(env), "registry"));
+	writeJsonAtomic(workspaceRegistryPath(env), next);
+	const operationalRoot = linkedOperationalRoot(workspaceRoot, { env });
+	const dataDir = globalDataDir(env);
+	if (operationalRoot && operationalRoot.startsWith(dataDir)) {
+		rmSync(dirname(operationalRoot), { recursive: true, force: true });
+	}
+	return { workspaceId: binding?.workspaceId || null, path: canonicalPath };
 }
 
 export function projectPolicyDir(workspaceRoot) {

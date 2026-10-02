@@ -71,9 +71,12 @@ export function resolveYolo({
 		}
 	}
 
-	// 5. Legacy workspace yolo.json — only in legacy mode
-	if (!concurrent && root) {
-		const { legacyYoloPath } = pathsFor(root);
+	// 5. Workspace yolo.json.
+	// Embedded concurrent mode ignores it so one task cannot unguard another.
+	// A linked project has one execution-local file, which `heli yolo on` writes.
+	const yoloPaths = root ? pathsFor(root) : null;
+	if (root && yoloPaths && (!concurrent || yoloPaths.linked)) {
+		const { legacyYoloPath } = yoloPaths;
 		if (pathExists(legacyYoloPath)) {
 			try {
 				const data = readJson(legacyYoloPath, null);

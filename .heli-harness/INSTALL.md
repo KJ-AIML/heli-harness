@@ -7,7 +7,7 @@ This document covers the self-contained `.heli-harness/` compatibility path.
 ## Current primary path
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.4
+npm install -g heli-harness
 heli setup
 cd /path/to/project
 heli link
@@ -16,7 +16,7 @@ heli link
 ## Deliberate embedded compatibility install
 
 ```bash
-npx github:KJ-AIML/heli-harness#v0.10.4 install /path/to/workspace
+npx -y heli-harness install /path/to/workspace
 ```
 
 The embedded install copies distribution assets and seeds idle local state. It must not copy package-dogfood sessions, tasks, bindings, locks, grants, capability observations, or YOLO state into the destination.

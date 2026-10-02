@@ -6,10 +6,10 @@
 
 ## Recommended v0.10 setup
 
-The npm registry publication for `0.10.4` may lag the GitHub release. The pinned GitHub package is the authoritative install path until `npm view heli-harness@0.10.4` succeeds.
+`heli-harness@0.10.4` is published on npm.
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.4
+npm install -g heli-harness
 heli --version
 heli setup
 heli host install all
@@ -42,6 +42,16 @@ A linked project receives:
 `.heli/workspace.json` contains logical project/resource identity. `.heli/heli.lock` pins behavior-relevant runtime/protocol/schema information.
 
 Neither file may contain live sessions, writer authority, grants, credentials, runtime capability observations, process handles, or other execution-local authorization.
+
+`heli link` seeds `policies/`, `safety/`, `profiles/`, and `skills/` from the package when those files are missing.
+
+## Host writes
+
+Start the coding host from the linked project root. SessionStart binds that host to one Heli session. Later PreToolUse calls resume the same session, including when the host sends its own session id, and the first file write acquires resource authority for that worktree.
+
+You do not export `HELI_SESSION_ID` for that host path. `heli session start --mode write` is the CLI way to bind a terminal session.
+
+`heli yolo on` and `heli grant issue` stay human-terminal commands. On a linked project, YOLO state is the execution-local `state/yolo.json`, not a `.heli-harness/` file.
 
 ## What `heli link` does
 
@@ -82,7 +92,7 @@ During migration:
 Use this only when you intentionally need a self-contained workspace bundle:
 
 ```bash
-npx github:KJ-AIML/heli-harness#v0.10.4 install /path/to/workspace
+npx -y heli-harness install /path/to/workspace
 ```
 
 or from a source checkout:

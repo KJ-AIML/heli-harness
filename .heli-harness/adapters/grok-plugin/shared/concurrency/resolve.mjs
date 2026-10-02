@@ -163,18 +163,31 @@ export function resolveExecutionContext({
 		}
 	}
 
-	// 3. Unique active session binding for canonical worktree.
-	// Never substitute a worktree-bound actor when the host supplied an explicit
-	// external session identity that did not match this host.
-	if (!session && !externalHostSessionId) {
+	// 3. Resume the session this host already bound to the worktree.
+	// A host session id that SessionStart did not see yet must still resume
+	// hostBindings[host]. Do not steal another host's default session when an
+	// external id is present, and do not reuse a binding that already belongs
+	// to a different host session id. With no external id, keep the worktree
+	// default so CLI readers such as `heli explain` see the host session.
+	if (!session) {
 		const binding = readBinding(workspaceRoot, worktreeRoot);
-		if (binding?.defaultSessionId) {
-			const bound = readSession(workspaceRoot, binding.defaultSessionId);
-			if (bound && bound.status === "active") {
-				session = bound;
-				sessionId = bound.sessionId;
-				identitySource = "worktree-binding";
+		const resumeBound = (candidateId, source) => {
+			if (!candidateId) return false;
+			const bound = readSession(workspaceRoot, candidateId);
+			if (!bound || bound.status !== "active") return false;
+			if (source === "host-binding") {
+				const sameHost = !bound.host || !host || bound.host === host || bound.host === "unknown";
+				const externalFree = !externalHostSessionId || !bound.externalHostSessionId || bound.externalHostSessionId === externalHostSessionId;
+				if (!sameHost || !externalFree) return false;
 			}
+			session = bound;
+			sessionId = bound.sessionId;
+			identitySource = source;
+			return true;
+		};
+		const hostBoundId = host && binding?.hostBindings?.[host]?.sessionId;
+		if (!resumeBound(hostBoundId, "host-binding") && !externalHostSessionId) {
+			resumeBound(binding?.defaultSessionId, "worktree-binding");
 		}
 	}
 

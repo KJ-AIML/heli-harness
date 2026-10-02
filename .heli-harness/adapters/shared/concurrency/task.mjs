@@ -325,6 +325,15 @@ export function migrateLegacyTask(workspaceRoot, taskId, { title, repositoryId }
 	const legacyDecisions = readText(legacyDecisionsPath, "");
 	const target = readJson(targetPath, {});
 	const yolo = readJson(legacyYoloPath, null);
+	const idleTask = !legacyTask.trim() || /Task:\s*\(none — idle\)/.test(legacyTask);
+	const idlePlan = !legacyPlan.trim();
+	const idleDecisions = !legacyDecisions.trim() || legacyDecisions.trim() === "# Decisions";
+	const idleYolo = yolo?.enabled !== true;
+	if (idleTask && idlePlan && idleDecisions && idleYolo) {
+		const err = new Error("no legacy task state to migrate");
+		err.code = "NO_LEGACY_STATE";
+		throw err;
+	}
 
 	const task = createTask(workspaceRoot, {
 		taskId: id,

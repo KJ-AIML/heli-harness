@@ -198,7 +198,7 @@ export function linkProject(packageRoot, projectRoot, {
 			copyIfMissing(join(embeddedRoot, name), join(projectConfigDir(root), name));
 		}
 	} else if (firstLink) {
-		for (const name of ["policies", "safety", "profiles"]) {
+		for (const name of ["policies", "safety", "profiles", "skills"]) {
 			copyIfMissing(
 				join(packageRoot, ".heli-harness", name),
 				join(projectConfigDir(root), name),

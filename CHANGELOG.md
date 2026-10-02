@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- PreToolUse resumes the session SessionStart bound for that host, then stores the host session id. A linked Grok write no longer needs `HELI_SESSION_ID`. A different host's default session is not reused when an external id is present.
+- PreToolUse records a `pre_tool` observation with the allow or deny decision when a session exists.
+- `heli link` seeds `skills/` on a fresh linked project.
+- `heli yolo` on a linked project uses the execution-local YOLO file and does not require `.heli-harness/HARNESS.md`. Turning YOLO on still requires a human terminal.
+- `heli target show` reads the workspace target unless the active task names a repository.
+- `heli task migrate-legacy` refuses an idle seed with `NO_LEGACY_STATE`. A real in-progress legacy task still migrates.
+- `heli update` refreshes missing linked overlays and the runtime pin. `heli uninstall` removes the linked `.heli/` project and its registry row, and leaves host integrations in place.
+- Install docs install from the published npm package and describe how a host obtains a write session.
+
 ## v0.10.4 - Phase 0 security hardening
 
 ### Security

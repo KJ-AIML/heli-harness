@@ -8,7 +8,7 @@
 
 | Step | Command | Result |
 | --- | --- | --- |
-| Install pinned release | `npm install -g github:KJ-AIML/heli-harness#v0.10.4` | Shared/global Heli CLI/runtime |
+| Install published release | `npm install -g heli-harness` | Shared/global Heli CLI/runtime |
 | Initialize trusted user state | `heli setup` | Machine identity, user policy, locator |
 | Install host integrations | `heli host install all` | Machine-level plugins/hooks/skills from the global package |
 | Inspect lifecycle state | `heli host status` | Absent/current/stale/manual state, separate from runtime proof |
@@ -52,7 +52,7 @@ Removing a host integration does not remove or rewrite:
 Use only when a self-contained workspace is intentional:
 
 ```bash
-npx github:KJ-AIML/heli-harness#v0.10.4 install <path>
+npx -y heli-harness install <path>
 ```
 
 This creates the legacy-compatible `.heli-harness/` tree. Existing embedded workspaces can migrate with `heli link <path>` after active embedded writer authority is quiesced.
