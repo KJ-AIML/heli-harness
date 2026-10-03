@@ -1,12 +1,12 @@
-# Install — Heli-Harness v0.10.9
+# Install — Heli-Harness v0.10.10
 
-**Current release:** `v0.10.9`
+**Current release:** `v0.10.10`
 **Primary model:** shared/global distribution + explicit project binding
 **Architecture:** [docs/architecture/README.md](docs/architecture/README.md)
 
 ## Recommended v0.10 setup
 
-`heli-harness@0.10.9` is published on npm.
+`heli-harness@0.10.10` is published on npm.
 
 ```bash
 npm install -g heli-harness
@@ -100,7 +100,7 @@ or from a source checkout:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.10.9
+git checkout v0.10.10
 ./install.sh /path/to/workspace
 # Windows:
 # .\install.ps1 -Parent "C:\your\workspace"
@@ -204,7 +204,7 @@ See [Cloud Sync](docs/architecture/cloud-sync.md).
 
 ## Maintainer release
 
-Release validation is automated in CI. `v0.10.9` has a GitHub Release and annotated tag.
+Release validation is automated in CI. `v0.10.10` has a GitHub Release and annotated tag.
 
 The repository Release workflow:
 
@@ -226,4 +226,4 @@ heli explain authority
 heli explain capabilities
 ```
 
-Expected package version for this documentation: **0.10.9**.
+Expected package version for this documentation: **0.10.10**.
