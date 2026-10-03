@@ -1,6 +1,6 @@
 ---
 name: heli-audit
-description: Use for the ergonomic /heli-audit entry point — compose broad workflow review with dependency, test-coverage, and impact lenses as triggered.
+description: Use when invoking the ergonomic /heli-audit entry point — compose broad workflow review with dependency, test-coverage, and impact lenses as triggered.
 ---
 
 # Heli Audit
