@@ -1,51 +1,50 @@
 ---
 name: heli-review
-description: Use when reviewing the current repo, diff, or task safely without making changes (/heli-review, review this).
+description: Use when invoking the ergonomic /heli-review entry point. Resolve current Heli/repo context, then delegate focused verification to audit or broad review to workflow.
 ---
 
-# Heli-Harness Review
+# Heli Review
 
-Review current repo, diff, or task safely without making changes.
+`heli-review` is a routing wrapper, not a second review methodology.
 
-## Workflow
+## Resolve context
 
-1. **Read harness context**
-   - Read `.heli-harness/HARNESS.md` as source of truth
-   - Read `.heli-harness/profiles/<repo>.md` if present
-   - Identify target repo and current task
+When the repository is Heli-managed, start with the smallest relevant Heli context:
 
-2. **Inspect current state**
-   - Run `git status` to see changed files
-   - Run `git diff` to see actual changes
-   - Read changed files to understand context
-   - Identify what the change is trying to do
+```bash
+heli status
+```
 
-3. **Analyze for issues**
-   - Look for bugs, logic errors, edge cases
-   - Check for missing tests or test gaps
-   - Identify unsafe changes (data loss, security, breaking changes)
-   - Check for missing error handling
-   - Look for performance issues
-   - Check for API/contract violations
+Use linked `.heli/` context for linked v0.10 projects and embedded `.heli-harness/` context only for intentional compatibility workspaces. Preserve dirty user work.
 
-4. **Return actionable review**
-   - Summarize what the change does
-   - List issues found (critical, warnings, suggestions)
-   - Suggest fixes or improvements
-   - Do NOT edit files unless user explicitly asks
+## Route
 
-## Safety Rules
+- Current diff / PR / commit / claimed fix -> `audit`
+- Broad multi-file correctness, security, or high-recall sweep -> `workflow`
+- Shared/high-use surface in scope -> add `impact`
+- Missing/weak regression protection -> add `test-coverage`
+- Heli operation/state question rather than code review -> `heli-assistant`
 
-- Do NOT edit files by default
-- Do NOT run mutating commands
-- Do NOT commit or push
-- Preserve dirty user work
-- If user asks for fixes, confirm before editing
+Read the selected specialist skill and follow its evidence/output rules.
+
+## Boundary
+
+By default this entry point is read-only:
+
+- inspect status, diff, history, code, tests, and relevant evidence;
+- do not edit, commit, push, merge, publish, deploy, or alter Heli authority merely to complete a review;
+- do not claim checks passed without current evidence;
+- do not treat plugin/skill files as runtime-enforcement proof.
+
+If the user separately asks to fix findings, route the implementation through the appropriate engineering/fix workflow and existing authority rules.
 
 ## Output
 
-Return:
-- Summary of changes
-- Issues found (categorized by severity)
-- Suggested fixes
-- Safest next action
+State:
+
+- route used: `audit` or `workflow`;
+- scope reviewed;
+- findings/verdict;
+- verification evidence;
+- residual risk;
+- next action.

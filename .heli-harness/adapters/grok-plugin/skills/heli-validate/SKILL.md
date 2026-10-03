@@ -1,60 +1,49 @@
 ---
 name: heli-validate
-description: Use when running the Heli test-validation workflow safely with proper command classification (/heli-validate, validate tests).
+description: Use when invoking the ergonomic /heli-validate entry point. Resolve the repo's real verification context, then delegate safe command classification and execution to test-validation.
 ---
 
-# Heli-Harness Validate
+# Heli Validate
 
-Run test-validation workflow safely with proper command classification.
+`heli-validate` is a thin entry point for the canonical `test-validation` protocol.
 
-## Workflow
+## Resolve context
 
-1. **Read harness context**
-   - Read `.heli-harness/HARNESS.md` as source of truth
-   - Read `.heli-harness/skills/test-validation/SKILL.md` for validation protocol
-   - Read `.heli-harness/profiles/<repo>.md` if present
-   - Identify target repo and available test commands
+When Heli manages the project, start with:
 
-2. **Start with safe audit-only checks**
-   - Run non-mutating checks first (lint, type check, dependency checks)
-   - Verify commands are safe before running
-   - Check if dependencies are installed
-   - If dependencies missing, report before installing
+```bash
+heli status
+```
 
-3. **Classify test commands**
-   - **Safe audit-only**: Non-mutating, no API keys, no side effects
-   - **Broader non-mutating gate**: May auto-fix formatting but no logic changes
-   - **Mutating/full local gate**: Requires dependencies, may modify files
-   - **API-credit-consuming**: Requires API keys, consumes credits
-   - **Release/publish/version**: Production operations, requires approval
+Use the active linked `.heli/` profile/overlays or embedded compatibility profile as appropriate. Do not assume `.heli-harness/HARNESS.md` exists in a normal linked v0.10 project.
 
-4. **Run approved tests**
-   - Start with safe audit-only commands
-   - Ask user before running broader gates
-   - Do NOT run mutating/full gates without explicit approval
-   - Do NOT run API-credit-consuming commands without explicit approval
-   - Do NOT run release/publish/version commands without explicit approval
+Identify the repository's actual verification commands from its package/build files, repo docs, and current Heli profile facts.
 
-5. **Report results**
-   - Show test results (pass/fail)
-   - Identify any failures or warnings
-   - Suggest fixes if tests fail
-   - Do NOT edit files unless user asks
+## Delegate
 
-## Safety Rules
+Read and follow `test-validation`.
 
-- Do NOT run mutating commands without approval
-- Do NOT run API-credit-consuming commands without approval
-- Do NOT run release/publish/version commands without approval
-- Do NOT commit or push
-- Preserve dirty user work
-- If dependencies missing, report before installing
-- If tests fail, report before attempting fixes
+That protocol owns:
+
+- command existence checks;
+- read-only vs mutating vs destructive classification;
+- dependency preflight;
+- safe hydration constraints;
+- execution of approved/safe verification;
+- post-run Git status checks;
+- failure classification;
+- profile-correction routing.
+
+Use `audit` when validating a completed change claim rather than the safety/correctness of the verification command itself.
+
+## Rules
+
+- Do not silently install dependencies.
+- Do not run mutating, API-cost-bearing, publish/deploy, or destructive commands merely because this wrapper was invoked.
+- Do not edit source while performing validation-only work.
+- Do not claim a command is non-mutating without checking post-run repository state.
+- Existing policy, authority, and human-approval rules remain in force.
 
 ## Output
 
-Return:
-- Test results (pass/fail for each command)
-- Failures or warnings found
-- Suggested fixes
-- Safest next action
+Return the canonical `test-validation` result and identify the command/profile source used.

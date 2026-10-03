@@ -81,6 +81,7 @@ Evidence/work records may be portable. **Authorization never becomes portable me
 These are current-facing references for `v0.10.9`:
 
 - [Governance model](governance-model.md)
+- [Heli assistant and skill routing](heli-assistant.md)
 - [Adapter support matrix](../ADAPTER_SUPPORT_MATRIX.md)
 - [Enforcement matrix](../ENFORCEMENT_MATRIX.md)
 - [Install guide](../../INSTALL.md)

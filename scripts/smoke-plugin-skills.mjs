@@ -44,8 +44,9 @@ const canonical = join(root, ".heli-harness", "skills");
 const skills = listSkillDirs(canonical);
 assert.ok(skills.includes("using-heli-skills"), "using-heli-skills must exist in canonical library");
 assert.ok(skills.includes("heli-governance"), "heli-governance must be in canonical library");
+assert.ok(skills.includes("heli-assistant"), "heli-assistant must be in canonical library");
 assert.ok(skills.includes("verify-premise"), "verify-premise must be in canonical library");
-assert.ok(skills.length >= 24, `expected full skill library (>=24), got ${skills.length}`);
+assert.ok(skills.length >= 31, `expected full skill library (>=31), got ${skills.length}`);
 
 // unique names
 assert.equal(new Set(skills).size, skills.length, "skill directory names must be unique");
@@ -64,6 +65,44 @@ for (const skill of skills) {
 	assert.ok(descLine, `${skill}: missing description`);
 	assert.match(descLine[1], /\buse when\b/i, `${skill}: description should use "Use when"`);
 }
+
+// semantic regressions for the v0.10 skill architecture
+function readSkill(name) {
+	return readFileSync(join(canonical, name, "SKILL.md"), "utf8");
+}
+
+const assistant = readSkill("heli-assistant");
+for (const expected of [
+	"heli resume --json",
+	"heli explain authority",
+	"heli explain capabilities",
+	"heli host status",
+	"must not silently",
+]) {
+	assert.ok(assistant.includes(expected), `heli-assistant must preserve situational guidance: ${expected}`);
+}
+assert.match(assistant, /do not.*(inherit|transfer).*writer authority/is, "heli-assistant must not imply writer transfer");
+
+const help = readSkill("heli-help");
+assert.ok(help.includes("heli resume"), "heli-help must include resume");
+assert.ok(help.includes("heli-assistant"), "heli-help must route situational questions to heli-assistant");
+assert.ok(help.includes("heli host install|update|repair|remove|status"), "heli-help must include host lifecycle");
+
+const installSkill = readSkill("heli-install");
+assert.ok(
+	installSkill.includes("npm install -g heli-harness@latest"),
+	"heli-install must keep public npm as the normal install path",
+);
+
+for (const wrapper of ["heli-review", "heli-audit", "heli-impact", "heli-validate"]) {
+	const text = readSkill(wrapper);
+	assert.ok(!/Read `.heli-harness\/HARNESS\.md` as source of truth/i.test(text), `${wrapper} must not be embedded-first`);
+	assert.ok(text.includes("heli status"), `${wrapper} must resolve current Heli layout`);
+}
+
+const releaseSkill = readSkill("release");
+assert.ok(releaseSkill.includes("npm view <package>@<version> version"), "release must verify exact npm version visibility");
+assert.ok(releaseSkill.includes("npx -y <package>@<version> --version"), "release must include fresh-package version proof");
 
 // 2) plugin inventories match canonical
 const plugins = [
