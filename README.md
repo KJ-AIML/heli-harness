@@ -106,6 +106,19 @@ For a deliberately self-contained/offline bundle, `heli install <path>` remains 
 
 Full installation and migration details: [INSTALL.md](INSTALL.md).
 
+## Resume across coding tools
+
+When one coding host runs out of usage or you deliberately switch tools, `heli resume` reconstructs the durable continuation context without inheriting the previous host's authority:
+
+```bash
+heli resume
+heli resume --json
+```
+
+The packet reports Git branch/HEAD/dirty state, active tasks, dependency and handoff readiness, current resource writer, active sessions, and recorded runtime observations. It is read-only: it does not choose a task, spawn an agent, mutate Git, or transfer/take over writer authority. The new host still enters through the normal SessionStart/PreToolUse lifecycle before writing.
+
+See [Resume context](docs/architecture/resume-context.md) for the boundary and JSON model.
+
 ## Authority is resource-scoped
 
 v0.10.8 no longer treats a narrative task name as the root write-authority boundary.
