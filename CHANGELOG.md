@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.10.9 - Durable resume context for agent switching
 
 ### Added
 
