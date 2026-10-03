@@ -1,6 +1,6 @@
 ---
 name: heli-review
-description: Use for the ergonomic /heli-review entry point. Resolve current Heli/repo context, then delegate focused verification to audit or broad review to workflow.
+description: Use when invoking the ergonomic /heli-review entry point. Resolve current Heli/repo context, then delegate focused verification to audit or broad review to workflow.
 ---
 
 # Heli Review
