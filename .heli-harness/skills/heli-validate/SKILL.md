@@ -1,6 +1,6 @@
 ---
 name: heli-validate
-description: Use for the ergonomic /heli-validate entry point. Resolve the repo's real verification context, then delegate safe command classification and execution to test-validation.
+description: Use when invoking the ergonomic /heli-validate entry point. Resolve the repo's real verification context, then delegate safe command classification and execution to test-validation.
 ---
 
 # Heli Validate
