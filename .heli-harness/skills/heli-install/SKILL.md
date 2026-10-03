@@ -1,27 +1,37 @@
 ---
 name: heli-install
-description: Use when setting up Heli. For v0.10 prefer global/shared distribution plus heli setup and heli link; /heli-install remains an embedded compatibility/hermetic install path.
+description: Use when installing, upgrading, linking, or migrating Heli. Prefer the public npm package plus heli setup/host install/link; embedded .heli-harness installs are compatibility/hermetic mode.
 ---
 
 # Heli Install
 
-## Current v0.10 path
+## Normal v0.10 path
 
-For normal projects, prefer:
+Use the published npm package:
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.9
+npm install -g heli-harness@latest
+heli --version
 heli setup
 heli host install all
 heli host status
+
 cd /path/to/project
 heli link
 heli doctor
+heli status
 ```
 
-This separates shared distribution from project binding and execution-local authority.
+This is the primary topology:
 
-Expected linked project files:
+```text
+global Heli distribution
+  -> machine-level host integration
+  -> project .heli/ binding
+  -> execution-local runtime authority
+```
+
+Expected linked project files include:
 
 ```text
 .heli/workspace.json
@@ -32,54 +42,92 @@ Expected linked project files:
 .heli/skills/
 ```
 
-Live grants, sessions, resource authority, credentials, capability observations, YOLO state, and process handles must not be committed as project binding.
+Live grants, sessions, writer/resource authority, runtime capability observations, credentials, YOLO state, and process handles are not portable project binding.
 
 ## Existing embedded workspace
 
-If `.heli-harness/HARNESS.md` already exists, do not overwrite it with a fresh installer.
+If a project already contains an intentional `.heli-harness/` workspace, do not replace it with a fresh install and do not delete it before migration.
 
-To migrate:
+Use the current global CLI to update the embedded compatibility runtime first:
 
-1. update the embedded runtime to v0.10.9;
-2. run `heli status`;
-3. quiesce active embedded writer authority;
-4. run `heli link <path>`.
+```bash
+heli update /path/to/workspace
+heli status /path/to/workspace
+```
 
-The first link fails closed while active embedded writer authority exists.
+Then:
+
+1. verify the embedded runtime is linked-workspace-capable;
+2. quiesce active embedded writer authority;
+3. run:
+
+```bash
+heli link /path/to/workspace
+```
+
+The first link fails closed while active embedded write authority exists.
+
+After cutover, verify:
+
+```bash
+cd /path/to/workspace
+heli doctor
+heli status
+heli resume
+```
+
+Portable project/work evidence may migrate. Live sessions, bindings, leases/resource authority, grants, YOLO, credentials, sync runtime state, and capability observations do not migrate as authorization.
 
 ## Embedded compatibility / hermetic install
 
-The `/heli-install` command and installer scripts remain supported when the user intentionally wants a self-contained `.heli-harness/` workspace.
-
-Preferred pinned command:
+Use this only when the user intentionally needs a self-contained workspace bundle:
 
 ```bash
-npx github:KJ-AIML/heli-harness#v0.10.9 install <path>
+npx -y heli-harness@0.10.9 install /path/to/workspace
 ```
 
-Manual source checkout is a fallback:
+A source checkout is a fallback for development/offline needs:
 
 ```bash
-git clone https://github.com/KJ-AIML/heli-harness.git hh-source-tmp
-cd hh-source-tmp
+git clone https://github.com/KJ-AIML/heli-harness.git hh-source
+cd hh-source
 git checkout v0.10.9
 ./install.sh /path/to/workspace
 # Windows:
 # .\install.ps1 -Parent "C:\path\to\workspace"
 ```
 
-Before writing, tell the user that the compatibility install creates `.heli-harness/` and host pointer files and obtain the approval required by the host/workflow.
+Before an embedded install writes files, explain that it creates a local `.heli-harness/` compatibility tree and host pointer files, and follow the active approval policy.
 
-Verify the embedded install with:
+## Host lifecycle is separate
 
-- `.heli-harness/HARNESS.md`
-- `.heli-harness/manifest.json`
-- `.heli-harness/skills/test-validation/SKILL.md`
-- `AGENTS.md`
-- `CLAUDE.md`
+Project linking and host activation are separate concerns:
+
+```bash
+heli host install all
+heli host status
+heli host update all
+```
+
+Use `heli explain capabilities` after launching a supported host when runtime callback evidence matters. Installed files alone do not prove that the host invoked Heli.
+
+## Version-aware guidance
+
+Do not assume the workspace and global CLI are the same version.
+
+When migration or compatibility is relevant, inspect:
+
+```bash
+heli --version
+heli status /path/to/workspace
+heli host status
+```
+
+Use `heli-assistant` when the user needs help choosing the correct upgrade/migration path for the actual workspace state.
 
 ## Boundary
 
-Host plugin activation is separate from project linking/embedded installation. Files on disk do not prove runtime enforcement.
-
-Use `heli explain capabilities` and `docs/ADAPTER_SUPPORT_MATRIX.md` for current evidence.
+- npm is the normal public distribution path.
+- Git/source installation is a fallback, not the default onboarding path.
+- Do not erase embedded state before a successful cutover.
+- Do not carry old runtime authorization into a new linked execution.
