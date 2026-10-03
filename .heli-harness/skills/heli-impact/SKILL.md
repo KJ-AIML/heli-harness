@@ -1,6 +1,6 @@
 ---
 name: heli-impact
-description: Use for the ergonomic /heli-impact entry point. Resolve the current Heli/repo context, then delegate blast-radius analysis to the canonical impact skill.
+description: Use when invoking the ergonomic /heli-impact entry point. Resolve the current Heli/repo context, then delegate blast-radius analysis to the canonical impact skill.
 ---
 
 # Heli Impact
