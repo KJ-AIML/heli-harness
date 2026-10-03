@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `heli-assistant` provides version/layout/state-aware situational guidance for Heli: it inspects only relevant CLI/state surfaces, explains the current workspace/session/host situation, recommends the smallest supported path, and routes to specialist skills without gaining authority.
+
+### Changed
+
+- Heli skill guidance is modernized around the linked v0.10 topology: npm-first install guidance, current command/help surfaces, task-optional linked workflows, canonical diagnosis CLI usage, and thin `/heli-*` wrappers that delegate to specialist skills instead of duplicating methodology.
+- Release guidance now requires post-release proof across source/tag, exact registry version, release channel/dist-tag, and fresh-install/runtime version where applicable.
+
 ## v0.10.9 - Durable resume context for agent switching
 
 ### Added
