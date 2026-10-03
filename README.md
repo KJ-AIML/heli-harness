@@ -119,6 +119,22 @@ The packet reports Git branch/HEAD/dirty state, active tasks, dependency and han
 
 See [Resume context](docs/architecture/resume-context.md) for the boundary and JSON model.
 
+## Heli Assistant skill
+
+When the question is not "which command exists?" but **"given this workspace/session/host, what should I do now?"**, use the packaged `heli-assistant` skill.
+
+It is a read-first situational guide. It can use version, layout, resume context, host lifecycle, runtime capability evidence, task/handoff state, target/resource context, and writer authority to explain the situation and recommend the smallest supported path.
+
+Typical questions:
+
+- why a host cannot write;
+- how to continue after switching Codex/Grok/Claude;
+- whether a durable task or handoff is actually needed;
+- how to migrate an older embedded workspace;
+- what a stale host/session/writer state means.
+
+It does not spawn agents, assign work, transfer writer authority, issue grants/YOLO, sync, publish, or deploy by itself. See [Heli assistant and skill routing](docs/architecture/heli-assistant.md).
+
 ## Authority is resource-scoped
 
 v0.10.9 no longer treats a narrative task name as the root write-authority boundary.
