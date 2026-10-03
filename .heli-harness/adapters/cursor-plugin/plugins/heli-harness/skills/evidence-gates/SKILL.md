@@ -1,67 +1,97 @@
 ---
 name: evidence-gates
-description: Use when a diagnosis, failure transition, material decision, expensive retry, subsystem change, or completion claim needs machine-readable evidence.
+description: Use when a diagnosis, failure transition, material decision, expensive retry, subsystem change, or completion claim needs current machine-readable evidence.
 ---
 
-# Evidence gates
+# Evidence Gates
 
-Heli-Harness is a claim → evidence → transition protocol. The agent executes
-the work; Heli checks that the state transition has current structured support.
-The canonical machine state is the task-local `diagnosis.json`, with
-`events.jsonl` as append-only history. Markdown remains the human projection.
+Heli is a claim -> evidence -> transition protocol. The agent executes the work; Heli checks whether a state transition has current structured support.
+
+## Resolve the active topology
+
+Prefer the current Heli CLI surface:
+
+```bash
+heli status
+```
+
+- Linked v0.10: durable diagnosis/work evidence is resolved through Heli's linked workspace and execution-aware state.
+- Embedded compatibility: local `.heli-harness/` task/diagnosis state may remain authoritative for that compatibility workflow.
+
+Do not infer linked authority or diagnosis state from leftover embedded files merely because they still exist.
 
 ## When diagnosis is active
 
-Keep these fields short and concrete:
+Keep the current structured record short and concrete:
 
-- observed symptom/claim;
-- failure signature and closest proven boundary;
+- observed symptom or claim;
+- normalized failure signature;
+- closest proven boundary;
 - responsible subsystem;
-- bounded hypothesis, supporting evidence, falsifier, and expected result;
-- root cause and smallest causal change;
-- next discriminating action and current verification result.
+- bounded hypothesis;
+- supporting and contradicting evidence;
+- falsifier;
+- expected result;
+- root cause once established;
+- smallest causal change;
+- next discriminating action;
+- current verification result.
 
-Facts are not interpretations. An observer timeout proves the observation
-deadline expired; it does not prove a worker died. A contradictory observation
-marks the hypothesis `CONTRADICTED` and requires rerouting. Do not rewrite the
-event history to preserve an old story.
+Facts are not interpretations. An observer timeout proves the observation deadline expired; it does not prove a worker died. Contradictory evidence invalidates the old story and requires rerouting.
 
-## Failure transitions
+## Canonical failure transitions
 
-Use the embedded CLI or equivalent structured API:
+Use the global Heli CLI when available:
 
-```text
-node .heli-harness/heli.mjs diagnosis show <task-id>
-node .heli-harness/heli.mjs diagnosis record <task-id> --type run --json '<result>'
-node .heli-harness/heli.mjs diagnosis route <task-id> --route verify-premise|debug|fix-loop|impact|incident
+```bash
+heli diagnosis show <task-id>
+heli diagnosis record <task-id> --type run --json '<result>'
+heli diagnosis route <task-id> --route verify-premise|debug|fix-loop|impact|incident
+heli diagnosis gate <task-id> ...
 ```
 
-The same normalized failure class after a fix stays in the fix-loop and
-advances its class-specific attempt count. Two implementation failures against
-that same class require root-cause re-evaluation. A materially new class starts
-`NEW FAILURE CLASS → REASSESS PREMISE → ROUTE AGAIN → ESTABLISH BOUNDARY`; it
-does not consume the old diagnosis's two-strike count.
+For an intentionally embedded compatibility workspace with only the local runtime, the equivalent commands may be run through:
 
-When the responsible subsystem changes, record a checkpoint with what is known,
-what changed, why the prior boundary is no longer primary, the new closest
-boundary, and the next discriminating action.
+```bash
+node .heli-harness/heli.mjs diagnosis ...
+```
+
+The same normalized implementation-failure class stays in the fix-loop and advances its class-specific attempt count. Two implementation failures against that same class require root-cause re-evaluation.
+
+A materially new class starts a new premise/boundary cycle. It does not consume the old class's attempt count.
+
+When the responsible subsystem changes, checkpoint:
+
+- what is known;
+- what changed;
+- why the prior boundary is no longer primary;
+- the new closest boundary;
+- the next discriminating action.
 
 ## Expensive actions
 
-Mark costly work with structured `heli_action` metadata or use `diagnosis gate`.
-The first run is recorded. A repeated expensive action needs a relevant
-material change and prediction, new discriminating evidence after cheaper
-checks, a bounded transient policy, or explicit human override. “Run it again
-and see” is not evidence. S3 and production mutation always require human
-approval. YOLO never bypasses ownership, reroute, or retry gates.
+Mark costly work with structured action metadata or the supported diagnosis gate.
+
+A repeated expensive action needs at least one of:
+
+- a relevant material change plus predicted effect;
+- new discriminating evidence after cheaper checks;
+- an explicitly bounded transient-retry policy;
+- explicit human override.
+
+"Run it again and see" is not evidence.
+
+S3, production mutation, destructive/irreversible work, security-boundary changes, credential/policy authority changes, and unresolved business intent require the applicable human approval. YOLO never bypasses ownership, reroute, or retry gates.
 
 ## Review boundaries
 
-S0 is autonomous. S1 is autonomous with self-checkpoints. S2 can continue
-without interrupting the user, but material transitions expose/record an
-independent-review requirement. S3, production mutation, destructive or
-irreversible work, security-boundary changes, credential/policy authority, and
-unresolved business intent require human approval.
+- S0: autonomous.
+- S1: autonomous with focused verification.
+- S2: may continue without interrupting the user when policy allows, but material transitions expose/record the independent-review obligation.
+- S3: explicit human approval for the high-risk transition.
 
-Hosts without a proven runtime hook are advisory. Do not claim that this skill
-or a Markdown pointer mechanically enforces a transition.
+Hosts without proven runtime callbacks are advisory. Installed files, a Markdown skill, or a plugin manifest do not prove mechanical enforcement.
+
+## Durable task boundary
+
+Do not create a named durable task merely because evidence gates exist. In linked v0.10, use a durable work record when the investigation spans sessions, needs handoff/coordination, or requires durable diagnosis history. Small local work can remain taskless while resource authority and policy still apply.

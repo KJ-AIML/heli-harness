@@ -1,69 +1,43 @@
 ---
 name: heli-impact
-description: Use when asked for Heli-flavored impact analysis of a planned change or current diff (/heli-impact, what will this affect).
+description: Use when invoking the ergonomic /heli-impact entry point. Resolve the current Heli/repo context, then delegate blast-radius analysis to the canonical impact skill.
 ---
 
-# Heli-Harness Impact
+# Heli Impact
 
-Impact analysis for a planned change or current diff.
+`heli-impact` is a thin entry point for the canonical `impact` protocol.
 
-## Workflow
+## Resolve context
 
-1. **Read harness context**
-   - Read `.heli-harness/HARNESS.md` as source of truth
-   - Read `.heli-harness/skills/impact/SKILL.md` for impact protocol
-   - Read `.heli-harness/profiles/<repo>.md` if present
-   - Identify target repo and current/planned changes
+When Heli state matters, start with:
 
-2. **Inspect changes**
-   - Run `git status` to see changed files
-   - Run `git diff` to see actual changes
-   - If no changes, ask user about planned changes
-   - Read changed files to understand context
+```bash
+heli status
+```
 
-3. **Map affected areas**
-   - Identify affected packages/modules
-   - Identify affected tests (unit, integration, e2e)
-   - Identify affected documentation
-   - Identify affected generated files (builds, lockfiles, shrinkwraps)
-   - Identify affected release/deployment processes
-   - Identify affected API contracts or public interfaces
+Resolve linked vs embedded layout and the actual target/resource before analyzing a planned change or current diff. Do not assume old `.heli-harness/workspace/*` files control a linked v0.10 project.
 
-4. **Assess risk level**
-   - **Low risk**: Local changes, no API changes, tests pass
-   - **Medium risk**: Cross-file changes, test updates needed
-   - **High risk**: API changes, breaking changes, data migration
-   - **Critical risk**: Production deploy, destructive migration, credential rotation
+## Delegate
 
-5. **Return impact report**
-   - List affected areas
-   - Risk level assessment
-   - Required verification steps
-   - Rollback plan if needed
-   - Safest next step
+Read and follow `impact`.
 
-## Impact Categories
+That protocol owns:
 
-- **Packages/modules**: Which parts of the codebase are affected
-- **Tests**: Which tests need updates or new tests
-- **Documentation**: Which docs need updates
-- **Generated files**: Build artifacts, lockfiles, shrinkwraps
-- **Release/deployment**: Version bumps, changelog, deployment steps
-- **API contracts**: Public interfaces, breaking changes
+- callers and consumers;
+- shared APIs/contracts;
+- data and UI flows;
+- generated files;
+- destructive/delete-capable call chains;
+- tests and verification;
+- operational/deployment blast radius;
+- rollback or mitigation for S2/S3 work.
 
-## Safety Rules
+Use `engineering` when risk/done criteria are unclear, and `heli-assistant` when the question is primarily "what should I do with Heli here?" rather than change-impact analysis.
 
-- Do NOT edit files by default
-- Do NOT run mutating commands
-- Do NOT commit or push
-- Preserve dirty user work
-- If user asks for fixes, confirm before editing
+## Boundary
+
+This entry point is read-only unless the user separately asks for implementation. It does not grant write authority or approval.
 
 ## Output
 
-Return:
-- Affected areas (packages, tests, docs, generated files, release)
-- Risk level (low/medium/high/critical)
-- Required verification steps
-- Rollback plan
-- Safest next step
+Return the canonical `impact` report, plus the resolved Heli layout/target when that context materially affects the result.
