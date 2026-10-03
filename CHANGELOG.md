@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `heli resume` / `heli resume --json` provide a read-only continuation packet for switching coding hosts: workspace/execution/worktree, Git state, active tasks, dependency/handoff readiness, current writer authority, sessions, runtime observations, and non-orchestrating continuation guidance.
+
 ## v0.10.8 - Workspace task dependencies and artifact handoffs
 
 ### Added

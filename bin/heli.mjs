@@ -22,6 +22,7 @@ import { runLink } from "../lib/cli/link.mjs";
 import { runGrant } from "../lib/cli/grant.mjs";
 import { runHost } from "../lib/cli/host.mjs";
 import { runHandoff } from "../lib/cli/handoff.mjs";
+import { runResume } from "../lib/cli/resume.mjs";
 import { runTargetMachine, runTaskMachine, runHandoffMachine, runDiagnosisMachine, runConflictsMachine } from "../lib/cli/machine.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -60,7 +61,7 @@ Commands:
   host status|list|install|update|repair|remove [all|host...]
   grant issue|list|revoke
   install | update | uninstall
-  target | status | yolo
+  target | status | resume | yolo
   doctor [path]  (workspace health: plugins, target, leases, sessions, sync)
   task create|list|show|depends|migrate-legacy|claim|release|takeover
   handoff publish|list|show
@@ -71,7 +72,7 @@ Commands:
   trace show --task <id> [path]
 
 Machine output:
-  status/doctor/session: add --json
+  status/resume/doctor/session: add --json
   task/target/conflicts: add --json
   diagnosis show: add --json
   diagnosis mutations: add --json --payload-json '<object>'
@@ -107,6 +108,7 @@ try {
 		case "uninstall": runUninstall(args); break;
 		case "target": protocolJsonRequested(command, args) ? runTargetMachine(args) : runTarget(args); break;
 		case "status": runStatus(args); break;
+		case "resume": runResume(args); break;
 		case "doctor": runDoctor(args); break;
 		case "yolo": runYolo(args); break;
 		case "task": protocolJsonRequested(command, args) ? runTaskMachine(args) : runTask(args); break;
