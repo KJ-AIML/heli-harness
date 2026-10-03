@@ -44,8 +44,9 @@ const canonical = join(root, ".heli-harness", "skills");
 const skills = listSkillDirs(canonical);
 assert.ok(skills.includes("using-heli-skills"), "using-heli-skills must exist in canonical library");
 assert.ok(skills.includes("heli-governance"), "heli-governance must be in canonical library");
+assert.ok(skills.includes("heli-assistant"), "heli-assistant must be in canonical library");
 assert.ok(skills.includes("verify-premise"), "verify-premise must be in canonical library");
-assert.ok(skills.length >= 24, `expected full skill library (>=24), got ${skills.length}`);
+assert.ok(skills.length >= 31, `expected full skill library (>=31), got ${skills.length}`);
 
 // unique names
 assert.equal(new Set(skills).size, skills.length, "skill directory names must be unique");
