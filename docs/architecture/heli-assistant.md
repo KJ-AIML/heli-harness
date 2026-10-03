@@ -1,6 +1,6 @@
 # Heli Assistant and Skill Refresh
 
-Status: implementation design for the Heli v0.10.9 skill refresh.
+Status: implementation design for the Heli v0.10 skill refresh.
 
 ## Goal
 
