@@ -1,62 +1,65 @@
 ---
 name: heli-audit
-description: Use when asked for a repo-wide audit of overengineering, fragile areas, risky commands, dependency issues, generated-file risks, or CI/test gaps (/heli-audit).
+description: Use for the ergonomic /heli-audit entry point — compose broad workflow review with dependency, test-coverage, and impact lenses as triggered.
 ---
 
-# Heli-Harness Audit
+# Heli Audit
 
-Repo-wide audit for overengineering, fragile areas, risky commands, dependency issues, generated-file risks, CI/test gaps.
+`heli-audit` is a broad read-only composition layer. It should not maintain a parallel audit methodology.
 
-## Workflow
+## Resolve context
 
-1. **Read harness context**
-   - Read `.heli-harness/HARNESS.md` as source of truth
-   - Read `.heli-harness/profiles/<repo>.md` if present
-   - Identify target repo
+For a Heli-managed project:
 
-2. **Static inspection first**
-   - Inspect repo structure and architecture
-   - Look for overengineering (unnecessary abstractions, speculative code)
-   - Identify fragile areas (complex logic, tight coupling, missing tests)
-   - Check for risky commands (destructive operations, API credit consumption)
-   - Review dependency issues (outdated, vulnerable, unnecessary)
-   - Check for generated-file risks (untracked builds, lockfile issues)
-   - Identify CI/test gaps (missing coverage, flaky tests)
+```bash
+heli status
+```
 
-3. **Prefer static inspection**
-   - Use `git status`, `git log`, file inspection
-   - Read package files, config files, scripts
-   - Avoid expensive/API tests unless approved
-   - Do NOT run mutating commands
+Resolve linked vs embedded layout, current target/resource context, and the repository actually being audited. Do not assume `.heli-harness/HARNESS.md` is the primary source in a linked v0.10 project.
 
-4. **Return audit report**
-   - List findings by category
-   - Prioritize by risk/severity
-   - Suggest fixes or improvements
-   - Do NOT edit files unless user asks
+## Composition
 
-## Audit Categories
+Start with `workflow` for broad candidate discovery and skeptical refutation.
 
-- **Overengineering**: Unnecessary abstractions, speculative code, dead flexibility
-- **Fragile areas**: Complex logic, tight coupling, missing error handling
-- **Risky commands**: Destructive operations, API credit consumption, release/publish
-- **Dependency issues**: Outdated, vulnerable, unnecessary, unpinned
-- **Generated-file risks**: Untracked builds, lockfile issues, shrinkwrap problems
-- **CI/test gaps**: Missing coverage, flaky tests, slow tests
+Add these lenses only when relevant:
 
-## Safety Rules
+- `deps` — package/lockfile/dependency risk;
+- `test-coverage` — missing, weak, flaky, or misleading tests;
+- `impact` — shared surfaces, destructive paths, API/data/operational blast radius;
+- `audit` — focused verification of a specific completed claim or fix;
+- `heli-governance` — Heli policy/authority/runtime-evidence questions.
 
-- Do NOT edit files by default
-- Do NOT run mutating commands
-- Do NOT run API-credit-consuming commands without approval
-- Do NOT commit or push
-- Preserve dirty user work
-- Prefer static inspection over dynamic testing
+Common audit categories include:
+
+- correctness and fragile logic;
+- overengineering or dead flexibility;
+- unsafe/destructive operations;
+- dependency and supply-chain concerns;
+- generated-file / lockfile drift;
+- CI, validation, or regression gaps;
+- runtime-enforcement overclaims;
+- version/layout assumptions that conflict with the current Heli topology.
+
+## Rules
+
+- Read-only by default.
+- Prefer static inspection and focused non-mutating verification.
+- Do not edit, install, commit, push, publish, deploy, rotate credentials, or consume paid/API resources merely to finish the audit.
+- Separate confirmed findings from hypotheses and coverage gaps.
+- Rank findings by severity/blast radius, not by stylistic preference.
+- Preserve dirty user work.
+- A Heli skill/plugin file proves available guidance or wiring, not that a host callback actually executed.
 
 ## Output
 
 Return:
-- Findings by category
-- Risk/severity assessment
-- Suggested fixes
-- Safest next action
+
+```text
+Scope:
+Heli layout/context:
+Confirmed findings:
+Coverage gaps:
+Dependency/test/impact notes:
+Residual risks:
+Safest next actions:
+```
