@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Flow-first governance for normal development: a valid bound compatibility writer automatically establishes missing free writer authority instead of looping on `NO_LEASE`; live writer conflicts still fail closed and explicit review/observe intent is never silently upgraded.
+- Ownership denials now carry recovery classification, `retryable=false`, a stable blocker fingerprint, and host-facing STOP guidance so agents do not burn usage retrying unchanged governance state.
+- Read/recovery Heli control-plane commands remain usable while coding work is blocked; explicit takeover remains human-only.
+- `heli-assistant` and SessionStart guidance teach the same recovery semantics and discourage using YOLO as a normal writer-authority workaround.
+
 ## v0.10.10 - Heli assistant and skill routing
 
 ### Added
