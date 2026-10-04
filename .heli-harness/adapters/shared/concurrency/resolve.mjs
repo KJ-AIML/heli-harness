@@ -25,6 +25,7 @@ import {
 	readLease,
 	sessionHoldsWriteLease,
 	refreshLease,
+	acquireWriteLease,
 	isLeaseExpired,
 	findActiveWriteLeaseForWorktree,
 } from "./lease.mjs";
@@ -508,11 +509,32 @@ export function evaluateOwnershipGate(ctx, { isWrite = false } = {}) {
 				code: "LEASE_HELD",
 			};
 		}
-		return {
-			deny: true,
-			reason: `Heli-Harness concurrent mode: no active write lease for task ${ctx.taskId}. Run \`heli task claim ${ctx.taskId} --mode write\`.`,
-			code: "NO_LEASE",
-		};
+		try {
+			const acquired = acquireWriteLease(ctx.workspaceRoot, {
+				taskId: ctx.taskId,
+				sessionId: ctx.sessionId,
+				worktreePath: ctx.worktreeRoot || ctx.session?.worktreePath || ctx.task?.target?.worktreePath || "",
+			});
+			return {
+				deny: false,
+				ok: true,
+				autoRecovered: true,
+				code: "LEASE_AUTO_ACQUIRED",
+				lease: acquired,
+			};
+		} catch (error) {
+			const code = error?.code || "LEASE_AUTO_ACQUIRE_FAILED";
+			const liveConflict = code === "WORKTREE_WRITER_HELD" || code === "LEASE_HELD";
+			return {
+				deny: true,
+				reason: liveConflict
+					? `Heli-Harness concurrent mode: cannot establish writer authority because another live writer owns this worktree (${error.message}). Stop retrying this write and ask the user to continue with the current writer, close it, use another worktree, or explicitly approve takeover.`
+					: `Heli-Harness concurrent mode: could not establish writer authority automatically (${error.message}). Inspect with \`heli status\` and \`heli explain authority\` before retrying.`,
+				code,
+				authority: error?.lease || null,
+				autoRecoveryFailed: true,
+			};
+		}
 	}
 	return { deny: false, ok: true };
 }
