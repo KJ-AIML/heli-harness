@@ -25,6 +25,7 @@ import {
 	readLease,
 	sessionHoldsWriteLease,
 	refreshLease,
+	acquireWriteLease,
 	isLeaseExpired,
 	findActiveWriteLeaseForWorktree,
 } from "./lease.mjs";
@@ -508,11 +509,32 @@ export function evaluateOwnershipGate(ctx, { isWrite = false } = {}) {
 				code: "LEASE_HELD",
 			};
 		}
-		return {
-			deny: true,
-			reason: `Heli-Harness concurrent mode: no active write lease for task ${ctx.taskId}. Run \`heli task claim ${ctx.taskId} --mode write\`.`,
-			code: "NO_LEASE",
-		};
+		try {
+			const acquired = acquireWriteLease(ctx.workspaceRoot, {
+				taskId: ctx.taskId,
+				sessionId: ctx.sessionId,
+				worktreePath: ctx.worktreeRoot || ctx.session?.worktreePath || ctx.task?.target?.worktreePath || "",
+			});
+			return {
+				deny: false,
+				ok: true,
+				autoRecovered: true,
+				code: "LEASE_AUTO_ACQUIRED",
+				lease: acquired,
+			};
+		} catch (error) {
+			const code = error?.code || "LEASE_AUTO_ACQUIRE_FAILED";
+			const liveConflict = code === "WORKTREE_WRITER_HELD" || code === "LEASE_HELD";
+			return {
+				deny: true,
+				reason: liveConflict
+					? `Heli-Harness concurrent mode: cannot establish writer authority because another live writer owns this worktree (${error.message}). Stop retrying this write and ask the user to continue with the current writer, close it, use another worktree, or explicitly approve takeover.`
+					: `Heli-Harness concurrent mode: could not establish writer authority automatically (${error.message}). Inspect with \`heli status\` and \`heli explain authority\` before retrying.`,
+				code,
+				authority: error?.lease || null,
+				autoRecoveryFailed: true,
+			};
+		}
 	}
 	return { deny: false, ok: true };
 }
@@ -561,7 +583,7 @@ export function buildConcurrentSessionContext(ctx) {
 		);
 	} else {
 		lines.push(
-			"Governance enforcement: plugin hooks active for this session (not a sandbox). Writes require bound session + write lease; YOLO never bypasses ownership.",
+			"Governance enforcement: plugin hooks active for this session (not a sandbox). A bound write session auto-establishes or renews its own lease when the worktree is free; live writer conflicts still deny; YOLO never bypasses ownership.",
 		);
 	}
 	lines.push(`- Session: ${ctx.sessionId || "none"}`);
@@ -591,7 +613,7 @@ export function buildConcurrentSessionContext(ctx) {
 		} else {
 			lines.push(
 				"",
-				"Session is unbound. WRITE TOOLS ARE DENIED until you bind: heli task claim <id> --mode write (or heli session attach) and export HELI_SESSION_ID.",
+				"Session is unbound. WRITE TOOLS ARE DENIED until you bind: heli task claim <id> --mode write (or heli session attach) and export HELI_SESSION_ID. If a write is denied, do not retry alternate write commands against the same blocker; run the stated recovery action once, or ask the user when Heli says human approval is required.",
 			);
 		}
 		if (active.length) {

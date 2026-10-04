@@ -171,6 +171,34 @@ heli resume
 
 Adapt this sequence to the actual runtime evidence. Do not erase compatibility state before successful cutover.
 
+### Governance block / repeated denial
+
+Treat a governance denial as a state transition problem, not an invitation to try nearby commands until one works.
+
+When the guard exposes recovery metadata, obey it:
+
+- `AUTO_RECOVERABLE`: Heli repaired the safe authority gap and the original operation may continue.
+- `SELF_RECOVERABLE`: run the single documented recovery action, then retry once only if authority state changed.
+- `HUMAN_REQUIRED`: stop tool retries and ask the user for the decision/approval.
+- `HARD_DENY`: stop; repair the invalid state or change the requested operation.
+
+If `retryable=false`, do not retry the blocked action or alternate write commands against the same blocker.
+
+Use `blockerFingerprint` to recognize the same unchanged blocker. Same fingerprint + unchanged authority state means no progress is possible by retrying.
+
+For writer/lease problems, start with:
+
+```bash
+heli status
+heli explain authority
+```
+
+Add `heli resume --json` when continuation context matters.
+
+A missing compatibility lease for an already-bound write session may be auto-established when the worktree is free. Do not ask the user to enable YOLO merely to recover that state.
+
+A live writer conflict is different: do not take over silently. Ask the user to continue with the current writer, close/release it, use another worktree, or explicitly approve takeover.
+
 ### Host says stale / integration mismatch
 
 Distinguish installation state from runtime proof:
@@ -230,6 +258,8 @@ If the user explicitly requests one of those actions, route to the appropriate s
 - Installed host/plugin files are not runtime callback proof.
 - A publish command being accepted is not the same as external registry visibility.
 - Evidence may move across workspaces/devices; live authorization does not.
+- Same blocker + unchanged authority state is not progress; do not spend tool/model budget retrying it.
+- Normal safe development should not require YOLO merely to obtain missing free writer authority.
 - Do not fabricate a state transition or supported control-plane action to satisfy the user's desired outcome.
 
 ## Output

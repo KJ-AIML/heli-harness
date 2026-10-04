@@ -472,6 +472,75 @@ function structuredHeliAction(toolInput) {
 	return action && typeof action === "object" && !Array.isArray(action) ? action : null;
 }
 
+const OWNERSHIP_RECOVERY = Object.freeze({
+	NO_SESSION: { recoverability: "SELF_RECOVERABLE", nextAction: "Establish the host/session identity Heli requested, then retry once." },
+	UNBOUND_SESSION: { recoverability: "SELF_RECOVERABLE", nextAction: "Attach the current session to the intended task in write mode, then retry once." },
+	NOT_WRITE_MODE: { recoverability: "HUMAN_REQUIRED", nextAction: "Confirm that this review/observe session should become a writer before changing its mode." },
+	RESOURCE_WRITER_HELD: { recoverability: "HUMAN_REQUIRED", nextAction: "Continue with the current writer, close/release it, use another worktree, or explicitly approve takeover." },
+	WORKTREE_WRITER_HELD: { recoverability: "HUMAN_REQUIRED", nextAction: "Continue with the current writer, close/release it, use another worktree, or explicitly approve takeover." },
+	LEASE_HELD: { recoverability: "HUMAN_REQUIRED", nextAction: "Continue with the lease owner, close/release it, use another worktree, or explicitly approve takeover." },
+	STALE_RESOURCE_AUTHORITY: { recoverability: "HUMAN_REQUIRED", nextAction: "Inspect the stale owner and explicitly approve takeover before replacing another actor's authority." },
+	STALE_LEASE: { recoverability: "HUMAN_REQUIRED", nextAction: "Inspect the stale owner and explicitly approve takeover before replacing another actor's authority." },
+	MALFORMED_LEASE: { recoverability: "HARD_DENY", nextAction: "Run heli doctor/status and repair the malformed authority state before attempting more writes." },
+	RESOURCE_UNRESOLVED: { recoverability: "HARD_DENY", nextAction: "Resolve the worktree/resource identity before attempting more writes." },
+	LEASE_LOCK_DIR_EXISTS: { recoverability: "HARD_DENY", nextAction: "Inspect and repair the orphaned lock state before attempting more writes." },
+	LEASE_RACE: { recoverability: "SELF_RECOVERABLE", nextAction: "Refresh status/authority once; retry only if the authority state changed." },
+});
+
+function ownershipRecovery(decision, ctx) {
+	const code = decision?.code || "GOVERNANCE_DENIED";
+	const spec = OWNERSHIP_RECOVERY[code] || {
+		recoverability: "SELF_RECOVERABLE",
+		nextAction: "Inspect heli status and heli explain authority before deciding whether to retry.",
+	};
+	const authority = decision?.authority || decision?.lease || null;
+	const resourceId = authority?.resource?.id || (ctx?.worktreeRoot ? resourceIdForWorktree(ctx.worktreeRoot) : null);
+	const holderSessionId = authority?.sessionId || null;
+	const fingerprint = `heli-block-${hashText([
+		code,
+		resourceId || "",
+		holderSessionId || "",
+		ctx?.taskId || "",
+		ctx?.sessionId || "",
+	].join("|")).slice(0, 16)}`;
+	return {
+		recoverability: spec.recoverability,
+		retryable: false,
+		nextAction: spec.nextAction,
+		blockerFingerprint: fingerprint,
+	};
+}
+
+function withRecoveryGuidance(reason, recovery) {
+	const lines = [
+		reason,
+		`Heli recovery: ${recovery.recoverability}.`,
+		"Retry unchanged action: NO.",
+		`Next action: ${recovery.nextAction}`,
+		`Blocker: ${recovery.blockerFingerprint}`,
+	];
+	if (recovery.recoverability === "HUMAN_REQUIRED") {
+		lines.push("STOP: do not try alternate write commands to bypass this block; ask the user for the required decision.");
+	} else if (recovery.recoverability === "HARD_DENY") {
+		lines.push("STOP: this state must be repaired before more write attempts.");
+	} else {
+		lines.push("Do not retry the denied operation until the recovery action changes Heli authority state.");
+	}
+	return lines.join("\n");
+}
+
+function ownershipDeniedResult(decision, ctx, coverage) {
+	const recovery = ownershipRecovery(decision, ctx);
+	return {
+		deny: true,
+		reason: withCliHint(withRecoveryGuidance(decision.reason, recovery)),
+		code: decision.code,
+		ctx,
+		coverage,
+		...recovery,
+	};
+}
+
 /**
  * The fail-closed denial for an MCP input Heli refuses to read (see mcp-input.mjs): hosts treat a hook that times out as an
  * allow, so an input too large to check in time is refused, never checked in part.
@@ -676,23 +745,19 @@ export function evaluatePreToolUse({
 		];
 		const foreign = evaluateForeignWorktreeWrite(ctx, foreignPaths, { cwd: baseCwd });
 		if (foreign.deny) {
-			return {
-				deny: true,
-				reason: withCliHint(foreign.reason),
-				code: foreign.code,
+			return ownershipDeniedResult(
+				foreign,
 				ctx,
-				coverage: shellMutation ? "shell-mutation-best-effort" : "structured-write",
-			};
+				shellMutation ? "shell-mutation-best-effort" : "structured-write",
+			);
 		}
 		ownershipDecision = evaluateOwnershipGate(ctx, { isWrite: true });
 		if (ownershipDecision.deny) {
-			return {
-				deny: true,
-				reason: withCliHint(ownershipDecision.reason),
-				code: ownershipDecision.code,
+			return ownershipDeniedResult(
+				ownershipDecision,
 				ctx,
-				coverage: shellMutation ? "shell-mutation-best-effort" : "structured-write",
-			};
+				shellMutation ? "shell-mutation-best-effort" : "structured-write",
+			);
 		}
 	}
 

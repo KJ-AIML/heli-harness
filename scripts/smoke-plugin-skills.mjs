@@ -78,10 +78,17 @@ for (const expected of [
 	"heli explain capabilities",
 	"heli host status",
 	"must not silently",
+	"AUTO_RECOVERABLE",
+	"HUMAN_REQUIRED",
+	"retryable=false",
+	"blockerFingerprint",
+	"do not retry",
 ]) {
 	assert.ok(assistant.includes(expected), `heli-assistant must preserve situational guidance: ${expected}`);
 }
 assert.match(assistant, /do not.*(inherit|transfer).*writer authority/is, "heli-assistant must not imply writer transfer");
+assert.match(assistant, /do not ask the user to enable YOLO/i, "heli-assistant must not use YOLO as normal authority recovery");
+assert.match(assistant, /live writer conflict[\s\S]*do not take over silently/i, "heli-assistant must escalate live-writer conflict");
 
 const help = readSkill("heli-help");
 assert.ok(help.includes("heli resume"), "heli-help must include resume");
