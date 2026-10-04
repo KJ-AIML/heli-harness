@@ -583,7 +583,7 @@ export function buildConcurrentSessionContext(ctx) {
 		);
 	} else {
 		lines.push(
-			"Governance enforcement: plugin hooks active for this session (not a sandbox). Writes require bound session + write lease; YOLO never bypasses ownership.",
+			"Governance enforcement: plugin hooks active for this session (not a sandbox). A bound write session auto-establishes or renews its own lease when the worktree is free; live writer conflicts still deny; YOLO never bypasses ownership.",
 		);
 	}
 	lines.push(`- Session: ${ctx.sessionId || "none"}`);
@@ -613,7 +613,7 @@ export function buildConcurrentSessionContext(ctx) {
 		} else {
 			lines.push(
 				"",
-				"Session is unbound. WRITE TOOLS ARE DENIED until you bind: heli task claim <id> --mode write (or heli session attach) and export HELI_SESSION_ID.",
+				"Session is unbound. WRITE TOOLS ARE DENIED until you bind: heli task claim <id> --mode write (or heli session attach) and export HELI_SESSION_ID. If a write is denied, do not retry alternate write commands against the same blocker; run the stated recovery action once, or ask the user when Heli says human approval is required.",
 			);
 		}
 		if (active.length) {
