@@ -1,11 +1,11 @@
-# Grok Build Install — Heli v0.10.10
+# Grok Build Install — Heli v0.10.11
 
 ## Project setup
 
 Use the current linked model first:
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.10
+npm install -g github:KJ-AIML/heli-harness#v0.10.11
 heli setup
 cd /path/to/project
 heli link
