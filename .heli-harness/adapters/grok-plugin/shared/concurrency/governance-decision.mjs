@@ -78,6 +78,10 @@ export function structuredGuardDecision(result, {
 		details: {
 			bootstrap: Boolean(legacy.bootstrap),
 			renewalRequired: Boolean(legacy.renewalRequired),
+			recoverability: legacy.recoverability || null,
+			retryable: legacy.retryable !== undefined ? Boolean(legacy.retryable) : null,
+			nextAction: legacy.nextAction || null,
+			blockerFingerprint: legacy.blockerFingerprint || null,
 		},
 	});
 }
