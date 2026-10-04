@@ -22,6 +22,7 @@ function workspace(label) {
 	const dir = mkdtempSync(join(tmpdir(), `heli-flow-first-${label}-`));
 	mkdirSync(join(dir, ".heli-harness", "state"), { recursive: true });
 	mkdirSync(join(dir, ".heli-harness", "workspace"), { recursive: true });
+	mkdirSync(join(dir, ".heli-harness", "safety"), { recursive: true });
 	writeFileSync(join(dir, ".heli-harness", "HARNESS.md"), "# Heli-Harness\n");
 	writeFileSync(
 		join(dir, ".heli-harness", "workspace", "index.json"),
@@ -34,6 +35,10 @@ function workspace(label) {
 	writeFileSync(
 		join(dir, ".heli-harness", "workspace", "target.json"),
 		JSON.stringify({ schemaVersion: 1, targetRepo: "demo", targetGitRoot: dir, writesAllowedUnder: dir }) + "\n",
+	);
+	writeFileSync(
+		join(dir, ".heli-harness", "safety", "command-rules.json"),
+		JSON.stringify({ rules: [] }) + "\n",
 	);
 	return dir;
 }
@@ -154,6 +159,45 @@ function ctxFor(dir, sessionId) {
 		assert.equal(second.blockerFingerprint, first.blockerFingerprint);
 		assert.equal(second.retryable, false);
 		console.log("ok: host denial is stable and tells the agent to stop retrying");
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+}
+
+// Recovery/read Heli control-plane commands stay usable even while another
+// writer owns the worktree. Explicit takeover remains human-only.
+{
+	const dir = workspace("recovery-control-plane");
+	try {
+		boundWriteSession(dir, "task-owner", "owner");
+		acquireWriteLease(dir, { taskId: "task-owner", sessionId: "owner", worktreePath: dir });
+		createTask(dir, { taskId: "task-contender", title: "task-contender", repositoryId: "demo", worktreePath: dir, mode: "strict", allowDuplicate: true });
+		createSession(dir, { sessionId: "contender", host: "test-host", taskId: "task-contender", mode: "write", worktreePath: dir });
+		writeBinding(dir, { worktreePath: dir, taskId: "task-contender", sessionId: "contender", host: "test-host", mode: "write" });
+		const env = { ...process.env, HELI_SESSION_ID: "contender" };
+		for (const command of [
+			"heli status",
+			"heli resume --json",
+			"heli explain authority",
+			"heli explain capabilities",
+			"heli task claim task-contender --mode write",
+			"heli task release task-contender",
+			"heli session status",
+		]) {
+			const decision = evaluatePreToolUse({ cwd: dir, toolName: "Bash", toolInput: { command }, host: "test-host", env });
+			assert.equal(decision.deny, false, `${command} should remain usable as recovery/control-plane intent`);
+		}
+		const takeover = evaluatePreToolUse({
+			cwd: dir,
+			toolName: "Bash",
+			toolInput: { command: "heli task takeover task-owner --confirm" },
+			host: "test-host",
+			env,
+		});
+		assert.equal(takeover.deny, true);
+		assert.equal(takeover.code, "TIER_BLOCKED");
+		assert.match(takeover.reason || "", /human|hard deny/i);
+		console.log("ok: recovery control plane flows while takeover stays human-only");
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
