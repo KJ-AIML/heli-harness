@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 
 const root = process.cwd();
 const api = await import(pathToFileURL(join(root, "lib/concurrency/index.mjs")).href);
+const { evaluatePreToolUse } = await import(pathToFileURL(join(root, ".heli-harness/adapters/shared/hook-core.mjs")).href);
 const {
 	createTask,
 	createSession,
@@ -120,6 +121,39 @@ function ctxFor(dir, sessionId) {
 		assert.equal(decision.code, "WORKTREE_WRITER_HELD");
 		assert.equal(readLease(dir, "task-contender"), null);
 		console.log("ok: live worktree writer remains fail-closed");
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+}
+
+// The host-facing guard must tell an agent to stop retrying a live-writer
+// conflict, and the blocker fingerprint must stay stable while authority state
+// is unchanged.
+{
+	const dir = workspace("host-stop-retry");
+	try {
+		boundWriteSession(dir, "task-owner", "owner");
+		acquireWriteLease(dir, { taskId: "task-owner", sessionId: "owner", worktreePath: dir });
+		createTask(dir, { taskId: "task-contender", title: "task-contender", repositoryId: "demo", worktreePath: dir, mode: "strict", allowDuplicate: true });
+		createSession(dir, { sessionId: "contender", host: "test-host", taskId: "task-contender", mode: "write", worktreePath: dir });
+		writeBinding(dir, { worktreePath: dir, taskId: "task-contender", sessionId: "contender", host: "test-host", mode: "write" });
+		const call = () => evaluatePreToolUse({
+			cwd: dir,
+			toolName: "Write",
+			toolInput: { file_path: join(dir, "note.txt"), content: "x\n" },
+			host: "test-host",
+			env: { ...process.env, HELI_SESSION_ID: "contender" },
+		});
+		const first = call();
+		const second = call();
+		assert.equal(first.deny, true);
+		assert.equal(first.recoverability, "HUMAN_REQUIRED");
+		assert.equal(first.retryable, false);
+		assert.match(first.reason || "", /STOP: do not try alternate write commands/i);
+		assert.match(first.blockerFingerprint || "", /^heli-block-/);
+		assert.equal(second.blockerFingerprint, first.blockerFingerprint);
+		assert.equal(second.retryable, false);
+		console.log("ok: host denial is stable and tells the agent to stop retrying");
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
