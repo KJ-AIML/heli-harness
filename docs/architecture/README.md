@@ -82,6 +82,7 @@ These are current-facing references for `v0.10.10`:
 
 - [Governance model](governance-model.md)
 - [Heli assistant and skill routing](heli-assistant.md)
+- [Flow-first governance](flow-first-governance.md) — normal work flows; conflicts/human decisions block with explicit recovery semantics
 - [Adapter support matrix](../ADAPTER_SUPPORT_MATRIX.md)
 - [Enforcement matrix](../ENFORCEMENT_MATRIX.md)
 - [Install guide](../../INSTALL.md)
