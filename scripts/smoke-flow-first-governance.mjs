@@ -95,6 +95,28 @@ function ctxFor(dir, sessionId) {
 	}
 }
 
+// The actual host write path must allow the first guarded mutation and create
+// the missing lease in the same evaluation.
+{
+	const dir = workspace("hook-auto-acquire");
+	try {
+		boundWriteSession(dir, "task-hook", "session-hook");
+		const decision = evaluatePreToolUse({
+			cwd: dir,
+			toolName: "Write",
+			toolInput: { file_path: join(dir, "note.txt"), content: "flow\n" },
+			host: "test-host",
+			env: { ...process.env, HELI_SESSION_ID: "session-hook" },
+		});
+		assert.equal(decision.deny, false);
+		assert.equal(readLease(dir, "task-hook")?.sessionId, "session-hook");
+		console.log("ok: first guarded write auto-establishes missing authority");
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+}
+
+
 // Flow-first must not turn explicit review intent into writer authority.
 {
 	const dir = workspace("review-stays-review");
