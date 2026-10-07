@@ -118,7 +118,7 @@ export function appendSkillUsageBootstrap(contextText) {
 	return `${text}\n\n${bootstrap}`;
 }
 
-export function buildSessionContext(cwd, { host = "unknown", hookPayload = null, env = process.env, recordSessionStart = false } = {}) {
+export function buildSessionContext(cwd, { host = "unknown", hookPayload = null, env = process.env, recordSessionStart = false, sessionStartSource = "SessionStart" } = {}) {
 	const ctx = resolveExecutionContext({
 		cwd,
 		environment: env,
@@ -132,7 +132,7 @@ export function buildSessionContext(cwd, { host = "unknown", hookPayload = null,
 			observeRuntimeCapability(ctx.workspaceRoot, ctx.sessionId, {
 				host,
 				capability: "session_start",
-				source: "SessionStart",
+				source: sessionStartSource,
 			});
 		} catch {
 			// Evidence must not block the host from receiving session context.
