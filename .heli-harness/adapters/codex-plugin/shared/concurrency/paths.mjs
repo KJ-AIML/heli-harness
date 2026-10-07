@@ -1,7 +1,7 @@
 /**
  * Workspace / worktree / path canonicalization for Heli concurrency.
  */
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, normalize, resolve, sep, win32 } from "node:path";
 import { spawnSync } from "node:child_process";
 import { safeRealpath } from "./fs-atomic.mjs";
@@ -109,23 +109,44 @@ export function gitBranch(cwd) {
 	return null;
 }
 
+function isHeliDistributionCheckout(dir) {
+	const packageJson = join(dir, "package.json");
+	const cli = join(dir, "bin", "heli.mjs");
+	if (!existsSync(packageJson) || !existsSync(cli)) return false;
+	try {
+		return JSON.parse(readFileSync(packageJson, "utf8"))?.name === "heli-harness";
+	} catch {
+		return false;
+	}
+}
+
 /**
- * Walk upward from cwd looking for .heli-harness/HARNESS.md.
- * Returns absolute workspace root or null.
+ * Walk upward from cwd looking for a Heli workspace.
+ *
+ * A Heli source/distribution checkout contains .heli-harness/HARNESS.md as
+ * packaged content. When that checkout lives inside a linked parent workspace,
+ * the package content must not shadow the parent's explicit .heli binding.
+ * An explicit local .heli/workspace.json still wins, and ordinary embedded
+ * workspaces keep nearest-workspace precedence.
  */
 export function findWorkspaceRoot(startCwd) {
 	let dir = resolve(startCwd || process.cwd());
 	const seen = new Set();
+	let distributionFallback = null;
 	while (dir && !seen.has(dir)) {
 		seen.add(dir);
 		const projectBinding = workspaceManifestPath(dir);
 		const harness = join(dir, ".heli-harness", "HARNESS.md");
-		if (existsSync(projectBinding) || existsSync(harness)) return canonicalizePath(dir);
+		if (existsSync(projectBinding)) return canonicalizePath(dir);
+		if (existsSync(harness)) {
+			if (!isHeliDistributionCheckout(dir)) return canonicalizePath(dir);
+			distributionFallback ||= canonicalizePath(dir);
+		}
 		const parent = dirname(dir);
 		if (parent === dir) break;
 		dir = parent;
 	}
-	return null;
+	return distributionFallback;
 }
 
 /**
