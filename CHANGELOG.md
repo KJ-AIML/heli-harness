@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.11.1 - Linked source workspace resolution
+
+### Fixed
+
+- Heli source/distribution checkouts nested under a linked parent no longer let packaged `.heli-harness/` content shadow the parent's explicit `.heli/` binding; ordinary embedded workspaces and standalone source checkouts keep their existing resolution behavior.
+
 ## v0.11.0 - Flow-first governance
 
 ### Added
