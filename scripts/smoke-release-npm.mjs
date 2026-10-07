@@ -119,8 +119,13 @@ for (const npmExecpath of [undefined, ""]) {
 	const workflow = readFileSync(join(root, ".github", "workflows", "release.yml"), "utf8").replace(/\r\n/g, "\n");
 	assert.match(
 		workflow,
-		/if \[ "\$\{GITHUB_EVENT_NAME\}" = "workflow_dispatch" \] \|\| \[ "\$\{version\}" != "\$\{previous_version\}" \]; then/,
-		"release.yml must gate automatic publication on a package version change",
+		/grep -Fq "\[release-retry\]"/,
+		"release.yml must allow an explicit release-retry commit marker when a version is not yet published",
+	);
+	assert.match(
+		workflow,
+		/\[ "\$\{version\}" != "\$\{previous_version\}" \]/,
+		"release.yml must still request automatic publication on a package version change",
 	);
 	assert.match(workflow, /echo "release_requested=\$\{release_requested\}" >> "\$GITHUB_OUTPUT"/);
 	for (const name of [
