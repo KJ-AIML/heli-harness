@@ -173,6 +173,26 @@ try {
 	assert.match(blocked.reason, /Owner:/);
 	console.log("ok: live overlapping mutation blocks");
 
+	// If Heli knows an operation mutates but cannot resolve its exact paths, it
+	// must conservatively treat that mutation as worktree-scoped. Otherwise an
+	// unknown-path writer could bypass a proven live path-scoped mutation.
+	const unknownCtx = resolveExecutionContext({
+		cwd: project,
+		host: "grok",
+		environment: env,
+		hookPayload: { session_id: "host-unknown" },
+		createIfMissing: true,
+	});
+	const unknownBlocked = evaluateOwnershipGate(unknownCtx, {
+		isWrite: true,
+		mutationPaths: [],
+		toolUseId: "host-unknown:unscoped-write",
+		env,
+	});
+	assert.equal(unknownBlocked.deny, true);
+	assert.equal(unknownBlocked.code, "MUTATION_CONFLICT");
+	console.log("ok: unknown-path mutation cannot bypass a live worktree conflict");
+
 	const side = writeDecision(project, "host-other", other);
 	assert.equal(side.deny, false, side.reason);
 	const sessions = new Set(listMutationLeases(project).map((lease) => lease.sessionId));

@@ -125,7 +125,7 @@ function pathsOf(record) {
 function isWorktreeScoped(record) {
 	if (!record) return false;
 	if (record.exclusive === true) return true;
-	if (record.scope === "worktree") return true;
+	if (record.scope === "worktree" || record.scope === "unscoped") return Boolean(record.worktreePath);
 	if (!record.scope && pathsOf(record).length === 0 && record.worktreePath) return true;
 	return false;
 }
