@@ -10,7 +10,7 @@
  * cross-worktree visibility, and task lifecycle isolation (status untouched).
  */
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -240,13 +240,7 @@ const all = evaluateWorkspaceCoordination(checkoutB, { env });
 assert.deepEqual(all.map((s) => s.coordinationState).sort(), ["ready", "ready", "ready", "ready"]);
 
 function cpDir(from, to) {
-	mkdirSync(to, { recursive: true });
-	for (const entry of spawnSync("find", [from, "-type", "f"], { encoding: "utf8" }).stdout.split("\n").filter(Boolean)) {
-		const rel = entry.slice(from.length + 1);
-		const dest = join(to, rel);
-		mkdirSync(dest.slice(0, dest.lastIndexOf("/")), { recursive: true });
-		writeFileSync(dest, readFileSync(entry, "utf8"));
-	}
+	cpSync(from, to, { recursive: true });
 }
 
 console.log("layer2 coordination smoke ok");
