@@ -4,7 +4,7 @@
 **Primary model:** shared/global distribution + explicit project binding
 **Architecture:** [docs/architecture/README.md](docs/architecture/README.md)
 
-## Recommended v0.10 setup
+## Recommended v0.11 setup
 
 `heli-harness@0.11.0` is published on npm.
 
@@ -59,7 +59,7 @@ For a fresh project, `heli link`:
 
 - creates or reuses a logical workspace ID;
 - declares the project root as a worktree resource;
-- writes the v0.10 runtime/protocol/schema lock;
+- writes the v0.11 runtime/protocol/schema lock;
 - creates a machine/execution-specific operational namespace outside committed project binding;
 - seeds default project policy/safety/profile material when missing;
 - registers the project in the global locator;
@@ -74,7 +74,7 @@ The self-contained `.heli-harness/` installation remains supported as a compatib
 First update it to a linked-workspace-capable runtime, then ensure no embedded writer authority is active:
 
 ```bash
-# use the current v0.10 CLI
+# use the current v0.11 CLI
 heli status /path/to/workspace
 heli link /path/to/workspace
 ```
@@ -178,7 +178,7 @@ T6 hard-deny rules are not made grantable by normal temporary approval.
 
 ## Work records and concurrency
 
-A named task is optional for ordinary reversible work in the linked v0.10 model.
+A named task is optional for ordinary reversible work in the linked v0.11 model.
 
 Use durable task/work records when work spans sessions, requires handoff, coordinates multiple actors, carries significant verifier obligations, or needs investigation/evidence history.
 

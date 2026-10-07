@@ -2,7 +2,7 @@
 
 Heli-Harness provides the embedded governance protocol and compatibility assets for Heli v0.11.0. The current architecture is a portable governance kernel with explicit project binding and execution-local/resource-scoped authority. In a linked project, `.heli/workspace.json`, `.heli/heli.lock`, trusted user/global config, and CLI-resolved execution state take precedence over legacy embedded workspace state. In a deliberately embedded/hermetic install, this file remains the local protocol entry point.
 
-## v0.10 layout and authority
+## v0.11 layout and authority
 
 - First run `heli status` (and `heli doctor` when needed) to determine whether the project is **linked** or **embedded compatibility**.
 - In linked mode, start from the linked project root. Project identity/config lives under `.heli/`; live grants, sessions, resource authority, credentials, capability observations, and process state are execution-local and must not be inferred from committed project files.
@@ -24,7 +24,7 @@ Heli-Harness provides the embedded governance protocol and compatibility assets 
 - **Plan/task freshness (mandatory):** same-turn Evidence after verify; never leave `Next smallest action` or plan Status lagging after a blocking discovery (e.g. "await auth" after auth was granted, or "rebind pin" after the action is proven unsupported). When strategy shifts, update plan `Active strategy` / `Supersedes` so old eras do not look current.
 - **Evidence purity:** plan/task Evidence holds measured results only. Do not record product-defect hypotheses until `verify-premise` confirms them.
 - **Resume card + gate packet:** keep the Resume card in `current-task.md` current after every verify or blocker. For multi-gate S2/S3 ops (smoke, launch, staging), use `.heli-harness/templates/ops-gate-packet.md` and fail closed on typed blockers.
-- **Linked vs embedded compatibility:** linked v0.10 projects use execution-local resource authority and do not require a named task for ordinary reversible work. Embedded compatibility installs use the older concurrent/legacy task/session layout; the `concurrent-upgrade` skill applies only to that compatibility path.
+- **Linked vs embedded compatibility:** linked v0.11 projects use execution-local resource authority and do not require a named task for ordinary reversible work. Embedded compatibility installs use the older concurrent/legacy task/session layout; the `concurrent-upgrade` skill applies only to that compatibility path.
 - `current-task.md`'s `Step count` field is a self-reported number of discrete steps in the current task (0 if the task isn't naturally step-shaped). Set it honestly before starting, not as a formality — it is what lets session-start context warn when `Step count` is 3+ but `Plan` is still `n/a`, catching the exact case where a task obviously needed a plan.md and didn't get one. This is a warning, not a blocking gate: it surfaces the gap instead of leaving it silent, but it does not stop you from proceeding.
 - The agent must read policy overlays in `.heli-harness/policies/` when they exist.
 - The agent must read safety overlays in `.heli-harness/safety/` when they exist.

@@ -1,6 +1,6 @@
 # Embedded / Hermetic Install — v0.11.0
 
-The primary v0.10 model is **global/shared distribution + `heli setup` + `heli link`**. See the root [INSTALL.md](../INSTALL.md).
+The primary v0.11 model is **global/shared distribution + `heli setup` + `heli link`**. See the root [INSTALL.md](../INSTALL.md).
 
 This document covers the self-contained `.heli-harness/` compatibility path.
 

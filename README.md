@@ -102,7 +102,7 @@ heli link /path/to/existing-workspace
 
 The cutover is fail-closed when active embedded write authority exists. Portable work/evidence may migrate; authorization does not.
 
-For a deliberately self-contained/offline bundle, `heli install <path>` remains available. It is no longer the primary v0.10 distribution model.
+For a deliberately self-contained/offline bundle, `heli install <path>` remains available. It is no longer the primary v0.11 distribution model.
 
 Full installation and migration details: [INSTALL.md](INSTALL.md).
 
@@ -227,7 +227,7 @@ Use these as current `v0.11.0` references:
 
 - [Architecture index](docs/architecture/README.md) — canonical current architecture entry point.
 - [Governance model](docs/architecture/governance-model.md) — policy, authority, grants, decisions, evidence.
-- [Install guide](INSTALL.md) — v0.10 setup/link plus embedded compatibility.
+- [Install guide](INSTALL.md) — v0.11 setup/link plus embedded compatibility.
 - [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) — current host claims and evidence.
 - [Enforcement Matrix](docs/ENFORCEMENT_MATRIX.md) — current governance surface/evidence map.
 - [Heli v1 Architecture Convergence RFC](docs/superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md) — accepted architecture contract implemented through v0.11.0.

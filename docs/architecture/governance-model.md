@@ -79,7 +79,7 @@ Cloning or moving a repository does not copy authorization. A clone may preserve
 
 ## Resource-scoped authority
 
-The v0.10 authority boundary is the modeled **resource**, not a task name.
+The v0.11 authority boundary is the modeled **resource**, not a task name.
 
 For a conflicting local worktree resource, Heli conservatively models one active writer authority unless an executor provides stronger isolation/fencing semantics.
 
@@ -247,7 +247,7 @@ Current host claims live in the [Adapter Support Matrix](../ADAPTER_SUPPORT_MATR
 
 The historical `.heli-harness/` workspace layout remains supported for compatibility and hermetic/offline use.
 
-It includes embedded task/session/lease/index/target concepts from earlier releases. Those compatibility records must not override the current linked v0.10 rules when a project has `.heli/workspace.json`.
+It includes embedded task/session/lease/index/target concepts from earlier releases. Those compatibility records must not override the current linked v0.11 rules when a project has `.heli/workspace.json`.
 
 First linked cutover fails closed while active embedded writer authority exists.
 

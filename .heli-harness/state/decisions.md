@@ -2,7 +2,7 @@
 
 Durable harness-level decisions go here.
 
-## 2026-09-19 — v0.10 architecture baseline
+## 2026-09-19 — historical v0.10 architecture baseline
 
 - Heli is a portable governance and coordination layer around a small policy/authority kernel.
 - Shared/global installation is distribution + trusted user configuration, not one global mutable active-workspace authority.

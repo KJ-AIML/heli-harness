@@ -5,7 +5,7 @@
 
 This directory is the shipped **embedded compatibility/hermetic distribution** for Heli. It contains portable skills, policies, safety defaults, adapter assets, the embedded CLI mirror, and compatibility state schemas.
 
-It is **not** the primary v0.10 project-binding topology.
+It is **not** the primary v0.11 project-binding topology.
 
 For a normal linked project:
 
