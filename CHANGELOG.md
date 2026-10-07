@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- CLI help is now first-class and read-only across command surfaces: `heli --help`, `heli help <command> [subcommand]`, `heli <command> --help`, and grouped subcommand help are intercepted before dispatch so commands such as `heli link --help` cannot mutate workspace state.
+
 ## v0.10.11 - Flow-first governance
 
 ### Changed
