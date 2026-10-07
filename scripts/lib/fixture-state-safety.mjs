@@ -35,14 +35,13 @@ function isSameOrDescendant(root, target) {
  * root and does not overlap the user's ~/.heli tree. Existing symlink ancestors
  * are resolved before containment checks, including when the leaf is missing.
  */
-export function assertFixtureOwnedPath(targetPath, fixtureRoot) {
+function assertFixtureOwnedPathAgainstHeli(targetPath, fixtureRoot, heliPath) {
 	const targetInput = lexicalAbsolute(targetPath, "targetPath");
 	const rootInput = lexicalAbsolute(fixtureRoot, "fixtureRoot");
-	const homeInput = lexicalAbsolute(homedir(), "home");
+	const heliInput = lexicalAbsolute(heliPath, "heliPath");
 	if (!existsSync(rootInput)) throw new Error(`fixture root does not exist: ${rootInput}`);
 	const root = realpathSync(rootInput);
 	const target = canonicalPathWithMissingTail(targetInput);
-	const heliInput = resolve(homeInput, ".heli");
 	const heli = canonicalPathWithMissingTail(heliInput);
 	if (isSameOrDescendant(heli, target) || isSameOrDescendant(target, heli)) {
 		throw new Error(`refusing cleanup path that overlaps user Heli state: ${target}`);
@@ -51,6 +50,10 @@ export function assertFixtureOwnedPath(targetPath, fixtureRoot) {
 		throw new Error(`refusing cleanup outside fixture root ${root}: ${target}`);
 	}
 	return target;
+}
+
+export function assertFixtureOwnedPath(targetPath, fixtureRoot) {
+	return assertFixtureOwnedPathAgainstHeli(targetPath, fixtureRoot, resolve(homedir(), ".heli"));
 }
 
 /** Remove one explicitly owned fixture path after asserting containment. */
@@ -117,17 +120,24 @@ export function runFixtureStateSafetyRegression() {
 			assert.equal(existsSync(productionEntriesBefore), true, "the real ~/.heli root survives refusal");
 		}
 
+		// Use an existing synthetic protected root for the symlink regression so the
+		// test is deterministic on clean CI runners where ~/.heli does not exist.
+		// The exported guard still derives the real protected root from homedir().
+		const syntheticHeli = join(root, "synthetic-home", ".heli");
+		mkdirSync(syntheticHeli, { recursive: true });
 		const symlinkRoot = join(root, "fixture-symlink");
 		mkdirSync(symlinkRoot, { recursive: true });
 		const escapedLink = join(symlinkRoot, "escape");
-		symlinkSync(productionHeli, escapedLink, "dir");
+		symlinkSync(syntheticHeli, escapedLink, "dir");
 		assert.throws(
-			() => assertFixtureOwnedPath(join(escapedLink, "state", "workspaces", "must-never-delete"), symlinkRoot),
+			() => assertFixtureOwnedPathAgainstHeli(
+				join(escapedLink, "state", "workspaces", "must-never-delete"),
+				symlinkRoot,
+				syntheticHeli,
+			),
 			/overlaps user Heli state/,
 		);
-		if (productionEntriesBefore) {
-			assert.equal(existsSync(productionEntriesBefore), true, "symlink escape did not mutate ~/.heli");
-		}
+		assert.equal(existsSync(syntheticHeli), true, "symlink escape did not mutate the protected Heli root");
 	} finally {
 		// Remove this exact temporary test root. Its parent is the system temp dir,
 		// and the user's real ~/.heli is independently excluded by the guard.
