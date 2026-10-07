@@ -19,6 +19,7 @@ import { runExplain } from "../lib/cli/explain.mjs";
 import { runTrace } from "../lib/cli/trace.mjs";
 import { runSetup } from "../lib/cli/setup.mjs";
 import { runLink } from "../lib/cli/link.mjs";
+import { runRepo } from "../lib/cli/repo.mjs";
 import { runGrant } from "../lib/cli/grant.mjs";
 import { runHost } from "../lib/cli/host.mjs";
 import { runHandoff } from "../lib/cli/handoff.mjs";
@@ -83,6 +84,7 @@ try {
 	switch (command) {
 		case "setup": runSetup(args); break;
 		case "link": runLink(packageRoot, args); break;
+		case "repo": runRepo(args); break;
 		case "host": runHost(packageRoot, args); break;
 		case "handoff": protocolJsonRequested(command, args) ? runHandoffMachine(args) : runHandoff(args); break;
 		case "grant": runGrant(args); break;
