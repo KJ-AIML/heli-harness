@@ -122,7 +122,7 @@ jobs:
           printf '\n**npm:** heli-harness@%s\n' "$VERSION" >> release-notes.md
 
       - name: Create annotated tag and GitHub release
-        if: steps.meta.outputs.tag_exists != 'true'
+        if: steps.meta.outputs.release_requested == 'true' && steps.meta.outputs.tag_exists != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
