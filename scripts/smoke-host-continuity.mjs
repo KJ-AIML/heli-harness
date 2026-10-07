@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import {
+	canonicalizePath,
 	closeSession,
 	continuationForWorktree,
 	listTasks,
@@ -37,6 +38,18 @@ const env = {
 	HOME: home,
 	USERPROFILE: home,
 };
+const priorEnv = {
+	HELI_CONFIG_DIR: process.env.HELI_CONFIG_DIR,
+	HELI_DATA_DIR: process.env.HELI_DATA_DIR,
+	HOME: process.env.HOME,
+	USERPROFILE: process.env.USERPROFILE,
+};
+Object.assign(process.env, {
+	HELI_CONFIG_DIR: config,
+	HELI_DATA_DIR: data,
+	HOME: home,
+	USERPROFILE: home,
+});
 
 function run(command, args, { cwd = workspace } = {}) {
 	const result = spawnSync(command, args, { cwd, env, encoding: "utf8" });
@@ -93,7 +106,9 @@ assert.equal(linked.ok, true);
 const workspaceReal = linked.data.workspaceRoot;
 const registered = JSON.parse(heliRun(["link", repo, "--json"], repo).stdout);
 assert.equal(registered.data.nestedRepositoryRegistered, true);
-const repoReal = spawnSync("git", ["-C", repo, "rev-parse", "--show-toplevel"], { encoding: "utf8" }).stdout.trim();
+const repoReal = canonicalizePath(
+	spawnSync("git", ["-C", repo, "rev-parse", "--show-toplevel"], { encoding: "utf8" }).stdout.trim(),
+);
 
 // Codex starts and performs meaningful taskless work.
 const codex = hostStart("codex", "codex-live-1");
@@ -178,4 +193,8 @@ assert.ok(finalResume.git.changes.some((change) => change.path === "src/continui
 
 console.log("smoke-host-continuity: codex -> pi -> claude -> opencode passed without YOLO");
 
+for (const [key, value] of Object.entries(priorEnv)) {
+	if (value == null) delete process.env[key];
+	else process.env[key] = value;
+}
 rmSync(scratch, { recursive: true, force: true });
