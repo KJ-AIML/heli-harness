@@ -1,4 +1,4 @@
-# Install Matrix — v0.11.0
+# Install Matrix — v0.11.1
 
 **Primary topology:** global Heli distribution → machine-level host integration → lightweight project `.heli/` binding
 **Architecture:** [Current Heli architecture](architecture/README.md)
