@@ -33,8 +33,10 @@ assert.ok(manifest.author.name);
 const hooks = json(join(pluginRoot, "hooks", "hooks.json"));
 assert.ok(hooks.hooks.SessionStart);
 assert.ok(hooks.hooks.PreToolUse);
+assert.ok(hooks.hooks.SessionEnd);
+assert.match(hooks.hooks.SessionEnd[0].hooks[0].command, /heli-session-end\.mjs/);
 
-for (const rel of [session, pre, `${plugin}/install-user-hooks.mjs`]) {
+for (const rel of [session, pre, `${plugin}/hooks/heli-session-end.mjs`, `${plugin}/install-user-hooks.mjs`]) {
 	nodeCheck(root, rel);
 }
 

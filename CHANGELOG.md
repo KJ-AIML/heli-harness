@@ -15,6 +15,7 @@
 - Flow profile allows a write unless Heli can prove a live overlapping mutation or an existing destructive policy applies. Stale, closed, missing, and unknown authority is recovered instead of demanding takeover.
 - Observe profile records those decisions and does not block ordinary writes. Strict profile keeps the previous fail-closed writer gate.
 - Live overlap still blocks, with the owner, path, and last mutation activity. Non-overlapping live work is allowed.
+- The Grok plugin closes the Heli session on `SessionEnd`, so a clean `grok -p` exit releases the mutation lease.
 
 ## v0.10.12 - Multi-repo host continuity
 

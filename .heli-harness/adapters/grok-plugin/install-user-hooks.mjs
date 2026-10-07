@@ -24,8 +24,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const hooksDir = join(here, "hooks");
 const pre = join(hooksDir, "heli-pre-tool-use.mjs").replaceAll("\\", "/");
 const session = join(hooksDir, "heli-session-start.mjs").replaceAll("\\", "/");
+const sessionEnd = join(hooksDir, "heli-session-end.mjs").replaceAll("\\", "/");
 
-if (!existsSync(pre) || !existsSync(session)) {
+if (!existsSync(pre) || !existsSync(session) || !existsSync(sessionEnd)) {
 	console.error("Missing hook scripts next to install-user-hooks.mjs");
 	process.exit(1);
 }
@@ -104,6 +105,18 @@ const config = {
 						type: "command",
 						command: `node "${pre}"`,
 						timeout: 30,
+					},
+				],
+			},
+		],
+		// No matcher: every end reason, including a clean grok -p exit, closes the session.
+		SessionEnd: [
+			{
+				hooks: [
+					{
+						type: "command",
+						command: `node "${sessionEnd}"`,
+						timeout: 5,
 					},
 				],
 			},
