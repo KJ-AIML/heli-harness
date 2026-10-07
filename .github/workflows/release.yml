@@ -68,6 +68,44 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Resolve npm staged state
+        if: steps.meta.outputs.release_requested == 'true' && steps.npm_meta.outputs.exists != 'true'
+        id: npm_stage_meta
+        shell: bash
+        env:
+          NPM_STAGE_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+          if [ -z "${NPM_STAGE_TOKEN:-}" ]; then
+            exit 0
+          fi
+          stages="$(NODE_AUTH_TOKEN="$NPM_STAGE_TOKEN" npm stage list heli-harness --json 2>/dev/null || true)"
+          STAGES="$stages" VERSION="$VERSION" node <<'NODE' > staged.txt
+          const version = process.env.VERSION;
+          let found = false;
+          function visit(value) {
+            if (found) return;
+            if (typeof value === "string") {
+              if (value === version) found = true;
+              return;
+            }
+            if (Array.isArray(value)) {
+              for (const item of value) visit(item);
+              return;
+            }
+            if (value && typeof value === "object") {
+              for (const item of Object.values(value)) visit(item);
+            }
+          }
+          try { visit(JSON.parse(process.env.STAGES || "[]")); } catch {}
+          process.stdout.write(found ? "true" : "false");
+          NODE
+          if [ "$(cat staged.txt)" = "true" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Full release gate
         if: steps.meta.outputs.release_requested == 'true' && (steps.meta.outputs.tag_exists != 'true' || steps.npm_meta.outputs.exists != 'true')
         run: npm run check
@@ -83,21 +121,47 @@ jobs:
           test -f "$file"
           echo "file=$file" >> "$GITHUB_OUTPUT"
 
-      - name: Publish to npm
-        if: steps.meta.outputs.release_requested == 'true' && steps.npm_meta.outputs.exists != 'true'
+      - name: Publish or stage on npm
+        if: steps.meta.outputs.release_requested == 'true' && steps.npm_meta.outputs.exists != 'true' && steps.npm_stage_meta.outputs.exists != 'true'
         id: npm_publish
         shell: bash
         env:
+          NPM_STAGE_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ steps.meta.outputs.version }}
           PACKAGE_FILE: ${{ steps.pack.outputs.file }}
         run: |
           set -euo pipefail
           npm --version
-          npm publish "$PACKAGE_FILE" --access public --provenance
-          echo "status=published" >> "$GITHUB_OUTPUT"
+          set +e
+          publish_output="$(npm publish "$PACKAGE_FILE" --access public --provenance 2>&1)"
+          publish_status=$?
+          set -e
+          printf '%s\n' "$publish_output"
+          if [ "$publish_status" -eq 0 ]; then
+            echo "status=published" >> "$GITHUB_OUTPUT"
+          elif printf '%s\n' "$publish_output" | grep -Eq 'EOTP|E_STAGE_REQUIRED|E404'; then
+            if [ -z "${NPM_STAGE_TOKEN:-}" ]; then
+              echo "::error::Trusted publishing is unavailable and NPM_TOKEN is not configured for staged fallback. heli-harness@${VERSION} was not released."
+              exit "$publish_status"
+            fi
+            echo "::notice::Direct OIDC publish is unavailable; staging heli-harness@${VERSION} for maintainer 2FA approval."
+            NODE_AUTH_TOKEN="$NPM_STAGE_TOKEN" npm stage publish "$PACKAGE_FILE" --access public
+            echo "status=staged" >> "$GITHUB_OUTPUT"
+          else
+            exit "$publish_status"
+          fi
+
+      - name: Await staged npm approval
+        if: steps.meta.outputs.release_requested == 'true' && steps.npm_meta.outputs.exists != 'true' && (steps.npm_stage_meta.outputs.exists == 'true' || steps.npm_publish.outputs.status == 'staged')
+        shell: bash
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          echo "::error::heli-harness@${VERSION} is staged on npm and awaiting maintainer 2FA approval. Approve it in npmjs.com → Staged Packages, then re-run the Release workflow. No Git tag or GitHub Release has been created."
+          exit 1
 
       - name: Build release notes
-        if: steps.meta.outputs.release_requested == 'true' && steps.meta.outputs.tag_exists != 'true'
+        if: steps.meta.outputs.release_requested == 'true' && steps.meta.outputs.tag_exists != 'true' && (steps.npm_meta.outputs.exists == 'true' || steps.npm_publish.outputs.status == 'published')
         shell: bash
         env:
           VERSION: ${{ steps.meta.outputs.version }}
@@ -122,7 +186,7 @@ jobs:
           printf '\n**npm:** heli-harness@%s\n' "$VERSION" >> release-notes.md
 
       - name: Create annotated tag and GitHub release
-        if: steps.meta.outputs.release_requested == 'true' && steps.meta.outputs.tag_exists != 'true'
+        if: steps.meta.outputs.release_requested == 'true' && steps.meta.outputs.tag_exists != 'true' && (steps.npm_meta.outputs.exists == 'true' || steps.npm_publish.outputs.status == 'published')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
