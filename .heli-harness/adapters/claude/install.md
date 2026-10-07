@@ -1,11 +1,11 @@
-# Claude Code Install — Heli v0.11.0
+# Claude Code Install — Heli v0.11.1
 
 ## Current project setup
 
 Use shared/global Heli distribution and link the project:
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.11.0
+npm install -g github:KJ-AIML/heli-harness#v0.11.1
 heli setup
 cd /path/to/project
 heli link
