@@ -34,7 +34,8 @@ for (const id of ["codex", "pi", "claude", "grok", "opencode", "kimi", "cursor",
 }
 
 assert.deepEqual(planHostInstall(root, "codex", { env })[0].slice(0, 4), ["codex", "plugin", "marketplace", "add"]);
-assert.match(planHostInstall(root, "pi", { env })[0][2], /heli-harness@v0\.10\./);
+const packageVersion = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
+assert.ok(planHostInstall(root, "pi", { env })[0][2].endsWith(`heli-harness@v${packageVersion}`));
 // `claude plugin install` resolves marketplace ids only; a directory path fails with
 // "not found in any configured marketplace".
 assert.deepEqual(planHostInstall(root, "claude", { env }), [

@@ -30,7 +30,7 @@ Use:
 heli status
 ```
 
-- **Linked v0.10:** project overlays may live under `.heli/`; authority is resource-scoped and execution-local; tasks are optional durable work records.
+- **Linked v0.11:** project overlays may live under `.heli/`; authority is resource-scoped and execution-local; tasks are optional durable work records.
 - **Embedded compatibility:** skills/state live under `.heli-harness/`; older task/session/lease workflows may apply.
 
 Safety, trusted policy, resource authority, scoped approvals, and evidence obligations remain unconditional. A workflow fast path never bypasses them.
@@ -100,7 +100,7 @@ If host-native activation is not proven, say so; installed files alone do not es
 ## Red flags
 
 - "Simple task means no safety." -> Fast paths remove ceremony, not governance.
-- "Task name gives me write authority." -> Not in linked v0.10; authority is resource-scoped.
+- "Task name gives me write authority." -> Not in linked v0.11; authority is resource-scoped.
 - "The plugin exists, so enforcement is active." -> File presence is not activation proof.
 - "Copying the project copies approvals." -> Evidence may move; authorization does not.
 - "Heli Assistant told me what to do, so it approved the action." -> Recommendation is not authority or approval.

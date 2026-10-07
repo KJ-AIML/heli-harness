@@ -1,6 +1,6 @@
 # Heli Assistant and Skill Refresh
 
-Status: implementation design for the Heli v0.10 skill refresh.
+Status: implementation design for the Heli v0.11 skill refresh.
 
 ## Goal
 
@@ -8,7 +8,7 @@ Make Heli easier to operate without weakening its governance model.
 
 This change has two parts:
 
-1. modernize and consolidate the existing skill set around the v0.10 linked-project topology;
+1. modernize and consolidate the existing skill set around the v0.11 linked-project topology;
 2. add `heli-assistant`, a user-facing situational guide that understands the user's goal and current Heli state, then recommends the smallest supported path.
 
 ## Product role
@@ -134,7 +134,7 @@ Heli CLI/state        authoritative facts
 
 ### Foundation
 
-- `heli-help`: describe the current CLI and linked v0.10 topology, including `resume`, host lifecycle, task/handoff, target, grants, and explain surfaces.
+- `heli-help`: describe the current CLI and linked v0.11 topology, including `resume`, host lifecycle, task/handoff, target, grants, and explain surfaces.
 - `heli-install`: make the public npm package the normal install path; keep Git/source install as fallback or compatibility paths.
 - `flow`: remove the requirement to update legacy `state/current-task.md` before ordinary linked edits; durable tasks are optional and purpose-driven.
 - `debug` / `evidence-gates`: prefer canonical global CLI forms such as `heli diagnosis ...`, with embedded invocation documented only as a compatibility fallback.
@@ -177,7 +177,7 @@ Examples:
 
 ## Compatibility
 
-- Linked v0.10 is the primary topology.
+- Linked v0.11 is the primary topology.
 - Embedded `.heli-harness/` remains a supported compatibility/hermetic topology.
 - Skill guidance must not erase embedded compatibility where it is still intentional.
 - Migration guidance must preserve the fail-closed authority boundary.

@@ -1,6 +1,6 @@
 ---
 name: heli-init
-description: Use when bootstrapping project facts/profile context for a Heli v0.10 linked project or an embedded compatibility workspace.
+description: Use when bootstrapping project facts/profile context for a Heli v0.11 linked project or an embedded compatibility workspace.
 ---
 
 # Heli Init
@@ -15,7 +15,7 @@ Run:
 heli status
 ```
 
-- **Linked v0.10 project:** project config/overlays live under `.heli/`; use Heli CLI state to resolve target/resource context.
+- **Linked v0.11 project:** project config/overlays live under `.heli/`; use Heli CLI state to resolve target/resource context.
 - **Embedded compatibility workspace:** use `.heli-harness/` profile/workspace paths.
 
 Do not infer linked authority from old embedded state files.

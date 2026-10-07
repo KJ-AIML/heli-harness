@@ -15,7 +15,7 @@ Prefer the current Heli CLI surface:
 heli status
 ```
 
-- Linked v0.10: durable diagnosis/work evidence is resolved through Heli's linked workspace and execution-aware state.
+- Linked v0.11: durable diagnosis/work evidence is resolved through Heli's linked workspace and execution-aware state.
 - Embedded compatibility: local `.heli-harness/` task/diagnosis state may remain authoritative for that compatibility workflow.
 
 Do not infer linked authority or diagnosis state from leftover embedded files merely because they still exist.
@@ -94,4 +94,4 @@ Hosts without proven runtime callbacks are advisory. Installed files, a Markdown
 
 ## Durable task boundary
 
-Do not create a named durable task merely because evidence gates exist. In linked v0.10, use a durable work record when the investigation spans sessions, needs handoff/coordination, or requires durable diagnosis history. Small local work can remain taskless while resource authority and policy still apply.
+Do not create a named durable task merely because evidence gates exist. In linked v0.11, use a durable work record when the investigation spans sessions, needs handoff/coordination, or requires durable diagnosis history. Small local work can remain taskless while resource authority and policy still apply.

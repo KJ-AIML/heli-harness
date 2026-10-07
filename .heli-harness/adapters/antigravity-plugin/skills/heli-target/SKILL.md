@@ -1,6 +1,6 @@
 ---
 name: heli-target
-description: Use when resolving or changing the active target/resource context. Prefer Heli CLI in linked v0.10 projects; direct .heli-harness workspace files are embedded-compatibility only.
+description: Use when resolving or changing the active target/resource context. Prefer Heli CLI in linked v0.11 projects; direct .heli-harness workspace files are embedded-compatibility only.
 ---
 
 # Heli Target
@@ -9,7 +9,7 @@ description: Use when resolving or changing the active target/resource context. 
 
 Run `heli status`.
 
-### Linked v0.10 project
+### Linked v0.11 project
 
 Use the CLI/machine surfaces as the canonical path:
 

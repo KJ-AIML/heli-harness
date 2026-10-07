@@ -1,4 +1,4 @@
-# Heli v0.10.12 Enforcement Matrix
+# Heli v0.11.0 Enforcement Matrix
 
 **Status:** Current
 **Architecture:** [docs/architecture/README.md](architecture/README.md)
@@ -39,4 +39,4 @@ Shell-mediated side effects that cannot be reliably normalized must not be descr
 
 Older documentation used task-scoped writer leases, workspace-global state, and v0.8 evidence-tier descriptions as the primary model. Those remain compatibility/history terms only.
 
-The current v0.10 authority model is resource-scoped and execution-local for linked projects.
+The current v0.11 authority model is resource-scoped and execution-local for linked projects.

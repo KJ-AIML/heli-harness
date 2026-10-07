@@ -1,6 +1,6 @@
 ---
 name: concurrent-upgrade
-description: Use when an embedded compatibility workspace still has shared legacy task state and needs migration to the embedded concurrent task/session/lease layout; linked v0.10 projects use resource-scoped authority instead.
+description: Use when an embedded compatibility workspace still has shared legacy task state and needs migration to the embedded concurrent task/session/lease layout; linked v0.11 projects use resource-scoped authority instead.
 ---
 
 # concurrent-upgrade
@@ -9,7 +9,7 @@ description: Use when an embedded compatibility workspace still has shared legac
 
 This skill is **embedded compatibility only**.
 
-Do not use it as the authority model for a linked v0.10 project. Linked projects use project binding plus execution-local resource authority.
+Do not use it as the authority model for a linked v0.11 project. Linked projects use project binding plus execution-local resource authority.
 
 ## Problem
 
@@ -56,7 +56,7 @@ If `.heli/workspace.json` exists, stop and use linked resource authority instead
 - Do not invent ownership in prose.
 - YOLO does not bypass compatibility write ownership.
 - Hook/plugin absence means enforcement may be advisory, but state transitions should still use the CLI.
-- Future `heli update` preserves embedded compatibility state; it does not convert the workspace into linked v0.10 topology.
+- Future `heli update` preserves embedded compatibility state; it does not convert the workspace into linked v0.11 topology.
 
 ## Output after upgrade
 

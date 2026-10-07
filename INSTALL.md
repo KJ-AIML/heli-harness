@@ -1,12 +1,12 @@
-# Install — Heli-Harness v0.10.12
+# Install — Heli-Harness v0.11.0
 
-**Current release:** `v0.10.12`
+**Current release:** `v0.11.0`
 **Primary model:** shared/global distribution + explicit project binding
 **Architecture:** [docs/architecture/README.md](docs/architecture/README.md)
 
-## Recommended v0.10 setup
+## Recommended v0.11 setup
 
-`heli-harness@0.10.12` is published on npm.
+`heli-harness@0.11.0` is published on npm.
 
 ```bash
 npm install -g heli-harness
@@ -59,7 +59,7 @@ For a fresh project, `heli link`:
 
 - creates or reuses a logical workspace ID;
 - declares the project root as a worktree resource;
-- writes the v0.10 runtime/protocol/schema lock;
+- writes the v0.11 runtime/protocol/schema lock;
 - creates a machine/execution-specific operational namespace outside committed project binding;
 - seeds default project policy/safety/profile material when missing;
 - registers the project in the global locator;
@@ -74,7 +74,7 @@ The self-contained `.heli-harness/` installation remains supported as a compatib
 First update it to a linked-workspace-capable runtime, then ensure no embedded writer authority is active:
 
 ```bash
-# use the current v0.10 CLI
+# use the current v0.11 CLI
 heli status /path/to/workspace
 heli link /path/to/workspace
 ```
@@ -100,7 +100,7 @@ or from a source checkout:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.10.12
+git checkout v0.11.0
 ./install.sh /path/to/workspace
 # Windows:
 # .\install.ps1 -Parent "C:\your\workspace"
@@ -178,7 +178,7 @@ T6 hard-deny rules are not made grantable by normal temporary approval.
 
 ## Work records and concurrency
 
-A named task is optional for ordinary reversible work in the linked v0.10 model.
+A named task is optional for ordinary reversible work in the linked v0.11 model.
 
 Use durable task/work records when work spans sessions, requires handoff, coordinates multiple actors, carries significant verifier obligations, or needs investigation/evidence history.
 
@@ -204,7 +204,7 @@ See [Cloud Sync](docs/architecture/cloud-sync.md).
 
 ## Maintainer release
 
-Release validation is automated in CI. `v0.10.12` has a GitHub Release and annotated tag.
+Release validation is automated in CI. `v0.11.0` has a GitHub Release and annotated tag.
 
 The repository Release workflow:
 
@@ -226,4 +226,4 @@ heli explain authority
 heli explain capabilities
 ```
 
-Expected package version for this documentation: **0.10.12**.
+Expected package version for this documentation: **0.11.0**.

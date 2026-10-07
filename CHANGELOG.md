@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased - Flow-first governance
+## v0.11.0 - Flow-first governance
 
 ### Added
 
