@@ -6,6 +6,7 @@ import {
 	mkdtempSync,
 	renameSync,
 	rmSync,
+	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -55,6 +56,14 @@ try {
 	gitInit(external);
 	mkdirSync(env.HOME, { recursive: true });
 
+	// A heli-harness source checkout carries .heli-harness as package content.
+	// Inside a linked parent that package tree must not shadow the parent binding.
+	mkdirSync(join(app, ".heli-harness"), { recursive: true });
+	mkdirSync(join(app, "bin"), { recursive: true });
+	writeFileSync(join(app, ".heli-harness", "HARNESS.md"), "# packaged harness\n");
+	writeFileSync(join(app, "package.json"), JSON.stringify({ name: "heli-harness", version: "0.0.0-test" }) + "\n");
+	writeFileSync(join(app, "bin", "heli.mjs"), "#!/usr/bin/env node\n");
+
 	run(["setup", "--json"]);
 	const parentLink = JSON.parse(run(["link", workspace, "--json"]).stdout);
 	assert.equal(parentLink.ok, true);
@@ -72,6 +81,22 @@ try {
 	assert.equal(nested.data.repository.path, "repos/app");
 	assert.equal(existsSync(join(app, ".heli")), false);
 	assert.equal(findWorkspaceRoot(join(app, "src")), canonicalizePath(workspace));
+
+	// Ordinary embedded workspaces still keep nearest-workspace precedence.
+	const legacy = join(workspace, "repos", "legacy");
+	mkdirSync(join(legacy, ".heli-harness"), { recursive: true });
+	writeFileSync(join(legacy, ".heli-harness", "HARNESS.md"), "# embedded workspace\n");
+	assert.equal(findWorkspaceRoot(join(legacy, "src")), canonicalizePath(legacy));
+
+	// A standalone Heli source checkout still falls back to its packaged
+	// embedded workspace when no linked parent exists.
+	const standaloneSource = join(root, "standalone-heli-source");
+	mkdirSync(join(standaloneSource, ".heli-harness"), { recursive: true });
+	mkdirSync(join(standaloneSource, "bin"), { recursive: true });
+	writeFileSync(join(standaloneSource, ".heli-harness", "HARNESS.md"), "# packaged harness\n");
+	writeFileSync(join(standaloneSource, "package.json"), JSON.stringify({ name: "heli-harness", version: "0.0.0-test" }) + "\n");
+	writeFileSync(join(standaloneSource, "bin", "heli.mjs"), "#!/usr/bin/env node\n");
+	assert.equal(findWorkspaceRoot(join(standaloneSource, "src")), canonicalizePath(standaloneSource));
 
 	const listed = JSON.parse(run(["repo", "list", workspace, "--json"]).stdout);
 	assert.equal(listed.ok, true);
