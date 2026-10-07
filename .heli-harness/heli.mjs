@@ -24,6 +24,7 @@ import { runGrant } from "./cli/grant.mjs";
 import { runHost } from "./cli/host.mjs";
 import { runHandoff } from "./cli/handoff.mjs";
 import { runResume } from "./cli/resume.mjs";
+import { hasHelpFlag, helpPathForInvocation, printHelp, renderHelp } from "./cli/help.mjs";
 import { runTargetMachine, runTaskMachine, runHandoffMachine, runDiagnosisMachine, runConflictsMachine } from "./cli/machine.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -54,43 +55,25 @@ function protocolJsonRequested(commandName, values) {
 }
 
 function usage() {
-	console.error(`Usage: heli <command> [args]
-
-Commands:
-  --version | -v  print the Heli-Harness version
-  setup | link
-  host status|list|install|update|repair|remove [all|host...]
-  grant issue|list|revoke
-  install | update | uninstall
-  target | status | resume | yolo
-  doctor [path]  (workspace health: plugins, target, leases, sessions, sync)
-  task create|list|show|depends|migrate-legacy|claim|release|takeover
-  handoff publish|list|show
-  diagnosis show|init|record|route|gate
-  session start|attach|transfer-write|status|list|close
-  conflicts [--task id]
-  explain authority|task|guard|capabilities [--task id] [path]
-  trace show --task <id> [path]
-
-Machine output:
-  status/resume/doctor/session: add --json
-  task/target/conflicts: add --json
-  diagnosis show: add --json
-  diagnosis mutations: add --json --payload-json '<object>'
-
-Experimental cloud sync (optional; see docs/architecture/cloud-sync.md):
-  auth login|logout|status|devices
-  ws create|link|unlink|list|versions|delete  (unlink = back to local-only)
-  push | pull [--version N] [--accept-policy-changes] | sync [auto|e2e on|off]
-  init <name> [--dir p] [--clone] [--accept-policy-changes]  (full device restore)
-  --accept-policy-changes applies governance, workspace-mode and task-history changes from the server; interactive terminal only
-
-  heli yolo on|off|status [path] [--hours N]
-`);
+	process.stderr.write(renderHelp([]));
 	process.exit(1);
 }
 
 if (!command) usage();
+
+if (command === "--help" || command === "-h") {
+	printHelp([]);
+	process.exit(0);
+}
+
+if (command === "help") {
+	const topic = args.filter((value) => value !== "--help" && value !== "-h").slice(0, 2);
+	process.exit(printHelp(topic) ? 0 : 1);
+}
+
+if (hasHelpFlag(args)) {
+	process.exit(printHelp(helpPathForInvocation(command, args)) ? 0 : 1);
+}
 
 if (command === "--version" || command === "-v") {
 	console.log(version());
