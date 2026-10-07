@@ -2,7 +2,7 @@
  * Workspace / worktree / path canonicalization for Heli concurrency.
  */
 import { existsSync, statSync } from "node:fs";
-import { dirname, join, normalize, resolve, sep } from "node:path";
+import { dirname, join, normalize, resolve, sep, win32 } from "node:path";
 import { spawnSync } from "node:child_process";
 import { safeRealpath } from "./fs-atomic.mjs";
 import { hashCanonicalPath } from "./ids.mjs";
@@ -29,26 +29,39 @@ export function isWindows() {
 /**
  * Canonicalize a filesystem path for binding identity.
  * - absolute
- * - realpath when possible
+ * - native realpath when possible, then realpath
  * - forward slashes
  * - lowercase drive letter / path on Windows
+ *
+ * `platform` and `realpath` exist so tests can prove Windows 8.3 and long-path
+ * aliases collapse to one identity without a Windows runner.
  */
-export function canonicalizePath(input) {
+export function normalizePathIdentity(input, {
+	realpath = null,
+	platform = process.platform,
+} = {}) {
 	if (!input) return "";
-	let p = resolve(String(input));
-	p = safeRealpath(p);
-	p = normalize(p);
-	// unify separators
-	p = p.replace(/\\/g, "/");
-	if (isWindows()) {
-		// lowercase for case-insensitive FS identity
-		p = p.toLowerCase();
-		// strip trailing slash except drive root C:/
-		if (p.length > 3 && p.endsWith("/")) p = p.slice(0, -1);
+	const resolveRealpath = realpath || safeRealpath;
+	let p;
+	if (platform === "win32" && process.platform !== "win32") {
+		p = String(input).replace(/\\/g, "/");
 	} else {
-		if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
+		p = resolve(String(input));
+	}
+	p = resolveRealpath(p);
+	p = platform === "win32" ? win32.normalize(String(p)) : normalize(String(p));
+	p = p.replace(/\\/g, "/");
+	if (platform === "win32") {
+		p = p.toLowerCase();
+		if (p.length > 3 && p.endsWith("/")) p = p.slice(0, -1);
+	} else if (p.length > 1 && p.endsWith("/")) {
+		p = p.slice(0, -1);
 	}
 	return p;
+}
+
+export function canonicalizePath(input) {
+	return normalizePathIdentity(input);
 }
 
 export function bindingHashForPath(canonicalPath) {

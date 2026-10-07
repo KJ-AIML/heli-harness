@@ -23,6 +23,8 @@ export * from "./project-binding.mjs";
 export * from "./workspace-repos.mjs";
 export * from "./continuation.mjs";
 export * from "./resource-authority.mjs";
+export * from "./mutation-lease.mjs";
+export * from "./flow-governance.mjs";
 export * from "./policy-composition.mjs";
 export * from "./grant.mjs";
 export * from "./handoff.mjs";

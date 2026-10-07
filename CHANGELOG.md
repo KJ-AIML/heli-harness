@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased - Flow-first governance
+
+### Added
+
+- Governance profiles `flow` (default), `strict`, and `observe`, with `heli governance show` and `heli governance set`.
+- Short-lived path-scoped mutation leases. A session is coordination identity, not a worktree mutex.
+- `heli doctor --repair` releases closed, orphaned, and unknown stale authority, clears stale bindings, and normalizes safe path aliases without taking a live writer.
+- Lazy session recovery when a linked write arrives without SessionStart. Missing hooks continue in degraded mode.
+- Windows path-identity normalization prefers the native realpath and can collapse 8.3 and long-path aliases before containment checks.
+
+### Changed
+
+- Flow profile allows a write unless Heli can prove a live overlapping mutation or an existing destructive policy applies. Stale, closed, missing, and unknown authority is recovered instead of demanding takeover.
+- Observe profile records those decisions and does not block ordinary writes. Strict profile keeps the previous fail-closed writer gate.
+- Live overlap still blocks, with the owner, path, and last mutation activity. Non-overlapping live work is allowed.
+- The Grok plugin closes the Heli session on `SessionEnd`, so a clean `grok -p` exit releases the mutation lease.
+
 ## v0.10.12 - Multi-repo host continuity
 
 ### Fixed

@@ -35,8 +35,15 @@ jobs:
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
           tag="v${version}"
+          previous_version="$(git show HEAD^:package.json 2>/dev/null | node -e "const fs=require('fs'); const text=fs.readFileSync(0,'utf8').trim(); process.stdout.write(text ? String(JSON.parse(text).version || '') : '')" || true)"
+          release_requested=false
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] || [ "${version}" != "${previous_version}" ]; then
+            release_requested=true
+          fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "previous_version=${previous_version}" >> "$GITHUB_OUTPUT"
+          echo "release_requested=${release_requested}" >> "$GITHUB_OUTPUT"
           if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
             echo "tag_exists=true" >> "$GITHUB_OUTPUT"
           else
@@ -44,6 +51,7 @@ jobs:
           fi
 
       - name: Resolve npm publication state
+        if: steps.meta.outputs.release_requested == 'true'
         id: npm_meta
         shell: bash
         env:
@@ -57,11 +65,11 @@ jobs:
           fi
 
       - name: Full release gate
-        if: steps.meta.outputs.tag_exists != 'true' || steps.npm_meta.outputs.exists != 'true'
+        if: steps.meta.outputs.release_requested == 'true' && (steps.meta.outputs.tag_exists != 'true' || steps.npm_meta.outputs.exists != 'true')
         run: npm run check
 
       - name: Pack release artifact
-        if: steps.meta.outputs.tag_exists != 'true' || steps.npm_meta.outputs.exists != 'true'
+        if: steps.meta.outputs.release_requested == 'true' && (steps.meta.outputs.tag_exists != 'true' || steps.npm_meta.outputs.exists != 'true')
         id: pack
         shell: bash
         run: |
@@ -72,7 +80,7 @@ jobs:
           echo "file=$file" >> "$GITHUB_OUTPUT"
 
       - name: Publish to npm
-        if: steps.npm_meta.outputs.exists != 'true'
+        if: steps.meta.outputs.release_requested == 'true' && steps.npm_meta.outputs.exists != 'true'
         id: npm_publish
         shell: bash
         env:
@@ -89,7 +97,7 @@ jobs:
           echo "status=published" >> "$GITHUB_OUTPUT"
 
       - name: Build release notes
-        if: steps.meta.outputs.tag_exists != 'true'
+        if: steps.meta.outputs.release_requested == 'true' && steps.meta.outputs.tag_exists != 'true'
         shell: bash
         env:
           VERSION: ${{ steps.meta.outputs.version }}
@@ -114,7 +122,7 @@ jobs:
           printf '\n**npm:** heli-harness@%s\n' "$VERSION" >> release-notes.md
 
       - name: Create annotated tag and GitHub release
-        if: steps.meta.outputs.tag_exists != 'true'
+        if: steps.meta.outputs.release_requested == 'true' && steps.meta.outputs.tag_exists != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

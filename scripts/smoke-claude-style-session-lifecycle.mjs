@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
 import {
@@ -132,10 +133,10 @@ async function verifyHost(host) {
     assert.ok(continuation, host + ": normal write must create durable continuation");
     assert.equal(continuation.provenance?.lastHost, host);
 
-    const pluginPaths = await import(join(plugin, "shared", "concurrency", "paths.mjs"));
-    const pluginSessions = await import(join(plugin, "shared", "concurrency", "session.mjs"));
+    const pluginPaths = await import(pathToFileURL(join(plugin, "shared", "concurrency", "paths.mjs")).href);
+    const pluginSessions = await import(pathToFileURL(join(plugin, "shared", "concurrency", "session.mjs")).href);
     const pluginWorkspaceRoot = pluginPaths.findWorkspaceRoot(repoDir);
-    assert.equal(pluginWorkspaceRoot, realpathSync(workspace), host + ": plugin findWorkspaceRoot must resolve parent linked workspace");
+    assert.equal(pluginWorkspaceRoot, pluginPaths.canonicalizePath(workspace), host + ": plugin findWorkspaceRoot must resolve parent linked workspace");
     const pluginExactSession = pluginSessions.findSessionByExternalId(pluginWorkspaceRoot, externalId, { host });
     assert.ok(pluginExactSession, host + ": plugin session store must find exact external host session before SessionEnd");
     assert.equal(pluginExactSession.sessionId, session.sessionId);

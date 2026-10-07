@@ -174,9 +174,16 @@ export function listFileNames(path, { suffix } = {}) {
 
 export function safeRealpath(path) {
 	try {
-		return realpathSync(path);
+		// Prefer the OS-native resolver. On Windows this collapses alternate
+		// filesystem spellings (including 8.3 aliases) before path identity and
+		// containment checks compare them.
+		return realpathSync.native(path);
 	} catch {
-		return path;
+		try {
+			return realpathSync(path);
+		} catch {
+			return path;
+		}
 	}
 }
 

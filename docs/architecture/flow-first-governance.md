@@ -22,7 +22,7 @@ Normal safe work should flow. Heli should intervene when there is a real resourc
 
 ## Locked invariants
 
-1. Linked v0.10 resource authority semantics remain authoritative and unchanged.
+1. `strict` keeps the linked resource-authority gate. `flow`, the default, recovers stale authority and blocks only a proven live path overlap.
 2. A durable task is coordination/provenance, not the root write permission primitive.
 3. A free worktree plus a valid active host session may establish writer authority automatically.
 4. Another live writer remains a hard ownership conflict.

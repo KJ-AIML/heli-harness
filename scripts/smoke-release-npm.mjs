@@ -112,6 +112,37 @@ for (const npmExecpath of [undefined, ""]) {
 	);
 }
 
+// Release workflow must not publish merely because package.json or the workflow
+// changed. Automatic publication requires an actual version change; manual
+// workflow_dispatch remains an explicit release request.
+{
+	const workflow = readFileSync(join(root, ".github", "workflows", "release.yml"), "utf8").replace(/\r\n/g, "\n");
+	assert.match(
+		workflow,
+		/if \[ "\$\{GITHUB_EVENT_NAME\}" = "workflow_dispatch" \] \|\| \[ "\$\{version\}" != "\$\{previous_version\}" \]; then/,
+		"release.yml must gate automatic publication on a package version change",
+	);
+	assert.match(workflow, /echo "release_requested=\$\{release_requested\}" >> "\$GITHUB_OUTPUT"/);
+	for (const name of [
+		"Resolve npm publication state",
+		"Full release gate",
+		"Pack release artifact",
+		"Publish to npm",
+		"Build release notes",
+		"Create annotated tag and GitHub release",
+	]) {
+		const start = workflow.indexOf(`- name: ${name}`);
+		assert.ok(start >= 0, `release.yml missing step: ${name}`);
+		const next = workflow.indexOf("\n      - name:", start + 1);
+		const step = workflow.slice(start, next >= 0 ? next : workflow.length);
+		assert.match(
+			step,
+			/steps\.meta\.outputs\.release_requested == 'true'/,
+			`${name} must be gated by release_requested`,
+		);
+	}
+}
+
 // Release workflow: a missing NPM_TOKEN must fail the run loudly, never skip
 // publication while still reporting success (0.10.x never reached npm that way).
 {
