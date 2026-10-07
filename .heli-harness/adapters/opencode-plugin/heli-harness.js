@@ -15,6 +15,26 @@ import { recordGuardDecision } from "./shared/concurrency/governance-decision.mj
 export const HeliHarness = async (ctx) => {
 	const directory = ctx?.directory || process.cwd();
 	const host = "opencode";
+	const opened = new Set();
+	const remember = (resolved) => {
+		if (!resolved?.workspaceRoot || !resolved?.sessionId) return resolved;
+		opened.add(`${resolved.workspaceRoot}\n${resolved.sessionId}`);
+		return resolved;
+	};
+	// OpenCode does not always emit session.deleted before a one-shot process
+	// exits. Release only the sessions this process opened.
+	process.once("exit", () => {
+		for (const key of opened) {
+			const splitAt = key.indexOf("\n");
+			const workspaceRoot = key.slice(0, splitAt);
+			const sessionId = key.slice(splitAt + 1);
+			try {
+				closeSession(workspaceRoot, sessionId);
+			} catch {
+				// Process exit cannot recover a close failure. TTL remains the backstop.
+			}
+		}
+	});
 	const externalSessionId = (input) =>
 		input?.sessionID ??
 		input?.sessionId ??
@@ -33,20 +53,20 @@ export const HeliHarness = async (ctx) => {
 			createIfMissing: false,
 			refreshLeaseOnResolve: false,
 		});
-		if (existing.sessionId) return existing;
+		if (existing.sessionId) return remember(existing);
 		buildSessionContext(directory, {
 			host,
 			hookPayload: payload,
 			recordSessionStart: true,
 			sessionStartSource: source,
 		});
-		return resolveExecutionContext({
+		return remember(resolveExecutionContext({
 			cwd: directory,
 			host,
 			hookPayload: payload,
 			createIfMissing: false,
 			refreshLeaseOnResolve: false,
-		});
+		}));
 	};
 
 	return {
