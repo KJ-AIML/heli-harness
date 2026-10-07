@@ -1,4 +1,4 @@
-# Heli v0.10.11 Enforcement Matrix
+# Heli v0.10.12 Enforcement Matrix
 
 **Status:** Current
 **Architecture:** [docs/architecture/README.md](architecture/README.md)

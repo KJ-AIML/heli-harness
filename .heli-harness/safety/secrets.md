@@ -1,6 +1,6 @@
 # Secret Handling
 
-**Current release:** `v0.10.11`
+**Current release:** `v0.10.12`
 
 ## Required
 

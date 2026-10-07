@@ -1,4 +1,4 @@
-# Pi / AXGA Adapter — v0.10.11
+# Pi / AXGA Adapter — v0.10.12
 
 **Current lifecycle evidence:** [docs/ADAPTER_SUPPORT_MATRIX.md](../../../docs/ADAPTER_SUPPORT_MATRIX.md)
 
@@ -25,7 +25,7 @@ Host package installation is separate from project binding and separate again fr
 For a normal project:
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.11
+npm install -g github:KJ-AIML/heli-harness#v0.10.12
 heli setup
 heli host install pi
 cd /path/to/project
