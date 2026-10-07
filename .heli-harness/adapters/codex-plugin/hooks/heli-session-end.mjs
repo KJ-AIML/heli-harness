@@ -1,0 +1,3 @@
+#!/usr/bin/env node
+process.env.HELI_ADAPTER_ID = "codex";
+await import("../shared/claude-style-session-end.mjs");

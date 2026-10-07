@@ -19,6 +19,7 @@ import {
 	resourceIdForWorktree,
 } from "../adapters/shared/concurrency/resource-authority.mjs";
 import { protocolOk } from "../protocol/result.mjs";
+import { continuationForWorktree, listContinuations } from "../adapters/shared/concurrency/index.mjs";
 import { printProtocolResult, stripOutputFlags, wantsJson } from "./output.mjs";
 
 function workspaceRequired(cwd) {
@@ -130,10 +131,13 @@ function authorityProjection(workspaceRoot, worktreePath) {
 	};
 }
 
-function guidanceFor({ tasks, authority, git }) {
+function guidanceFor({ tasks, authority, git, currentContinuation }) {
 	const guidance = [];
-	if (tasks.length === 0) {
-		guidance.push("No active durable task is recorded in this workspace.");
+	if (tasks.length === 0 && currentContinuation) {
+		guidance.push(`No explicit task is active, but unfinished continuation ${currentContinuation.continuationId} is available from ${currentContinuation.provenance?.lastHost || "a previous host"}.`);
+		guidance.push("Read the continuation and current Git diff before editing. Its context is durable, but writer authority is never inherited.");
+	} else if (tasks.length === 0) {
+		guidance.push("No active durable task or continuation is recorded for this worktree.");
 	} else if (tasks.length > 1) {
 		guidance.push(
 			"Multiple active tasks are recorded. Inspect the task list and continue the intended one; Heli does not schedule or choose a task automatically.",
@@ -190,6 +194,8 @@ export function buildResumeContext(cwd = process.cwd(), { env = process.env } = 
 	const git = gitStatus(worktreePath);
 	const authority = authorityProjection(workspaceRoot, worktreePath);
 	const observations = runtimeObservations(sessions);
+	const continuations = listContinuations(workspaceRoot, { env, activeOnly: true });
+	const currentContinuation = continuationForWorktree(workspaceRoot, worktreePath, { env, activeOnly: true });
 
 	const context = {
 		workspace: {
@@ -212,6 +218,8 @@ export function buildResumeContext(cwd = process.cwd(), { env = process.env } = 
 			lastSeenAt: session.lastSeenAt || null,
 		})),
 		observations,
+		continuations,
+		currentContinuation,
 	};
 	return {
 		...context,
@@ -253,6 +261,18 @@ function printHuman(context) {
 				}
 			}
 		}
+	}
+
+	if (context.currentContinuation) {
+		const continuation = context.currentContinuation;
+		console.log("");
+		console.log("Unfinished continuation:");
+		console.log(`- ${continuation.continuationId} from ${continuation.provenance?.lastHost || "unknown"}`);
+		console.log(`  repository: ${continuation.repositoryName || continuation.repositoryId || continuation.repositoryPath || "unknown"}`);
+		console.log(`  branch/head: ${continuation.branch || "unknown"} @ ${continuation.head || "unknown"}`);
+		console.log(`  last activity: ${continuation.lastActivity?.at || continuation.updatedAt || "unknown"}`);
+		if (continuation.intentPaths?.length) console.log(`  intended paths: ${continuation.intentPaths.slice(-12).join(", ")}`);
+		console.log("  writer authority: not inherited");
 	}
 
 	if (context.git.dirty) {

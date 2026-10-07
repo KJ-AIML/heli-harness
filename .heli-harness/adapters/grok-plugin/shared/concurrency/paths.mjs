@@ -17,6 +17,7 @@ import {
 	projectProfilesDir,
 	projectSkillsDir,
 	linkedWorkspaceTasksDir,
+	linkedWorkspaceContinuationsDir,
 } from "./project-binding.mjs";
 
 export const DEFAULT_LEASE_TTL_SECONDS = 14400;
@@ -180,6 +181,10 @@ export function pathsFor(workspaceRoot, { env = process.env } = {}) {
 		legacyDiagnosisEventsPath: join(root, "state", "diagnosis-events.jsonl"),
 		legacyYoloPath: join(root, "state", "yolo.json"),
 		tasksDir: tasksDirFor(workspaceRoot, { env }),
+		continuationsDir:
+			linked && layout.binding?.workspaceId
+				? linkedWorkspaceContinuationsDir(layout.binding.workspaceId, env)
+				: join(root, "continuations"),
 		sessionsDir: join(root, "sessions"),
 		bindingsDir: join(root, "bindings", "worktrees"),
 		locksDir: join(root, "locks", "tasks"),

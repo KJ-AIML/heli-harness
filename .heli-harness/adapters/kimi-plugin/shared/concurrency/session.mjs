@@ -10,6 +10,8 @@ import { newSessionId } from "./ids.mjs";
 import { SESSION_SCHEMA_VERSION } from "./schema.mjs";
 import { appendTaskEvent } from "./events.mjs";
 import { readTask } from "./task.mjs";
+import { isLinkedWorkspace } from "./project-binding.mjs";
+import { releaseSessionResourceAuthorities } from "./resource-authority.mjs";
 
 const MODE_RANK = Object.freeze({ observe: 0, review: 1, write: 2 });
 
@@ -207,15 +209,35 @@ export function attachSession(workspaceRoot, sessionId, taskId, { mode = "write"
 export function closeSession(workspaceRoot, sessionId) {
 	const s = readSession(workspaceRoot, sessionId);
 	if (!s) return null;
+	let releasedResourceAuthorities = [];
+	if (isLinkedWorkspace(workspaceRoot)) {
+		try {
+			releasedResourceAuthorities = releaseSessionResourceAuthorities(workspaceRoot, sessionId);
+		} catch (error) {
+			// A clean close must not steal or force-delete malformed/foreign
+			// authority. Preserve it fail-closed and make the cleanup issue
+			// visible on the closed session for status/debugging.
+			s.closeWarnings = [
+				...(Array.isArray(s.closeWarnings) ? s.closeWarnings : []),
+				`resource authority cleanup failed: ${error.code || "ERROR"}: ${error.message}`,
+			];
+		}
+	}
 	s.status = "closed";
 	s.closedAt = new Date().toISOString();
 	s.lastSeenAt = s.closedAt;
+	s.releasedResourceAuthorities = releasedResourceAuthorities.map((lease) => ({
+		resourceId: lease.resource?.id || null,
+		worktreePath: lease.worktreePath || null,
+		leaseId: lease.leaseId || null,
+	}));
 	const written = writeSession(workspaceRoot, s);
 	if (written.taskId) {
 		appendTaskEvent(workspaceRoot, written.taskId, "session.closed", {
 			sessionId: written.sessionId,
 			parentSessionId: written.parentSessionId,
 			role: written.role,
+			releasedResourceAuthorities: written.releasedResourceAuthorities,
 		});
 	}
 	return written;

@@ -34,6 +34,7 @@ import { resolveYolo } from "./yolo-scope.mjs";
 import { readDiagnosis } from "./diagnosis.mjs";
 import { isLinkedWorkspace, readProjectBinding } from "./project-binding.mjs";
 import { classifyToolPaths } from "./protected-paths.mjs";
+import { continuationForWorktree } from "./continuation.mjs";
 import {
 	acquireResourceWriteAuthority,
 	readResourceLeaseForWorktree,
@@ -542,7 +543,7 @@ export function evaluateOwnershipGate(ctx, { isWrite = false } = {}) {
 /**
  * Build compact SessionStart context for concurrent or legacy mode.
  */
-export function buildConcurrentSessionContext(ctx) {
+export function buildConcurrentSessionContext(ctx, { env = process.env } = {}) {
 	const lines = [
 		"Heli-Harness plugin context:",
 		"Read .heli-harness/HARNESS.md before substantive work.",
@@ -571,6 +572,22 @@ export function buildConcurrentSessionContext(ctx) {
 		lines.push(`- Resource: ${ctx.worktreeRoot || "n/a"}`);
 		lines.push(`- Resource authority: ${active ? (active.sessionId === ctx.sessionId ? `held by this session (generation ${active.generation || 1}, revision ${active.revision || 1})` : `held by session ${active.sessionId}`) : authority?.invalid ? "malformed (writes fail closed)" : "available; first guarded mutation acquires it conflict-safely"}`);
 		lines.push("- Project binding lives under .heli/; grants, sessions, live authority, and capability observations remain execution-local.");
+		if (!ctx.taskId && ctx.worktreeRoot) {
+			const continuation = continuationForWorktree(ctx.workspaceRoot, ctx.worktreeRoot, { env });
+			if (continuation) {
+				lines.push(
+					"",
+					"Durable continuation available from previous meaningful work:",
+					`- Continuation: ${continuation.continuationId}`,
+					`- Previous host: ${continuation.provenance?.lastHost || "unknown"}`,
+					`- Repository: ${continuation.repositoryName || continuation.repositoryId || continuation.repositoryPath || "unknown"}`,
+					`- Branch/HEAD: ${continuation.branch || "unknown"} @ ${continuation.head || "unknown"}`,
+					`- Last activity: ${continuation.lastActivity?.at || continuation.updatedAt || "unknown"}`,
+					`- Intended paths: ${continuation.intentPaths?.length ? continuation.intentPaths.slice(-12).join(", ") : "not recorded"}`,
+					"- Read heli resume before editing. Continuation context is durable; writer authority is NOT inherited from the previous host/session.",
+				);
+			}
+		}
 		return lines.join("\n");
 	}
 

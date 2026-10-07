@@ -21,6 +21,7 @@ export * from "./resolve.mjs";
 export * from "./task-transitions.mjs";
 export * from "./project-binding.mjs";
 export * from "./workspace-repos.mjs";
+export * from "./continuation.mjs";
 export * from "./resource-authority.mjs";
 export * from "./policy-composition.mjs";
 export * from "./grant.mjs";

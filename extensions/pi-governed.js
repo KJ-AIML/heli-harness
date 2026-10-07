@@ -1,6 +1,7 @@
 import heliHarnessExtension from "./pi-extension.js";
 import {
 	appendTaskEvent,
+	closeSession,
 	observeRuntimeCapability,
 	resolveExecutionContext,
 } from "../.heli-harness/adapters/shared/concurrency/index.mjs";
@@ -53,7 +54,7 @@ function recordPiDenial(ctx, event, result) {
 	}
 }
 
-function governedPi(pi) {
+function governedPi(pi, { onSessionStart = null } = {}) {
 	return new Proxy(pi, {
 		get(target, property, receiver) {
 			if (property !== "on") {
@@ -66,10 +67,18 @@ function governedPi(pi) {
 
 				if (name === "session_start") {
 					const result = await handler(...args);
-					const ctx = resolvePiContext(event, { createIfMissing: true });
-					observePiCapability(ctx, "session_start", {
-						externalHostSessionId: event?.sessionId || event?.session_id || null,
-					});
+					const hostCtx = args[1] || null;
+					const externalHostSessionId =
+						event?.sessionId ||
+						event?.session_id ||
+						hostCtx?.sessionManager?.getSessionId?.() ||
+						null;
+					const identityEvent = externalHostSessionId
+						? { ...event, sessionId: externalHostSessionId }
+						: event;
+					const ctx = resolvePiContext(identityEvent, { createIfMissing: true });
+					onSessionStart?.(ctx);
+					observePiCapability(ctx, "session_start", { externalHostSessionId });
 					return result;
 				}
 
@@ -96,5 +105,28 @@ function governedPi(pi) {
  * live host hooks and persists evidence without changing their return values.
  */
 export default function heliHarnessGovernedExtension(pi) {
-	return heliHarnessExtension(governedPi(pi));
+	let activeSessionContext = null;
+	const result = heliHarnessExtension(governedPi(pi, {
+		onSessionStart(ctx) {
+			if (!ctx?.workspaceRoot || !ctx?.sessionId) return;
+			activeSessionContext = {
+				workspaceRoot: ctx.workspaceRoot,
+				sessionId: ctx.sessionId,
+			};
+		},
+	}));
+
+	pi.on("session_shutdown", async (event) => {
+		const ctx = activeSessionContext || resolvePiContext(event, { createIfMissing: false });
+		activeSessionContext = null;
+		if (!ctx?.workspaceRoot || !ctx?.sessionId) return;
+		try {
+			closeSession(ctx.workspaceRoot, ctx.sessionId);
+		} catch {
+			// Shutdown cleanup must not prevent Pi from exiting. closeSession keeps
+			// malformed/foreign authority fail-closed and records cleanup warnings.
+		}
+	});
+
+	return result;
 }
