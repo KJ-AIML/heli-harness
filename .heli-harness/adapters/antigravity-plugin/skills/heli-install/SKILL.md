@@ -83,7 +83,7 @@ Portable project/work evidence may migrate. Live sessions, bindings, leases/reso
 Use this only when the user intentionally needs a self-contained workspace bundle:
 
 ```bash
-npx -y heli-harness@0.11.0 install /path/to/workspace
+npx -y heli-harness@0.11.1 install /path/to/workspace
 ```
 
 A source checkout is a fallback for development/offline needs:
@@ -91,7 +91,7 @@ A source checkout is a fallback for development/offline needs:
 ```bash
 git clone https://github.com/KJ-AIML/heli-harness.git hh-source
 cd hh-source
-git checkout v0.11.0
+git checkout v0.11.1
 ./install.sh /path/to/workspace
 # Windows:
 # .\install.ps1 -Parent "C:\path\to\workspace"
