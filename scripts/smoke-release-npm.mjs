@@ -132,7 +132,9 @@ for (const npmExecpath of [undefined, ""]) {
 		"Resolve npm publication state",
 		"Full release gate",
 		"Pack release artifact",
-		"Publish to npm",
+		"Resolve npm staged state",
+		"Publish or stage on npm",
+		"Await staged npm approval",
 		"Build release notes",
 		"Create annotated tag and GitHub release",
 	]) {
@@ -148,27 +150,49 @@ for (const npmExecpath of [undefined, ""]) {
 	}
 }
 
-// Release workflow uses npm Trusted Publishing (OIDC), not a long-lived
-// publish token. npm 11.15+ is installed explicitly because the Node 22 runner
-// can otherwise ship npm 10, which cannot exchange GitHub OIDC credentials.
+// Release workflow prefers npm Trusted Publishing (OIDC) and falls back to
+// staged publishing when npm has no matching trusted-publisher authorization.
+// The fallback uploads the exact packed artifact but never creates the Git tag
+// until a maintainer has approved the stage with 2FA.
 {
 	const workflow = readFileSync(join(root, ".github", "workflows", "release.yml"), "utf8").replace(/\r\n/g, "\n");
 	assert.match(workflow, /id-token:\s*write/, "release.yml must grant id-token: write for npm trusted publishing");
 	assert.match(
 		workflow,
 		/npm install --global npm@\^11\.15\.0/,
-		"release.yml must install an npm version with trusted publishing support",
+		"release.yml must install an npm version with trusted/staged publishing support",
 	);
-	const start = workflow.indexOf("- name: Publish to npm");
-	const end = workflow.indexOf("- name: Build release notes");
-	assert.ok(start > 0 && end > start, "release.yml must keep a 'Publish to npm' step before 'Build release notes'");
-	const publishStep = workflow.slice(start, end);
+
+	const stagedStart = workflow.indexOf("- name: Resolve npm staged state");
+	const fullGate = workflow.indexOf("- name: Full release gate");
+	assert.ok(stagedStart > 0 && fullGate > stagedStart, "release.yml must detect an already-staged version before retrying");
+	const stagedStep = workflow.slice(stagedStart, fullGate);
+	assert.match(stagedStep, /npm stage list heli-harness --json/);
+	assert.match(stagedStep, /NODE_AUTH_TOKEN="\$NPM_STAGE_TOKEN"/);
+
+	const start = workflow.indexOf("- name: Publish or stage on npm");
+	const awaitStart = workflow.indexOf("- name: Await staged npm approval");
+	assert.ok(start > 0 && awaitStart > start, "release.yml must keep publish/stage before the approval fence");
+	const publishStep = workflow.slice(start, awaitStart);
 	assert.match(publishStep, /npm publish "\$PACKAGE_FILE" --access public --provenance/);
+	assert.match(publishStep, /grep -Eq 'EOTP\|E_STAGE_REQUIRED\|E404'/);
+	assert.match(publishStep, /NODE_AUTH_TOKEN="\$NPM_STAGE_TOKEN" npm stage publish "\$PACKAGE_FILE" --access public/);
 	assert.doesNotMatch(
 		publishStep,
-		/NODE_AUTH_TOKEN|NPM_TOKEN/,
-		"trusted publishing must not depend on a long-lived npm publish token",
+		/env:\s*\n(?:\s+[^\n]+\n)*\s+NODE_AUTH_TOKEN:/,
+		"OIDC direct publish must not receive NODE_AUTH_TOKEN globally",
 	);
+
+	const notesStart = workflow.indexOf("- name: Build release notes");
+	const awaitStep = workflow.slice(awaitStart, notesStart);
+	assert.match(awaitStep, /awaiting maintainer 2FA approval/);
+	assert.match(awaitStep, /exit 1/, "staged release must stop before Git tagging");
+
+	const tagStart = workflow.indexOf("- name: Create annotated tag and GitHub release");
+	const notesStep = workflow.slice(notesStart, tagStart);
+	assert.match(notesStep, /steps\.npm_meta\.outputs\.exists == 'true' \|\| steps\.npm_publish\.outputs\.status == 'published'/);
+	const tagStep = workflow.slice(tagStart);
+	assert.match(tagStep, /steps\.npm_meta\.outputs\.exists == 'true' \|\| steps\.npm_publish\.outputs\.status == 'published'/);
 }
 
 // Every tracked file that names the current version is rewritten by the release
