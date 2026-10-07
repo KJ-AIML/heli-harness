@@ -11,22 +11,34 @@ import {
 	isTaskStateWriteForContext,
 } from "../.heli-harness/adapters/shared/concurrency/resolve.mjs";
 import { evaluateDiagnosisWriteGate, readActionPolicy, readDiagnosis } from "../.heli-harness/adapters/shared/concurrency/diagnosis.mjs";
+import { recordContinuationIntent } from "../.heli-harness/adapters/shared/concurrency/continuation.mjs";
+import { findWorkspaceRoot } from "../.heli-harness/adapters/shared/concurrency/paths.mjs";
+import { isLinkedWorkspace } from "../.heli-harness/adapters/shared/concurrency/project-binding.mjs";
 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+function detectedWorkspaceRoot(cwd) {
+	try {
+		return findWorkspaceRoot(cwd);
+	} catch {
+		return null;
+	}
+}
+
 function detectWorkspaceHarness(cwd) {
-	const harnessPath = join(cwd, ".heli-harness", "HARNESS.md");
-	return existsSync(harnessPath);
+	const workspaceRoot = detectedWorkspaceRoot(cwd);
+	return !!workspaceRoot && existsSync(join(workspaceRoot, ".heli-harness", "HARNESS.md"));
 }
 
 function detectLinkedProject(cwd) {
-	return existsSync(join(cwd, ".heli", "workspace.json")) && existsSync(join(cwd, ".heli", "heli.lock"));
+	const workspaceRoot = detectedWorkspaceRoot(cwd);
+	return !!workspaceRoot && isLinkedWorkspace(workspaceRoot);
 }
 
 function detectHeliProject(cwd) {
-	return detectLinkedProject(cwd) || detectWorkspaceHarness(cwd);
+	return !!detectedWorkspaceRoot(cwd);
 }
 
 function verifyLinkedProject(cwd) {
@@ -1744,6 +1756,29 @@ HELI_HOOK_OK`
 						return { block: true, reason: `Blocked: plan.md step "${stepTitle}" shows ${stepAttempts} failed attempts and status "${stepStatus || "(empty)"}" — update .heli-harness/state/plan.md to resolve it before continuing.` };
 					}
 				}
+			}
+		}
+
+		// Keep Pi aligned with the shared host adapters: once every ownership,
+		// diagnosis and Pi-local safety gate has allowed a meaningful taskless
+		// write, persist durable continuation evidence. This is not authority and
+		// never creates a task; session_shutdown releases the writer separately.
+		if (
+			isWriteTool &&
+			!isTaskStateWriteForContext(execCtx, writePathsEarly) &&
+			execCtx.workspaceRoot &&
+			execCtx.sessionId &&
+			!execCtx.taskId
+		) {
+			try {
+				recordContinuationIntent(execCtx, {
+					paths: writePathsEarly,
+					toolName,
+					source: "pre_tool_allow",
+				});
+			} catch {
+				// Continuation evidence is best-effort and must never weaken or block
+				// an otherwise valid guarded Pi operation.
 			}
 		}
 

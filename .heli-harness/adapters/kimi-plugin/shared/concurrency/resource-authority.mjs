@@ -316,6 +316,51 @@ export function refreshResourceWriteAuthority(workspaceRoot, taskId, {
 	});
 }
 
+export function releaseResourceWriteAuthorityForWorktree(workspaceRoot, worktreePath, {
+	sessionId,
+	force = false,
+} = {}) {
+	const paths = resourceAuthorityPaths(workspaceRoot, worktreePath);
+	if (!paths) return null;
+	return withResourceMutex(paths, () => {
+		const lease = parseResourceLease(paths.leasePath, { resourceId: paths.resourceId });
+		if (!lease) return null;
+		if (lease.invalid) {
+			if (!force) throw error("MALFORMED_LEASE", lease.reason, { lease });
+			releaseDir(paths.lockDir);
+			return lease;
+		}
+		if (!force) {
+			if (!sessionId) throw error("SESSION_REQUIRED", "sessionId required to release resource authority", { lease });
+			if (lease.sessionId !== sessionId) {
+				throw error("LEASE_NOT_OWNER", `session ${sessionId} cannot release authority owned by ${lease.sessionId}`, { lease });
+			}
+		}
+		if (lease.taskId) {
+			appendTaskEvent(workspaceRoot, lease.taskId, "resource_authority_released", {
+				sessionId: sessionId || lease.sessionId,
+				resource: lease.resource,
+				generation: lease.generation,
+				leaseId: lease.leaseId,
+				force: Boolean(force),
+			});
+		}
+		releaseDir(paths.lockDir);
+		return lease;
+	});
+}
+
+export function releaseSessionResourceAuthorities(workspaceRoot, sessionId) {
+	if (!sessionId) return [];
+	const released = [];
+	for (const lease of listResourceLeases(workspaceRoot)) {
+		if (!lease || lease.invalid || lease.sessionId !== sessionId || !lease.worktreePath) continue;
+		const value = releaseResourceWriteAuthorityForWorktree(workspaceRoot, lease.worktreePath, { sessionId });
+		if (value) released.push(value);
+	}
+	return released;
+}
+
 export function releaseResourceWriteAuthority(workspaceRoot, taskId, {
 	sessionId,
 	force = false,
@@ -324,28 +369,12 @@ export function releaseResourceWriteAuthority(workspaceRoot, taskId, {
 	if (!current) return null;
 	if (current.invalid) {
 		if (!force) throw error("MALFORMED_LEASE", current.reason, { lease: current });
-		return null;
+		const worktree = current.raw?.worktreePath || current.raw?.resource?.canonicalPath;
+		return worktree
+			? releaseResourceWriteAuthorityForWorktree(workspaceRoot, worktree, { sessionId, force })
+			: null;
 	}
-	const paths = resourceAuthorityPaths(workspaceRoot, current.worktreePath);
-	return withResourceMutex(paths, () => {
-		const lease = parseResourceLease(paths.leasePath, { resourceId: paths.resourceId });
-		if (!lease) return null;
-		if (!force) {
-			if (!sessionId) throw error("SESSION_REQUIRED", "sessionId required to release resource authority", { lease });
-			if (lease.sessionId !== sessionId) {
-				throw error("LEASE_NOT_OWNER", `session ${sessionId} cannot release authority owned by ${lease.sessionId}`, { lease });
-			}
-		}
-		appendTaskEvent(workspaceRoot, lease.taskId, "resource_authority_released", {
-			sessionId: sessionId || lease.sessionId,
-			resource: lease.resource,
-			generation: lease.generation,
-			leaseId: lease.leaseId,
-			force: Boolean(force),
-		});
-		releaseDir(paths.lockDir);
-		return lease;
-	});
+	return releaseResourceWriteAuthorityForWorktree(workspaceRoot, current.worktreePath, { sessionId, force });
 }
 
 export function takeoverResourceWriteAuthority(workspaceRoot, {

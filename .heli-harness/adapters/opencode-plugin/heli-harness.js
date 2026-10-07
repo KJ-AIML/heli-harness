@@ -8,6 +8,7 @@
  */
 
 import { evaluatePreToolUse, buildSessionContext, resolveExecutionContext } from "./shared/hook-core.mjs";
+import { closeSession } from "./shared/concurrency/session.mjs";
 import { observeRuntimeCapability } from "./shared/concurrency/attestation.mjs";
 import { recordGuardDecision } from "./shared/concurrency/governance-decision.mjs";
 
@@ -19,9 +20,70 @@ export const HeliHarness = async (ctx) => {
 		input?.sessionId ??
 		input?.session_id ??
 		input?.session?.id ??
+		input?.properties?.sessionID ??
+		input?.properties?.info?.id ??
 		null;
+
+	const ensureSession = (sessionID, source) => {
+		const payload = sessionID ? { session_id: sessionID } : null;
+		const existing = resolveExecutionContext({
+			cwd: directory,
+			host,
+			hookPayload: payload,
+			createIfMissing: false,
+			refreshLeaseOnResolve: false,
+		});
+		if (existing.sessionId) return existing;
+		buildSessionContext(directory, {
+			host,
+			hookPayload: payload,
+			recordSessionStart: true,
+			sessionStartSource: source,
+		});
+		return resolveExecutionContext({
+			cwd: directory,
+			host,
+			hookPayload: payload,
+			createIfMissing: false,
+			refreshLeaseOnResolve: false,
+		});
+	};
+
 	return {
+		event: async ({ event }) => {
+			const sessionID = externalSessionId(event);
+			if (event?.type === "session.created") {
+				ensureSession(sessionID, "session.created");
+			} else if (event?.type === "session.deleted" && sessionID) {
+				const resolved = resolveExecutionContext({
+					cwd: directory,
+					host,
+					hookPayload: { session_id: sessionID },
+					createIfMissing: false,
+					refreshLeaseOnResolve: false,
+				});
+				if (resolved.workspaceRoot && resolved.sessionId) closeSession(resolved.workspaceRoot, resolved.sessionId);
+			}
+		},
+		"experimental.chat.system.transform": async (input, output) => {
+			const sessionID = externalSessionId(input);
+			ensureSession(sessionID, "experimental.chat.system.transform");
+			if (output && Array.isArray(output.system)) {
+				output.system.push(
+					buildSessionContext(directory, {
+						host,
+						hookPayload: sessionID ? { session_id: sessionID } : null,
+						recordSessionStart: false,
+					}),
+				);
+			}
+		},
 		"tool.execute.before": async (input, output) => {
+			const sessionID = externalSessionId(input);
+			// OpenCode can execute a tool even when the event bus did not deliver
+			// session.created. Bind exactly once by stable host session id before
+			// evaluating governance; never mint one session per tool call.
+			ensureSession(sessionID, "tool.execute.before:fallback");
 			const tool = String(input?.tool ?? "");
 			const args = output?.args ?? input?.args ?? {};
 			const toolInput = {
@@ -38,7 +100,7 @@ export const HeliHarness = async (ctx) => {
 				hookPayload: {
 					tool_name: tool,
 					tool_input: toolInput,
-					session_id: externalSessionId(input),
+					session_id: sessionID,
 				},
 			});
 			if (result.ctx?.workspaceRoot && result.ctx?.sessionId) {

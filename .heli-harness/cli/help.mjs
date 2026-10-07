@@ -4,7 +4,8 @@ const HELP_FLAG_SET = new Set(["--help", "-h"]);
 const TOP_LEVEL = [
 	["help", "Show read-only help for Heli commands and subcommands."],
 	["setup", "Initialize Heli's machine-global config/data directories."],
-	["link", "Link a project to the global Heli runtime and execution-local authority state."],
+	["link", "Link a workspace or register a nested Git repo under its linked parent."],
+	["repo", "List, register, remove, or discover Git repositories inside one Heli workspace."],
 	["host", "Inspect and manage coding-host integrations."],
 	["grant", "Issue, list, or revoke scoped governance grants."],
 	["install", "Install an embedded Heli workspace (legacy/portable topology)."],
@@ -41,7 +42,17 @@ const COMMANDS = {
 	},
 	link: {
 		usage: "heli link [path] [--workspace-id <id>] [--json]",
-		summary: "Link a project to the global Heli runtime. Safe help never links or mutates a project.",
+		summary: "Link a workspace to the global Heli runtime. Inside an existing linked ancestor, registers the nested Git repo instead of creating a second workspace.",
+	},
+	repo: {
+		usage: "heli repo <list|add|remove|discover> [options]",
+		summary: "Manage the Git repository inventory of one Heli workspace without changing sessions or writer authority.",
+		subcommands: {
+			list: "heli repo list [workspace-or-repo-path] [--json]",
+			add: "heli repo add [repo-path] [--name <id>] [--profile <profile>] [--json]",
+			remove: "heli repo remove <id-or-name-or-path> [workspace-path] [--json]",
+			discover: "heli repo discover [path] [--depth N] [--json]",
+		},
 	},
 	host: {
 		usage: "heli host <status|list|install|update|repair|remove> [all|host...] [--dry-run]",

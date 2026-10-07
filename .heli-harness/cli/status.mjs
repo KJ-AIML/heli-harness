@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { resolveExecutionContext } from "../adapters/shared/concurrency/resolve.mjs";
 import { listActiveTasks, listTasks } from "../adapters/shared/concurrency/task.mjs";
 import { listActiveSessions, readSession } from "../adapters/shared/concurrency/session.mjs";
+import { observedCapabilityMap, runtimeObservationStatus } from "../adapters/shared/concurrency/attestation.mjs";
 import { readLease, isLeaseExpired } from "../adapters/shared/concurrency/lease.mjs";
 import { isConcurrentMode, readWorkspaceSchema } from "../adapters/shared/concurrency/schema.mjs";
 import { findWorkspaceRoot, canonicalizePath, pathsFor } from "../adapters/shared/concurrency/paths.mjs";
@@ -183,6 +184,56 @@ function countSkillDirs(skillsRoot) {
 	}
 }
 
+function runtimeSessionSummary(session) {
+	const observed = observedCapabilityMap(session);
+	const criteria = {
+		host: session.host || null,
+		hostSessionId: session.externalHostSessionId || null,
+	};
+	const sessionStart = runtimeObservationStatus(observed.session_start, criteria);
+	const preTool = runtimeObservationStatus(observed.pre_tool, criteria);
+	const latestObservedAt = Object.values(observed)
+		.map((value) => value?.observedAt || "")
+		.filter(Boolean)
+		.sort()
+		.at(-1) || null;
+	const state =
+		sessionStart.current && preTool.current
+			? "active"
+			: sessionStart.current
+				? "session-only"
+				: "inactive";
+	return {
+		host: session.host || "unknown",
+		sessionId: session.sessionId,
+		externalHostSessionId: session.externalHostSessionId || null,
+		state,
+		sessionStart: {
+			observed: Boolean(observed.session_start?.observed),
+			current: sessionStart.current,
+			reason: sessionStart.reason,
+			observedAt: observed.session_start?.observedAt || null,
+			hostVersion: observed.session_start?.hostVersion || null,
+			adapterVersion: observed.session_start?.adapterVersion || null,
+		},
+		preTool: {
+			observed: Boolean(observed.pre_tool?.observed),
+			current: preTool.current,
+			reason: preTool.reason,
+			observedAt: observed.pre_tool?.observedAt || null,
+			hostVersion: observed.pre_tool?.hostVersion || null,
+			adapterVersion: observed.pre_tool?.adapterVersion || null,
+		},
+		lastObservedAt: latestObservedAt,
+	};
+}
+
+function runtimeHostSummaries(sessions) {
+	return sessions
+		.map(runtimeSessionSummary)
+		.sort((a, b) => String(b.lastObservedAt || "").localeCompare(String(a.lastObservedAt || "")));
+}
+
 function skillPackagingStatus(root, linked = false) {
 	const workspaceSkills = countSkillDirs(
 		linked ? join(root, ".heli", "skills") : join(root, ".heli-harness", "skills"),
@@ -253,6 +304,7 @@ export function status(cwd) {
 		const tasks = listTasks(root);
 		const active = listActiveTasks(root);
 		const sessions = listActiveSessions(root);
+		const runtimeHosts = runtimeHostSummaries(sessions);
 		let writeLeases = layout.linked
 			? listResourceLeases(root).filter((lease) => lease && !lease.invalid && !isResourceLeaseExpired(lease)).length
 			: 0;
@@ -267,6 +319,7 @@ export function status(cwd) {
 			activeTasks: active.length,
 			totalTasks: tasks.length,
 			activeSessions: sessions.length,
+			runtimeHosts,
 			writeLeases,
 			taskSummaries,
 		};
@@ -335,6 +388,19 @@ export function runStatus(args) {
 		console.log(result.layout === "linked" ? `Work records: ${result.activeTasks} active (${result.totalTasks} total)` : `Active tasks: ${result.activeTasks}`);
 		console.log(`Active sessions: ${result.activeSessions}`);
 		console.log(result.layout === "linked" ? `Resource authorities: ${result.writeLeases}` : `Write leases: ${result.writeLeases}`);
+		if (result.runtimeHosts?.length) {
+			console.log("Runtime host evidence:");
+			for (const runtime of result.runtimeHosts) {
+				console.log(
+					`- ${runtime.host}: ${runtime.state.toUpperCase()} session=${runtime.sessionId}${runtime.externalHostSessionId ? ` host_session=${runtime.externalHostSessionId}` : ""}`,
+				);
+				console.log(
+					`  SessionStart=${runtime.sessionStart.current ? "current" : runtime.sessionStart.reason.toLowerCase()} PreTool=${runtime.preTool.current ? "current" : runtime.preTool.reason.toLowerCase()}`,
+				);
+			}
+		} else {
+			console.log("Runtime host evidence: none in this execution (installed integration does not mean active hooks in this session)");
+		}
 		for (const t of result.taskSummaries || []) {
 			console.log("");
 			console.log(t.taskId);

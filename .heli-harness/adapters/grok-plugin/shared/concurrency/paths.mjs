@@ -17,6 +17,7 @@ import {
 	projectProfilesDir,
 	projectSkillsDir,
 	linkedWorkspaceTasksDir,
+	linkedWorkspaceContinuationsDir,
 } from "./project-binding.mjs";
 
 export const DEFAULT_LEASE_TTL_SECONDS = 14400;
@@ -114,6 +115,26 @@ export function findWorkspaceRoot(startCwd) {
 	return null;
 }
 
+/**
+ * Walk upward looking specifically for a linked .heli/workspace.json binding.
+ * Used when deciding whether a nested Git repository belongs to an existing
+ * parent Heli workspace. This does not change normal nearest-workspace
+ * resolution for an explicitly independent nested workspace.
+ */
+export function findLinkedWorkspaceAncestor(startCwd, { includeSelf = true } = {}) {
+	let dir = resolve(startCwd || process.cwd());
+	if (!includeSelf) dir = dirname(dir);
+	const seen = new Set();
+	while (dir && !seen.has(dir)) {
+		seen.add(dir);
+		if (hasProjectBindingFile(dir)) return canonicalizePath(dir);
+		const parent = dirname(dir);
+		if (parent === dir) break;
+		dir = parent;
+	}
+	return null;
+}
+
 export function heliDir(workspaceRoot) {
 	const layout = resolveWorkspaceLayout(workspaceRoot);
 	return layout.operationalRoot;
@@ -160,6 +181,10 @@ export function pathsFor(workspaceRoot, { env = process.env } = {}) {
 		legacyDiagnosisEventsPath: join(root, "state", "diagnosis-events.jsonl"),
 		legacyYoloPath: join(root, "state", "yolo.json"),
 		tasksDir: tasksDirFor(workspaceRoot, { env }),
+		continuationsDir:
+			linked && layout.binding?.workspaceId
+				? linkedWorkspaceContinuationsDir(layout.binding.workspaceId, env)
+				: join(root, "continuations"),
 		sessionsDir: join(root, "sessions"),
 		bindingsDir: join(root, "bindings", "worktrees"),
 		locksDir: join(root, "locks", "tasks"),

@@ -24,6 +24,7 @@ import { findWorkspaceRoot } from "./concurrency/paths.mjs";
 import { consumeApplicableGrant, findUsableGrants } from "./concurrency/grant.mjs";
 import { hashText } from "./concurrency/ids.mjs";
 import { resourceIdForWorktree } from "./concurrency/resource-authority.mjs";
+import { recordContinuationIntent } from "./concurrency/continuation.mjs";
 import { evaluateDiagnosisWriteGate, readActionPolicy, readDiagnosis } from "./concurrency/diagnosis.mjs";
 import {
 	analyzeCommand,
@@ -117,7 +118,7 @@ export function appendSkillUsageBootstrap(contextText) {
 	return `${text}\n\n${bootstrap}`;
 }
 
-export function buildSessionContext(cwd, { host = "unknown", hookPayload = null, env = process.env, recordSessionStart = false } = {}) {
+export function buildSessionContext(cwd, { host = "unknown", hookPayload = null, env = process.env, recordSessionStart = false, sessionStartSource = "SessionStart" } = {}) {
 	const ctx = resolveExecutionContext({
 		cwd,
 		environment: env,
@@ -131,7 +132,7 @@ export function buildSessionContext(cwd, { host = "unknown", hookPayload = null,
 			observeRuntimeCapability(ctx.workspaceRoot, ctx.sessionId, {
 				host,
 				capability: "session_start",
-				source: "SessionStart",
+				source: sessionStartSource,
 			});
 		} catch {
 			// Evidence must not block the host from receiving session context.
@@ -139,7 +140,7 @@ export function buildSessionContext(cwd, { host = "unknown", hookPayload = null,
 	}
 
 	if (ctx.concurrentMode) {
-		return appendSkillUsageBootstrap(buildConcurrentSessionContext(ctx));
+		return appendSkillUsageBootstrap(buildConcurrentSessionContext(ctx, { env }));
 	}
 
 	const lines = [
@@ -905,9 +906,31 @@ export function evaluatePreToolUse({
 		appliedGrants.push(grant);
 	}
 
+	// Meaningful taskless work in linked mode gets a durable workspace-scoped
+	// continuation record only after governance has decided to allow it. This
+	// is evidence for host switching, never writer authority and never a task.
+	let continuation = null;
+	if (isWrite && !taskStateOnly && ctx.workspaceRoot && ctx.sessionId && !ctx.taskId) {
+		try {
+			continuation = recordContinuationIntent(ctx, {
+				paths: [
+					...structuredPaths,
+					...shellEntries.map((entry) => entry.normalized).filter(Boolean),
+				],
+				toolName: name,
+				source: "pre_tool_allow",
+				env,
+			});
+		} catch {
+			// Continuation evidence is best-effort and must never weaken or block
+			// an otherwise valid guarded operation.
+		}
+	}
+
 	return {
 		deny: false,
 		ctx,
+		...(continuation ? { continuation } : {}),
 		...(appliedGrants.length
 			? {
 					grants: appliedGrants.map((grant) => ({

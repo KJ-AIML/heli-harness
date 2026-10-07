@@ -99,11 +99,12 @@ try {
 	assert.equal(piEntrypoint, "./extensions/pi-governed.js", "Pi package must load the governed runtime-evidence wrapper");
 	const governed = await import(pathToFileURL(join(root, piEntrypoint)).href);
 	governed.default(pi);
-	assert.deepEqual(events.map((event) => event.name), ["session_start", "before_agent_start", "tool_call", "input"]);
+	assert.deepEqual(events.map((event) => event.name), ["session_start", "before_agent_start", "tool_call", "input", "session_shutdown"]);
 	assert.ok(commands.length > 0, "legacy Pi commands must remain registered through wrapper");
 
 	const sessionStart = events.find((event) => event.name === "session_start").handler;
 	const toolCall = events.find((event) => event.name === "tool_call").handler;
+	const sessionShutdown = events.find((event) => event.name === "session_shutdown").handler;
 	await sessionStart({ sessionId: "pi-host-runtime" }, ctx);
 
 	let observed = readSession(workspace, session.sessionId)?.runtimeAttestation?.observedCapabilities || {};
@@ -131,6 +132,9 @@ try {
 	assert.equal(denial.decision?.code, "PI_GUARD_BLOCKED");
 	assert.equal(denial.decision?.host, "pi");
 	assert.equal(denial.decision?.toolName, "bash");
+
+	await sessionShutdown({}, ctx);
+	assert.equal(readSession(workspace, session.sessionId)?.status, "closed", "session_shutdown must close the Heli session");
 
 	console.log("smoke-pi-runtime-evidence: ok");
 } finally {

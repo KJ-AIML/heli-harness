@@ -266,6 +266,10 @@ export function linkedWorkspaceExecutionsDir(workspaceId, env = process.env) {
 	return join(globalDataDir(env), "state", "workspaces", safeIdentity(workspaceId), "executions");
 }
 
+export function linkedWorkspaceContinuationsDir(workspaceId, env = process.env) {
+	return join(globalDataDir(env), "state", "workspaces", safeIdentity(workspaceId), "continuations");
+}
+
 export function linkedOperationalRoot(workspaceRoot, { env = process.env } = {}) {
 	const identity = resolveExecutionIdentity(workspaceRoot, { env });
 	if (!identity) return null;
