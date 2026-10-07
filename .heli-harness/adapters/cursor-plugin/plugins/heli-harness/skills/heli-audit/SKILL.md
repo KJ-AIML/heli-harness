@@ -15,7 +15,7 @@ For a Heli-managed project:
 heli status
 ```
 
-Resolve linked vs embedded layout, current target/resource context, and the repository actually being audited. Do not assume `.heli-harness/HARNESS.md` is the primary source in a linked v0.10 project.
+Resolve linked vs embedded layout, current target/resource context, and the repository actually being audited. Do not assume `.heli-harness/HARNESS.md` is the primary source in a linked v0.11 project.
 
 ## Composition
 
