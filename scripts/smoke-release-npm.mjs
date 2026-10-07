@@ -143,16 +143,27 @@ for (const npmExecpath of [undefined, ""]) {
 	}
 }
 
-// Release workflow: a missing NPM_TOKEN must fail the run loudly, never skip
-// publication while still reporting success (0.10.x never reached npm that way).
+// Release workflow uses npm Trusted Publishing (OIDC), not a long-lived
+// publish token. npm 11.15+ is installed explicitly because the Node 22 runner
+// can otherwise ship npm 10, which cannot exchange GitHub OIDC credentials.
 {
 	const workflow = readFileSync(join(root, ".github", "workflows", "release.yml"), "utf8").replace(/\r\n/g, "\n");
+	assert.match(workflow, /id-token:\s*write/, "release.yml must grant id-token: write for npm trusted publishing");
+	assert.match(
+		workflow,
+		/npm install --global npm@\^11\.15\.0/,
+		"release.yml must install an npm version with trusted publishing support",
+	);
 	const start = workflow.indexOf("- name: Publish to npm");
 	const end = workflow.indexOf("- name: Build release notes");
 	assert.ok(start > 0 && end > start, "release.yml must keep a 'Publish to npm' step before 'Build release notes'");
 	const publishStep = workflow.slice(start, end);
-	assert.match(publishStep, /if \[ -z "\$\{NODE_AUTH_TOKEN:-\}" \]; then\n\s*echo "::error::[^\n]*"\n\s*exit 1/, "missing NPM_TOKEN must exit 1 with an ::error:: annotation");
-	assert.doesNotMatch(publishStep, /exit 0|skipped-no-token|::warning::/, "missing NPM_TOKEN must not be treated as success");
+	assert.match(publishStep, /npm publish "\$PACKAGE_FILE" --access public --provenance/);
+	assert.doesNotMatch(
+		publishStep,
+		/NODE_AUTH_TOKEN|NPM_TOKEN/,
+		"trusted publishing must not depend on a long-lived npm publish token",
+	);
 }
 
 // Every tracked file that names the current version is rewritten by the release

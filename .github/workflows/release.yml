@@ -28,6 +28,9 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
+      - name: Install npm with trusted publishing support
+        run: npm install --global npm@^11.15.0
+
       - name: Resolve release metadata
         id: meta
         shell: bash
@@ -84,15 +87,11 @@ jobs:
         id: npm_publish
         shell: bash
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ steps.meta.outputs.version }}
           PACKAGE_FILE: ${{ steps.pack.outputs.file }}
         run: |
           set -euo pipefail
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "::error::NPM_TOKEN is not configured, so heli-harness@${VERSION} was NOT published to npm. Add the NPM_TOKEN repository secret and re-run this workflow; no tag or GitHub release is created until publication succeeds."
-            exit 1
-          fi
+          npm --version
           npm publish "$PACKAGE_FILE" --access public --provenance
           echo "status=published" >> "$GITHUB_OUTPUT"
 
