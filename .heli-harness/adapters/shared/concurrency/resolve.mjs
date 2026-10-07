@@ -41,6 +41,13 @@ import {
 	isResourceLeaseExpired,
 	resourceIdForWorktree,
 } from "./resource-authority.mjs";
+import {
+	decideFlowWrite,
+	findLiveMutationConflicts,
+	liveConflictMessage,
+	readGovernanceProfile,
+} from "./flow-governance.mjs";
+import { releaseWriteLease } from "./lease.mjs";
 
 /**
  * Extract optional external host session id from known documented-ish fields.
@@ -78,6 +85,8 @@ export function resolveExecutionContext({
 	host = "unknown",
 	createIfMissing = true,
 	refreshLeaseOnResolve = false,
+	sessionMode = null,
+	recoverStale = false,
 } = {}) {
 	const env = environment || process.env;
 	const workspaceRoot = findWorkspaceRoot(cwd);
@@ -131,13 +140,13 @@ export function resolveExecutionContext({
 				externalHostSessionId,
 				host,
 				worktreePath: worktreeRoot,
-				mode: "observe",
+				mode: sessionMode || "observe",
 			});
 			writeBinding(workspaceRoot, {
 				worktreePath: worktreeRoot,
 				sessionId,
 				host,
-				mode: "observe",
+				mode: sessionMode || "observe",
 			});
 		}
 	}
@@ -155,7 +164,7 @@ export function resolveExecutionContext({
 				externalHostSessionId,
 				host,
 				worktreePath: worktreeRoot,
-				mode: "observe",
+				mode: sessionMode || "observe",
 			});
 			sessionId = session.sessionId;
 			identitySource = "externalHostSessionId-created";
@@ -163,7 +172,7 @@ export function resolveExecutionContext({
 				worktreePath: worktreeRoot,
 				sessionId,
 				host,
-				mode: "observe",
+				mode: sessionMode || "observe",
 			});
 		}
 	}
@@ -224,7 +233,7 @@ export function resolveExecutionContext({
 			externalHostSessionId,
 			host,
 			worktreePath: worktreeRoot,
-			mode: "observe",
+			mode: sessionMode || "observe",
 		});
 		sessionId = session.sessionId;
 		identitySource = "generated";
@@ -233,7 +242,27 @@ export function resolveExecutionContext({
 			worktreePath: worktreeRoot,
 			sessionId,
 			host,
-			mode: "observe",
+			mode: sessionMode || "observe",
+		});
+	}
+
+	// A closed bound session is coordination history. Flow recovery must not
+	// keep serving it as the writer. Callers pass recoverStale when a tool
+	// event is allowed to open a fresh lightweight session.
+	if (recoverStale && session && session.status !== "active" && createIfMissing && !env.HELI_SESSION_ID) {
+		session = createSession(workspaceRoot, {
+			externalHostSessionId,
+			host,
+			worktreePath: worktreeRoot,
+			mode: sessionMode || "write",
+		});
+		sessionId = session.sessionId;
+		identitySource = "recovered-stale";
+		writeBinding(workspaceRoot, {
+			worktreePath: worktreeRoot,
+			sessionId,
+			host,
+			mode: session.mode,
 		});
 	}
 
@@ -355,23 +384,41 @@ export function evaluateForeignWorktreeWrite(ctx, rawPaths, { cwd = process.cwd(
 		const other = readProjectBinding(foreign);
 		if (!other || other.workspaceId !== local.workspaceId) continue;
 		const resourceId = resourceIdForWorktree(foreign);
+		const profile = readGovernanceProfile(ctx.workspaceRoot);
 		const existing = readResourceLeaseForWorktree(foreign, foreign);
-		if (existing && !existing.invalid && !isResourceLeaseExpired(existing)) {
+		if (profile === "strict") {
+			if (existing && !existing.invalid && !isResourceLeaseExpired(existing)) {
+				return {
+					deny: true,
+					code: "RESOURCE_WRITER_HELD",
+					reason: resourceHeldReason(existing, resourceId),
+					authority: existing,
+				};
+			}
 			return {
 				deny: true,
-				code: "RESOURCE_WRITER_HELD",
-				reason: resourceHeldReason(existing, resourceId),
-				authority: existing,
+				code: "NO_SESSION",
+				// Host binding UX (issue #35 acceptance 5): the host/plugin route comes
+				// first; the CLI write session is the fallback for hosts without the
+				// plugin, not the primary recommendation.
+				reason: `Heli linked mode: write targets worktree resource ${resourceId}, and no active host/session identity is bound to that worktree. Start the coding host in that worktree with the Heli plugin loaded (its SessionStart binds the writer), or, for hosts without the plugin, run \`heli session start --mode write\` there before mutation.`,
 			};
 		}
-		return {
-			deny: true,
-			code: "NO_SESSION",
-			// Host binding UX (issue #35 acceptance 5): the host/plugin route comes
-			// first; the CLI write session is the fallback for hosts without the
-			// plugin, not the primary recommendation.
-			reason: `Heli linked mode: write targets worktree resource ${resourceId}, and no active host/session identity is bound to that worktree. Start the coding host in that worktree with the Heli plugin loaded (its SessionStart binds the writer), or, for hosts without the plugin, run \`heli session start --mode write\` there before mutation.`,
-		};
+		const conflicts = findLiveMutationConflicts(foreign, {
+			sessionId: ctx.sessionId,
+			worktreePath: foreign,
+			paths: [abs],
+		});
+		if (conflicts.length && profile !== "observe") {
+			const owner = conflicts[0];
+			const worktreeScoped = owner.scope === "worktree" || owner.exclusive === true;
+			return {
+				deny: true,
+				code: worktreeScoped ? "RESOURCE_WRITER_HELD" : "MUTATION_CONFLICT",
+				reason: worktreeScoped ? resourceHeldReason(owner, resourceId) : liveConflictMessage(owner, [abs]),
+				authority: owner,
+			};
+		}
 	}
 	return { deny: false };
 }
@@ -380,12 +427,19 @@ export function evaluateForeignWorktreeWrite(ctx, rawPaths, { cwd = process.cwd(
  * Ownership gate for write tools in concurrent mode.
  * YOLO must never skip this.
  */
-export function evaluateOwnershipGate(ctx, { isWrite = false } = {}) {
+export function evaluateOwnershipGate(ctx, {
+	isWrite = false,
+	mutationPaths = [],
+	toolUseId = null,
+	env = process.env,
+} = {}) {
 	if (!ctx.workspaceRoot) {
 		return { deny: false };
 	}
 	if (isLinkedWorkspace(ctx.workspaceRoot)) {
 		if (!isWrite) return { deny: false, linked: true };
+		const flowDecision = decideFlowWrite(ctx, { mutationPaths, toolUseId, env });
+		if (flowDecision.handled) return flowDecision;
 		if (!ctx.sessionId || !ctx.session || ctx.session.status !== "active") {
 			const existing = ctx.worktreeRoot ? readResourceLeaseForWorktree(ctx.workspaceRoot, ctx.worktreeRoot) : null;
 			if (existing && !existing.invalid && !isResourceLeaseExpired(existing)) {
@@ -472,7 +526,7 @@ export function evaluateOwnershipGate(ctx, { isWrite = false } = {}) {
 		};
 	}
 	if (!sessionHoldsWriteLease(ctx.workspaceRoot, ctx.taskId, ctx.sessionId)) {
-		const lease = readLease(ctx.workspaceRoot, ctx.taskId);
+		let lease = readLease(ctx.workspaceRoot, ctx.taskId);
 		if (lease?.invalid) {
 			return {
 				deny: true,
@@ -497,11 +551,20 @@ export function evaluateOwnershipGate(ctx, { isWrite = false } = {}) {
 					lease: conflict.lease,
 				};
 			}
-			return {
-				deny: true,
-				reason: `Heli-Harness concurrent mode: write lease for task ${ctx.taskId} is stale (owner ${lease.sessionId}, expired ${lease.expiresAt}). Use \`heli task takeover ${ctx.taskId} --confirm\`.`,
-				code: "STALE_LEASE",
-			};
+			const profile = readGovernanceProfile(ctx.workspaceRoot);
+			if (profile === "strict") {
+				return {
+					deny: true,
+					reason: `Heli-Harness concurrent mode: write lease for task ${ctx.taskId} is stale (owner ${lease.sessionId}, expired ${lease.expiresAt}). Use \`heli task takeover ${ctx.taskId} --confirm\`.`,
+					code: "STALE_LEASE",
+				};
+			}
+			try {
+				releaseWriteLease(ctx.workspaceRoot, ctx.taskId, { force: true });
+			} catch {
+				// The stale record could not be removed. Do not pretend it is still exclusive.
+			}
+			lease = null;
 		}
 		if (lease) {
 			return {

@@ -10,6 +10,7 @@ import { runUninstall } from "./cli/uninstall.mjs";
 import { runTarget } from "./cli/target.mjs";
 import { runStatus } from "./cli/status.mjs";
 import { runDoctor } from "./cli/doctor.mjs";
+import { runGovernance } from "./cli/governance.mjs";
 import { runYolo } from "./cli/yolo.mjs";
 import { runTask } from "./cli/task.mjs";
 import { runSession } from "./cli/session-cmd.mjs";
@@ -96,6 +97,7 @@ try {
 		case "status": runStatus(args); break;
 		case "resume": runResume(args); break;
 		case "doctor": runDoctor(args); break;
+		case "governance": runGovernance(args); break;
 		case "yolo": runYolo(args); break;
 		case "task": protocolJsonRequested(command, args) ? runTaskMachine(args) : runTask(args); break;
 		case "diagnosis": protocolJsonRequested(command, args) ? runDiagnosisMachine(args) : runDiagnosis(args); break;

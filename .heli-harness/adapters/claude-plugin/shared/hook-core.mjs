@@ -24,6 +24,8 @@ import { findWorkspaceRoot } from "./concurrency/paths.mjs";
 import { consumeApplicableGrant, findUsableGrants } from "./concurrency/grant.mjs";
 import { hashText } from "./concurrency/ids.mjs";
 import { resourceIdForWorktree } from "./concurrency/resource-authority.mjs";
+import { isLinkedWorkspace } from "./concurrency/project-binding.mjs";
+import { readGovernanceProfile } from "./concurrency/flow-governance.mjs";
 import { recordContinuationIntent } from "./concurrency/continuation.mjs";
 import { evaluateDiagnosisWriteGate, readActionPolicy, readDiagnosis } from "./concurrency/diagnosis.mjs";
 import {
@@ -482,6 +484,7 @@ const OWNERSHIP_RECOVERY = Object.freeze({
 	LEASE_HELD: { recoverability: "HUMAN_REQUIRED", nextAction: "Continue with the lease owner, close/release it, use another worktree, or explicitly approve takeover." },
 	STALE_RESOURCE_AUTHORITY: { recoverability: "HUMAN_REQUIRED", nextAction: "Inspect the stale owner and explicitly approve takeover before replacing another actor's authority." },
 	STALE_LEASE: { recoverability: "HUMAN_REQUIRED", nextAction: "Inspect the stale owner and explicitly approve takeover before replacing another actor's authority." },
+	MUTATION_CONFLICT: { recoverability: "HUMAN_REQUIRED", nextAction: "Wait for the active writer to finish, change a non-overlapping path, or explicitly approve takeover of this live mutation." },
 	MALFORMED_LEASE: { recoverability: "HARD_DENY", nextAction: "Run heli doctor/status and repair the malformed authority state before attempting more writes." },
 	RESOURCE_UNRESOLVED: { recoverability: "HARD_DENY", nextAction: "Resolve the worktree/resource identity before attempting more writes." },
 	LEASE_LOCK_DIR_EXISTS: { recoverability: "HARD_DENY", nextAction: "Inspect and repair the orphaned lock state before attempting more writes." },
@@ -603,7 +606,7 @@ export function evaluatePreToolUse({
 	// PreToolUse must NOT mint a new session on every call — that recreates
 	// global last-writer pollution via session spam. Resume via HELI_SESSION_ID,
 	// external host id mapping, or worktree binding only.
-	const ctx = resolveExecutionContext({
+	let ctx = resolveExecutionContext({
 		cwd,
 		environment: env,
 		hookPayload: hookPayload || { tool_name: toolName, tool_input: toolInput },
@@ -634,6 +637,21 @@ export function evaluatePreToolUse({
 
 	const shellMutation = isLikelyShellMutation(name, rawCommand);
 	const isWrite = isFileMutationTool(name, { paths, writeToolNames }) || shellMutation;
+	if (isWrite && ctx.workspaceRoot && !ctx.session && isLinkedWorkspace(ctx.workspaceRoot)) {
+		const profile = readGovernanceProfile(ctx.workspaceRoot, { env });
+		if (profile !== "strict") {
+			ctx = resolveExecutionContext({
+				cwd: baseCwd,
+				environment: env,
+				hookPayload: hookPayload || { tool_name: toolName, tool_input: toolInput },
+				host,
+				createIfMissing: true,
+				sessionMode: "write",
+				recoverStale: true,
+			});
+			ctx.runtimeDegraded = true;
+		}
+	}
 	// Only narrative state files skip the ownership gate (see isTaskStateWriteForContext), and only a write needs it.
 	const taskStateOnly = isWrite && isTaskStateWriteForContext(ctx, rawPaths, { cwd: baseCwd, env, cache: pathCache });
 	let ownershipDecision = null;
@@ -752,7 +770,12 @@ export function evaluatePreToolUse({
 				shellMutation ? "shell-mutation-best-effort" : "structured-write",
 			);
 		}
-		ownershipDecision = evaluateOwnershipGate(ctx, { isWrite: true });
+		ownershipDecision = evaluateOwnershipGate(ctx, {
+			isWrite: true,
+			mutationPaths: foreignPaths,
+			toolUseId: hookPayload?.toolUseId || hookPayload?.tool_use_id || toolInput?.toolUseId || null,
+			env,
+		});
 		if (ownershipDecision.deny) {
 			return ownershipDeniedResult(
 				ownershipDecision,
@@ -930,6 +953,9 @@ export function evaluatePreToolUse({
 	return {
 		deny: false,
 		ctx,
+		...(ownershipDecision?.notice ? { notice: ownershipDecision.notice } : {}),
+		...(ownershipDecision?.governance ? { governance: ownershipDecision.governance } : {}),
+		...(ownershipDecision?.code ? { code: ownershipDecision.code } : {}),
 		...(continuation ? { continuation } : {}),
 		...(appliedGrants.length
 			? {

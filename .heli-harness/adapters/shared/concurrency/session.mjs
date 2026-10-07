@@ -12,6 +12,7 @@ import { appendTaskEvent } from "./events.mjs";
 import { readTask } from "./task.mjs";
 import { isLinkedWorkspace } from "./project-binding.mjs";
 import { releaseSessionResourceAuthorities } from "./resource-authority.mjs";
+import { releaseMutationLeasesForSession } from "./mutation-lease.mjs";
 
 const MODE_RANK = Object.freeze({ observe: 0, review: 1, write: 2 });
 
@@ -209,6 +210,15 @@ export function attachSession(workspaceRoot, sessionId, taskId, { mode = "write"
 export function closeSession(workspaceRoot, sessionId) {
 	const s = readSession(workspaceRoot, sessionId);
 	if (!s) return null;
+	let releasedMutationLeases = [];
+	try {
+		releasedMutationLeases = releaseMutationLeasesForSession(workspaceRoot, sessionId);
+	} catch (error) {
+		s.closeWarnings = [
+			...(Array.isArray(s.closeWarnings) ? s.closeWarnings : []),
+			`mutation lease cleanup failed: ${error.code || "ERROR"}: ${error.message}`,
+		];
+	}
 	let releasedResourceAuthorities = [];
 	if (isLinkedWorkspace(workspaceRoot)) {
 		try {
@@ -230,6 +240,11 @@ export function closeSession(workspaceRoot, sessionId) {
 		resourceId: lease.resource?.id || null,
 		worktreePath: lease.worktreePath || null,
 		leaseId: lease.leaseId || null,
+	}));
+	s.releasedMutationLeases = releasedMutationLeases.map((lease) => ({
+		leaseId: lease.leaseId || null,
+		worktreePath: lease.worktreePath || null,
+		paths: lease.paths || [],
 	}));
 	const written = writeSession(workspaceRoot, s);
 	if (written.taskId) {

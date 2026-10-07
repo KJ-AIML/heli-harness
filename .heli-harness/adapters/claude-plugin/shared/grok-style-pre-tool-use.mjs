@@ -75,6 +75,7 @@ try {
 if (result) {
 	// 1. Decision first — nothing below may change or delay it.
 	if (result.deny) deny(result.reason);
+	else if (result.notice) process.stderr.write(`${result.notice}\n`);
 	// 2. Evidence side effects, each isolated.
 	const sideEffect = async (label, fn) => {
 		try {

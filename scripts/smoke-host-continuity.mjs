@@ -134,7 +134,7 @@ assert.match(piBlocked.text, /Durable continuation available from previous meani
 assert.match(piBlocked.text, /Previous host: codex/i);
 const blocked = writeDecision("pi", piBlocked.payload, "pi-blocked");
 assert.equal(blocked.deny, true);
-assert.equal(blocked.code, "RESOURCE_WRITER_HELD");
+assert.equal(blocked.code, "MUTATION_CONFLICT");
 assert.equal(blocked.recoverability, "HUMAN_REQUIRED");
 assert.equal(blocked.retryable, false);
 

@@ -18,6 +18,7 @@ import {
 } from "./fs-atomic.mjs";
 import { canonicalizePath, pathsFor } from "./paths.mjs";
 import { hashCanonicalPath, newLeaseId } from "./ids.mjs";
+import { isMutationActivityFresh, MUTATION_TTL_SECONDS } from "./mutation-lease.mjs";
 import { LEASE_SCHEMA_VERSION } from "./schema.mjs";
 import { appendTaskEvent } from "./events.mjs";
 
@@ -414,6 +415,88 @@ export function takeoverResourceWriteAuthority(workspaceRoot, {
 			previousLease: previous || null,
 			confirmed: true,
 		});
+		return lease;
+	});
+}
+
+/**
+ * Record a short-lived, non-exclusive path lease for flow mode.
+ * A fresh worktree-exclusive lease owned by someone else is left in place.
+ * A fresh exclusive lease owned by this session keeps its exclusive scope.
+ */
+export function upsertCooperativeResourceLease(workspaceRoot, {
+	sessionId,
+	taskId = null,
+	worktreePath,
+	paths = [],
+	host = null,
+	toolUseId = null,
+	ttlSeconds = MUTATION_TTL_SECONDS,
+} = {}) {
+	if (!sessionId || !worktreePath) return null;
+	const authorityPaths = resourceAuthorityPaths(workspaceRoot, worktreePath);
+	if (!authorityPaths) return null;
+	return withResourceMutex(authorityPaths, () => {
+		const existing = parseResourceLease(authorityPaths.leasePath, { resourceId: authorityPaths.resourceId });
+		if (existing?.invalid) return { skipped: true, reason: "malformed", lease: existing };
+		const now = new Date();
+		const ttl = Number(ttlSeconds) > 0 ? Number(ttlSeconds) : MUTATION_TTL_SECONDS;
+		const canonicalPaths = [];
+		const seen = new Set();
+		for (const value of paths || []) {
+			const canonical = canonicalizePath(value);
+			if (!canonical || seen.has(canonical)) continue;
+			seen.add(canonical);
+			canonicalPaths.push(canonical);
+		}
+		if (existing && existing.sessionId === sessionId && (existing.exclusive === true || !existing.scope || existing.scope === "worktree")) {
+			const refreshed = {
+				...existing,
+				lastActivityAt: now.toISOString(),
+				revision: (existing.revision || 0) + 1,
+			};
+			writeJsonAtomic(authorityPaths.leasePath, refreshed);
+			return refreshed;
+		}
+		if (existing && existing.sessionId !== sessionId && isMutationActivityFresh(existing)) {
+			const exclusive = existing.exclusive === true || !existing.scope || existing.scope === "worktree";
+			return { skipped: true, reason: exclusive ? "live-exclusive" : "shared", lease: existing };
+		}
+		if (existing && pathExists(authorityPaths.lockDir) && existing.sessionId !== sessionId) {
+			releaseDir(authorityPaths.lockDir);
+		}
+		if (!pathExists(authorityPaths.lockDir)) {
+			const claimed = claimDirExclusive(authorityPaths.lockDir);
+			if (!claimed.ok) return { skipped: true, reason: "lock-busy" };
+		}
+		const lease = {
+			schemaVersion: LEASE_SCHEMA_VERSION,
+			authoritySchemaVersion: RESOURCE_AUTHORITY_SCHEMA_VERSION,
+			authorityClass: "cooperative-local",
+			leaseId: existing?.sessionId === sessionId ? existing.leaseId : newLeaseId(),
+			previousLeaseId: existing?.leaseId && existing.sessionId !== sessionId ? existing.leaseId : existing?.previousLeaseId || null,
+			taskId: taskId || null,
+			sessionId,
+			mode: "write",
+			host: host || null,
+			toolUseId: toolUseId || null,
+			scope: "paths",
+			exclusive: false,
+			paths: canonicalPaths,
+			resource: {
+				type: "worktree",
+				id: authorityPaths.resourceId,
+				canonicalPath: authorityPaths.canonicalWorktreePath,
+			},
+			worktreePath: authorityPaths.canonicalWorktreePath,
+			generation: existing?.sessionId === sessionId ? existing.generation || 1 : (existing?.generation || 0) + 1,
+			acquiredAt: existing?.sessionId === sessionId ? existing.acquiredAt : now.toISOString(),
+			lastActivityAt: now.toISOString(),
+			expiresAt: new Date(now.getTime() + ttl * 1000).toISOString(),
+			ttlSeconds: ttl,
+			revision: (existing?.revision || 0) + 1,
+		};
+		writeJsonAtomic(authorityPaths.leasePath, lease);
 		return lease;
 	});
 }
