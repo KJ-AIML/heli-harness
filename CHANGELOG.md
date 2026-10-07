@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.10.12 - Multi-repo host continuity
 
 ### Fixed
 

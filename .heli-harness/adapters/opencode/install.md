@@ -1,11 +1,11 @@
-# OpenCode Install — Heli v0.10.11
+# OpenCode Install — Heli v0.10.12
 
 ## Project setup
 
 Use current Heli project binding:
 
 ```bash
-npm install -g github:KJ-AIML/heli-harness#v0.10.11
+npm install -g github:KJ-AIML/heli-harness#v0.10.12
 heli setup
 cd /path/to/project
 heli link
