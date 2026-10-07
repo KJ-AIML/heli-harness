@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { findWorkspaceRoot } from "../lib/concurrency/index.mjs";
+import { canonicalizePath, findWorkspaceRoot } from "../lib/concurrency/index.mjs";
 
 const root = mkdtempSync(join(tmpdir(), "heli-multirepo-"));
 const workspace = join(root, "workspace");
@@ -67,11 +67,11 @@ try {
 	const nested = JSON.parse(run(["link", app, "--json"], { cwd: app }).stdout);
 	assert.equal(nested.ok, true);
 	assert.equal(nested.data.workspaceId, parentWorkspaceId);
-	assert.equal(nested.data.workspaceRoot, workspace);
+	assert.equal(nested.data.workspaceRoot, canonicalizePath(workspace));
 	assert.equal(nested.data.nestedRepositoryRegistered, true);
 	assert.equal(nested.data.repository.path, "repos/app");
 	assert.equal(existsSync(join(app, ".heli")), false);
-	assert.equal(findWorkspaceRoot(join(app, "src")), workspace);
+	assert.equal(findWorkspaceRoot(join(app, "src")), canonicalizePath(workspace));
 
 	const listed = JSON.parse(run(["repo", "list", workspace, "--json"]).stdout);
 	assert.equal(listed.ok, true);
@@ -79,7 +79,7 @@ try {
 
 	const status = JSON.parse(run(["status", app, "--json"], { cwd: app }).stdout);
 	assert.equal(status.ok, true);
-	assert.equal(status.data.workspaceRoot, workspace);
+	assert.equal(status.data.workspaceRoot, canonicalizePath(workspace));
 	assert.equal(status.data.workspaceId, parentWorkspaceId);
 
 	// Discovery registers another nested Git repo without creating a workspace.
