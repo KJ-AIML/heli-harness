@@ -108,14 +108,23 @@ export function updateLinked(packageRoot, parentDir) {
 	}
 	const safetyMigration = reconcileSafetyDefaults(sourceHarnessDir, projectDir);
 	const lockPath = workspaceLockPath(parentFull);
-	const lock = readJsonFile(lockPath);
-	const pkg = readJsonFile(join(packageRoot, "package.json"));
-	if (lock?.runtime) {
-		lock.runtime.version = pkg?.version || lock.runtime.version;
-		lock.generatedAt = new Date().toISOString();
-		writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`, "utf8");
-	}
-	return { linked: true, target: projectDir, parentFull, safetyMigration };
+	const existingLock = readJsonFile(lockPath) || {};
+	const pkg = readJsonFile(join(packageRoot, "package.json")) || {};
+	const positiveIntOr = (value, fallback) => Number.isInteger(value) && value > 0 ? value : fallback;
+	const lock = {
+		schemaVersion: 1,
+		runtime: {
+			package: pkg.name || existingLock.runtime?.package || "heli-harness",
+			version: pkg.version || existingLock.runtime?.version || "unknown",
+		},
+		protocolVersion: positiveIntOr(existingLock.protocolVersion, 1),
+		workspaceSchemaVersion: positiveIntOr(existingLock.workspaceSchemaVersion, 1),
+		adapterContractVersion: positiveIntOr(existingLock.adapterContractVersion, 1),
+		policySchemaVersion: positiveIntOr(existingLock.policySchemaVersion, 1),
+		generatedAt: new Date().toISOString(),
+	};
+	writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`, "utf8");
+	return { linked: true, target: projectDir, parentFull, safetyMigration, lock };
 }
 
 export function update(sourceHarnessDir, parentDir, { resetState = false } = {}) {

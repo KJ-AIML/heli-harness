@@ -56,6 +56,7 @@ try {
 		["grant", "--help"],
 		["install", "--help"],
 		["update", "--help"],
+		["migrate", "--help"],
 		["uninstall", "--help"],
 		["target", "--help"],
 		["status", "--help"],
