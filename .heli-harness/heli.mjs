@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { runInstall } from "./cli/install.mjs";
 import { runUpdate } from "./cli/update.mjs";
+import { runMigrate } from "./cli/migrate.mjs";
 import { runUninstall } from "./cli/uninstall.mjs";
 import { runTarget } from "./cli/target.mjs";
 import { runStatus } from "./cli/status.mjs";
@@ -92,6 +93,7 @@ try {
 		case "grant": runGrant(args); break;
 		case "install": runInstall(packageRoot, args); break;
 		case "update": runUpdate(packageRoot, args); break;
+		case "migrate": runMigrate(packageRoot, args); break;
 		case "uninstall": runUninstall(args); break;
 		case "target": protocolJsonRequested(command, args) ? runTargetMachine(args) : runTarget(args); break;
 		case "status": runStatus(args); break;
