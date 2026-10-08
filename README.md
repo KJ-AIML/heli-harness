@@ -5,27 +5,27 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/KJ-AIML/heli-harness/releases/download/v0.11.1/heli-harness-launch.mp4"><img src="assets/heli-harness-launch-poster.png" alt="Heli-Harness launch film (57 s): switch AI coding CLIs and keep the task thread" width="100%"></a>
+  <a href="https://github.com/KJ-AIML/heli-harness/releases/download/v0.11.2/heli-harness-launch.mp4"><img src="assets/heli-harness-launch-poster.png" alt="Heli-Harness launch film (57 s): switch AI coding CLIs and keep the task thread" width="100%"></a>
   <br>
-  <sub><a href="https://github.com/KJ-AIML/heli-harness/releases/download/v0.11.1/heli-harness-launch.mp4">Watch the launch film (MP4, 57 s)</a><br>Made with code using <a href="https://www.remotion.dev">Remotion</a> and Grok Bot · Voiceover: ElevenLabs · Video skill: <a href="https://github.com/KJ-AIML/product-launch-film">product-launch-film</a></sub>
+  <sub><a href="https://github.com/KJ-AIML/heli-harness/releases/download/v0.11.2/heli-harness-launch.mp4">Watch the launch film (MP4, 57 s)</a><br>Made with code using <a href="https://www.remotion.dev">Remotion</a> and Grok Bot · Voiceover: ElevenLabs · Video skill: <a href="https://github.com/KJ-AIML/product-launch-film">product-launch-film</a></sub>
 </p>
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.11.1-informational"></a>
+  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.11.2-informational"></a>
   <a href="https://github.com/KJ-AIML/heli-harness/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/KJ-AIML/heli-harness/ci.yml?branch=main&label=CI"></a>
   <a href="docs/ADAPTER_SUPPORT_MATRIX.md"><img alt="Adapters" src="https://img.shields.io/badge/adapters-evidence--backed-8A2BE2"></a>
 </p>
 
 **Switch tools. Keep the thread.** Current Task and Profile carry your work across AI CLIs (Claude Code, Codex, Grok Build, OpenCode, Kimi Code CLI, Pi) with the same context and task state, and Heli's skills make the agent verify the premise and fix from evidence instead of guessing.
 
-**Portable governance for coding agents.** Heli-Harness v0.11.1 is a small governance and coordination kernel that gives heterogeneous coding hosts the same policy, resource-authority, approval, evidence, and explanation semantics without becoming the agent runtime.
+**Portable governance for coding agents.** Heli-Harness v0.11.2 is a small governance and coordination kernel that gives heterogeneous coding hosts the same policy, resource-authority, approval, evidence, and explanation semantics without becoming the agent runtime.
 
 ## Current architecture
 
 > Facts describe. Policy constrains. Authority scopes. Grants approve. Evidence explains.
 
-Heli v0.11.1 separates four concerns that older workspace-only releases mixed together:
+Heli v0.11.2 separates four concerns that older workspace-only releases mixed together:
 
 - **Distribution** — shared/global Heli package and host integrations.
 - **Project binding** — committed `.heli/workspace.json` + `.heli/heli.lock`.
@@ -52,7 +52,7 @@ Heli does **not** own model calls, the agent loop, a scheduler, sandbox implemen
 
 See the [current architecture index](docs/architecture/README.md) and [governance model](docs/architecture/governance-model.md).
 
-## Install v0.11.1
+## Install v0.11.2
 
 Install the global CLI from npm:
 
@@ -150,7 +150,7 @@ It does not spawn agents, assign work, transfer writer authority, issue grants/Y
 
 ## Authority is resource-scoped
 
-v0.11.1 no longer treats a narrative task name as the root write-authority boundary.
+v0.11.2 no longer treats a narrative task name as the root write-authority boundary.
 
 For modeled local worktrees, Heli reasons about the actual resource. A conflicting resource has one active writer authority, with generation/revision tracking and conflict-checked reacquisition.
 
@@ -236,14 +236,14 @@ The check chain covers protocol/decision semantics, capability evidence, linked 
 
 ## Documentation
 
-Use these as current `v0.11.1` references:
+Use these as current `v0.11.2` references:
 
 - [Architecture index](docs/architecture/README.md) — canonical current architecture entry point.
 - [Governance model](docs/architecture/governance-model.md) — policy, authority, grants, decisions, evidence.
 - [Install guide](INSTALL.md) — v0.11 setup/link plus embedded compatibility.
 - [Adapter Support Matrix](docs/ADAPTER_SUPPORT_MATRIX.md) — current host claims and evidence.
 - [Enforcement Matrix](docs/ENFORCEMENT_MATRIX.md) — current governance surface/evidence map.
-- [Heli v1 Architecture Convergence RFC](docs/superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md) — accepted architecture contract implemented through v0.11.1.
+- [Heli v1 Architecture Convergence RFC](docs/superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md) — accepted architecture contract implemented through v0.11.2.
 - [Roadmap](ROADMAP.md) — current baseline and next gates.
 - [Changelog](CHANGELOG.md) — historical release facts.
 
