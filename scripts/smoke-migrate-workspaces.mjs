@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { canonicalizePath } from "../lib/concurrency/index.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const heli = join(repoRoot, "bin", "heli.mjs");
@@ -104,15 +105,15 @@ try {
 	setLockVersion(wsA, "0.10.0");
 
 	const discovered = json(["migrate", "--root", devRoot, "--discover", "--depth", "3"]);
-	assert.ok(discovered.results.some((item) => item.path === wsA && item.status === "migrated"));
-	assert.ok(discovered.results.some((item) => item.path === wsB));
-	assert.ok(discovered.results.some((item) => item.path === missing && item.status === "missing"));
+	assert.ok(discovered.results.some((item) => item.path === canonicalizePath(wsA) && item.status === "migrated"));
+	assert.ok(discovered.results.some((item) => item.path === canonicalizePath(wsB)));
+	assert.ok(discovered.results.some((item) => item.path === canonicalizePath(missing) && item.status === "missing"));
 	assert.equal(getLockVersion(wsA), currentVersion);
 	assert.ok(existsSync(sentinel), "discovery migration must preserve authority state");
 
 	const registry = JSON.parse(readFileSync(registryPath, "utf8"));
-	assert.ok(registry.workspaces.some((item) => item.workspaceId === a.workspaceId && item.path === wsA));
-	assert.ok(registry.workspaces.some((item) => item.workspaceId === b.workspaceId && item.path === wsB));
+	assert.ok(registry.workspaces.some((item) => item.workspaceId === a.workspaceId && item.path === canonicalizePath(wsA)));
+	assert.ok(registry.workspaces.some((item) => item.workspaceId === b.workspaceId && item.path === canonicalizePath(wsB)));
 
 	console.log("smoke-migrate-workspaces: ok");
 } finally {
