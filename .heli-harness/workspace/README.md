@@ -1,6 +1,6 @@
 # Workspace Metadata
 
-**Current release:** `v0.11.1`
+**Current release:** `v0.11.2`
 
 ## Linked projects
 

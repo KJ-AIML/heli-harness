@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.11.2 - Global workspace migration
+
+### Added
+
+- `heli migrate` updates all linked workspaces listed in the machine-global locator registry to the installed Heli runtime, preserving operational authority.
+- `--root`, `--discover`, `--depth`, `--dry-run`, and `--json` support nested development directories and recovery when the registry is missing.
+
+### Fixed
+
+- Migration can rebuild missing or malformed linked runtime locks and correctly handles stale registry paths on Windows without crossing the selected root.
+
 ## v0.11.1 - Linked source workspace resolution
 
 ### Added
