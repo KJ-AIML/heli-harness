@@ -106,6 +106,19 @@ For a deliberately self-contained/offline bundle, `heli install <path>` remains 
 
 Full installation and migration details: [INSTALL.md](INSTALL.md).
 
+### Migrate many linked workspaces
+
+When one machine keeps multiple Heli workspaces under a development root, migrate them from the global locator registry instead of visiting each project manually:
+
+```bash
+heli migrate --dry-run
+heli migrate
+heli migrate --root ~/Developer
+heli migrate --root ~/Developer --discover --depth 4
+```
+
+The registry remains locator-only. Migration refreshes each linked workspace's overlays, safety defaults, and `.heli/heli.lock` to the currently installed global runtime; it does not inherit, copy, or reset live authority state. `--discover` can rebuild missing locator knowledge from committed `.heli/workspace.json` bindings after a global-state reset.
+
 ## Resume across coding tools
 
 When one coding host runs out of usage or you deliberately switch tools, `heli resume` reconstructs the durable continuation context without inheriting the previous host's authority:
