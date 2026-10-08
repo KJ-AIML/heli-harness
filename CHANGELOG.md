@@ -2,6 +2,11 @@
 
 ## v0.11.1 - Linked source workspace resolution
 
+### Added
+
+- `heli migrate` migrates all registered linked workspaces to the currently installed global Heli runtime. `--root` filters a development tree, `--discover` recovers bindings from `.heli/workspace.json`, `--depth` bounds discovery, and `--dry-run` previews without mutating workspace or registry state.
+- Linked migration repairs missing or malformed `.heli/heli.lock` files and refreshes project overlays/safety defaults without copying or resetting sessions, leases, grants, tasks, or runtime capability observations.
+
 ### Fixed
 
 - Heli source/distribution checkouts nested under a linked parent no longer let packaged `.heli-harness/` content shadow the parent's explicit `.heli/` binding; ordinary embedded workspaces and standalone source checkouts keep their existing resolution behavior.
