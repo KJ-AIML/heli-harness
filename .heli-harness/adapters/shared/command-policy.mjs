@@ -1499,8 +1499,9 @@ export function commandWritesFiles(analysis, programs) {
 	return false;
 }
 
-export function approvalReason(match) {
-	return `Heli-Harness requires explicit approval for "${match.summary}" (rule ${match.id}, tier T5): ${match.reason}. Ask the user to run \`heli grant issue --action command.approval.${match.id} --scope once\` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_COMMAND=${match.id} or YOLO.`;
+/** @param {{ resourceFlag?: string }} [options] `resourceFlag`: ` --resource <folder>` when the grant must name its resource. */
+export function approvalReason(match, { resourceFlag = "" } = {}) {
+	return `Heli-Harness requires explicit approval for "${match.summary}" (rule ${match.id}, tier T5): ${match.reason}. Ask the user to run \`heli grant issue --action command.approval.${match.id} --scope once${resourceFlag}\` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_COMMAND=${match.id} or YOLO.`;
 }
 
 /**

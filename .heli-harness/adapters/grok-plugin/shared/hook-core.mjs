@@ -20,7 +20,7 @@ import {
 import { observeRuntimeCapability } from "./concurrency/attestation.mjs";
 import { resolveYolo, allowGitPushScoped, allowEnvWriteScoped } from "./concurrency/yolo-scope.mjs";
 import { sessionHoldsWriteLease, refreshLease } from "./concurrency/lease.mjs";
-import { findWorkspaceRoot } from "./concurrency/paths.mjs";
+import { findWorkspaceRoot, resolveWorktreeRoot } from "./concurrency/paths.mjs";
 import { consumeApplicableGrant, findUsableGrants } from "./concurrency/grant.mjs";
 import { hashText } from "./concurrency/ids.mjs";
 import { resourceIdForWorktree } from "./concurrency/resource-authority.mjs";
@@ -441,6 +441,18 @@ function grantCallKey(ctx, action, env) {
 	const hostSessionId = String(payload.sessionId || payload.session_id || "").trim();
 	if (!toolCallId || !hostSessionId) return null;
 	return hashText(`${hostSessionId}|${toolCallId}|${action}`);
+}
+
+/**
+ * ` --resource <folder>` for the `heli grant issue` a deny asks for, when the call is checked against a worktree other than
+ * the workspace root's (a repository nested in the workspace): a grant issued from the root would be for the root, and the
+ * agent would be refused again. Empty otherwise, where the plain command already names the right resource.
+ */
+function grantResourceFlag(ctx) {
+	const worktree = ctx.worktreeRoot;
+	if (!worktree || !ctx.workspaceRoot) return "";
+	if (resourceIdForWorktree(worktree) === resourceIdForWorktree(resolveWorktreeRoot(ctx.workspaceRoot))) return "";
+	return ` --resource ${/^[\w@%+=:,./\\-]+$/.test(worktree) ? worktree : JSON.stringify(worktree)}`;
 }
 
 function grantRequest(ctx, action, env) {
@@ -873,12 +885,13 @@ export function evaluatePreToolUse({
 	// Approval stage: collect EVERY required approval and look grants up
 	// read-only. Grants are consumed only after the final decision is allow.
 	const requirements = [];
+	const resourceFlag = grantResourceFlag(ctx);
 	if (commandPolicy?.gitPush && !allowGitPushScoped(scope)) {
 		requirements.push({
 			action: "git.push",
 			code: "REMOTE_PUSH_DENIED",
 			reason:
-				"Heli-Harness blocks git push without scoped authority. Ask the user to run `heli grant issue --action git.push --scope once` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_GIT_PUSH or YOLO.",
+				`Heli-Harness blocks git push without scoped authority. Ask the user to run \`heli grant issue --action git.push --scope once${resourceFlag}\` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_GIT_PUSH or YOLO.`,
 		});
 	}
 	const namesEnvFile = (entry) => entry.normalized && namesSecretEnvFile(entry.normalized);
@@ -900,7 +913,7 @@ export function evaluatePreToolUse({
 			action: "env.write",
 			code: "ENV_WRITE_DENIED",
 			reason:
-				"Heli-Harness blocks .env-style writes without scoped authority. Ask the user to run `heli grant issue --action env.write --scope once` in their own terminal.",
+				`Heli-Harness blocks .env-style writes without scoped authority. Ask the user to run \`heli grant issue --action env.write --scope once${resourceFlag}\` in their own terminal.`,
 		});
 	}
 	for (const match of commandPolicy?.approvals || []) {
@@ -908,7 +921,7 @@ export function evaluatePreToolUse({
 			action: `command.approval.${match.id}`,
 			code: "TIER_APPROVAL_REQUIRED",
 			ruleId: match.id,
-			reason: approvalReason(match),
+			reason: approvalReason(match, { resourceFlag }),
 		});
 	}
 	// Planned as one set, so a grant that can pay for one approval is not counted for two.

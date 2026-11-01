@@ -72,7 +72,7 @@ const COMMANDS = {
 		usage: "heli grant <issue|list|revoke> [options] [path]",
 		summary: "Manage scoped governance grants. Grant issuance remains human-gated.",
 		subcommands: {
-			issue: "heli grant issue --action <action> [--scope once|session|ttl] [--session <id>] [--resource <id|workspace>] [--minutes N] [--reason <text>] [--execution <id>] [path]",
+			issue: "heli grant issue --action <action> [--scope once|session|workspace|time] [--session <id>] [--resource <folder|id|workspace>] [--minutes N] [--reason <text>] [--execution <id>] [path]",
 			list: "heli grant list [--all] [path] [--json]",
 			revoke: "heli grant revoke <grant-id> [path]",
 		},
