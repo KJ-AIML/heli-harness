@@ -115,6 +115,22 @@ try {
 	assert.ok(registry.workspaces.some((item) => item.workspaceId === a.workspaceId && item.path === canonicalizePath(wsA)));
 	assert.ok(registry.workspaces.some((item) => item.workspaceId === b.workspaceId && item.path === canonicalizePath(wsB)));
 
+	// A workspace already on this version still takes newly shipped rules, and the output says which, not just "current".
+	const rulesPath = join(wsA, ".heli", "safety", "command-rules.json");
+	const dropDockerPush = () => {
+		const rules = JSON.parse(readFileSync(rulesPath, "utf8"));
+		rules.rules = rules.rules.filter((rule) => rule.id !== "docker-push");
+		writeFileSync(rulesPath, `${JSON.stringify(rules, null, 2)}\n`);
+	};
+	dropDockerPush();
+	const merged = run(["migrate", wsA]).stdout;
+	assert.match(merged, /\[current\]/);
+	assert.match(merged, /merged newly shipped rules into \.heli\/safety\/command-rules\.json: docker-push/);
+	dropDockerPush();
+	const mergedJson = json(["migrate", wsA]);
+	assert.deepEqual(mergedJson.results[0].safetyMigration.find((item) => item.fileName === "command-rules.json").added, ["docker-push"]);
+	assert.doesNotMatch(run(["migrate", wsA]).stdout, /merged newly shipped rules/, "nothing new to merge: nothing said");
+
 	console.log("smoke-migrate-workspaces: ok");
 } finally {
 	rmSync(root, { recursive: true, force: true });

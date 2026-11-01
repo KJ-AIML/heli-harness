@@ -275,6 +275,10 @@ function render(result) {
 				: "";
 			console.log(`${mark} ${item.path} [${item.status}]${versions}`);
 			if (item.error) console.log(`    ${item.error}`);
+			// A workspace already on this version can still take newly shipped rules: say so, or "current" hides it.
+			for (const merge of item.safetyMigration || []) {
+				if (merge.added?.length) console.log(`    merged newly shipped rules into .heli/safety/${merge.fileName}: ${merge.added.join(", ")}`);
+			}
 		}
 	}
 
