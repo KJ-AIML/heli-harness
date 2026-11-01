@@ -11,14 +11,14 @@
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { linkProject } from "../lib/cli/link.mjs";
-import { runRun } from "../lib/cli/run.mjs";
+import { askYes, runRun } from "../lib/cli/run.mjs";
 import { setupHeli } from "../lib/cli/setup.mjs";
 import { listGrants } from "../lib/concurrency/grant.mjs";
-import { currentRun, listRuns, parseRunEnvelope, runSessionLine, runStoreDir } from "../lib/concurrency/runs.mjs";
+import { bindableSession, currentRun, listRuns, parseRunEnvelope, runSessionLine, runStoreDir } from "../lib/concurrency/runs.mjs";
 import { evaluatePreToolUse } from "../.heli-harness/adapters/shared/hook-core.mjs";
 import { resolveExecutionContext } from "../.heli-harness/adapters/shared/concurrency/resolve.mjs";
 import { scrubHeliProcessEnv } from "./lib/hermetic-env.mjs";
@@ -96,6 +96,20 @@ for (const command of ["heli run status", "heli run done", "heli run blocked \"n
 }
 assert.equal(listRuns(project, { env }).length, 0, "nothing was approved");
 
+// The confirmation waits for the answer. The terminal check reads process.stdin.isTTY, which puts the terminal into
+// non-blocking mode: the read failed with EAGAIN before the user could type, and that counted as a no.
+{
+	const typed = (text, busy) => (buffer) => {
+		if (busy-- > 0) throw Object.assign(new Error("EAGAIN: resource temporarily unavailable, read"), { code: "EAGAIN" });
+		return buffer.write(text);
+	};
+	assert.equal(askYes("", { read: typed("y\n", 3) }), true, "typed after three empty reads");
+	assert.equal(askYes("", { read: typed("yes\n", 0) }), true);
+	assert.equal(askYes("", { read: typed("\n", 2) }), false, "Enter is no");
+	assert.equal(askYes("", { read: () => 0 }), false, "end of input is no");
+	assert.equal(askYes("", { read: () => { throw Object.assign(new Error("EIO"), { code: "EIO" }); } }), false);
+}
+
 // A run never pushes a default branch: main/master and the like, or the remote's own default.
 writePlan("branch: main\npush: yes");
 throwsCode(() => runRun(["approve", plan, "--yes"], human), "RUN_BRANCH_PROTECTED");
@@ -109,6 +123,15 @@ const { run } = quiet(() => runRun(["approve", plan, "--yes"], human));
 assert.equal(run.status, "active");
 assert.equal(run.branch, "feat/run-x");
 assert.equal(run.sessionId, agent, "bound to the agent session most recently active near the plan");
+// The window counts from when the plan was written: the agent that wrote it is idle until the user approves.
+{
+	const written = Date.now();
+	assert.equal(bindableSession(project, plan, { now: written + 3 * 3600_000 })?.sessionId, agent, "approved three hours after the plan was written");
+	const later = new Date(written + 2 * 3600_000);
+	utimesSync(plan, later, later);
+	assert.equal(bindableSession(project, plan, { now: written + 3 * 3600_000 }), null, "a plan written long after any agent was near it");
+	writePlan("branch: feat/run-x\npush: yes\nhours: 4"); // the approved text again, written now
+}
 assert.ok(Math.abs(Date.parse(run.expiresAt) - Date.now() - 4 * 3600_000) < 60_000);
 assert.ok(runStoreDir(project, { env }).startsWith(env.HELI_DATA_DIR), "kept in Heli's own data directory");
 const [grant] = listGrants(project, { activeOnly: true, env }).filter((item) => item.runId === run.runId);

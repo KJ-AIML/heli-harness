@@ -1155,8 +1155,12 @@ function parsePush(args) {
  * when the command leaves them to git's configuration; `wide` names an option that writes more than the branches listed
  * (`--tags`, `--all`, `--delete` ...). For a grant that allows pushes to some branches only: anything it cannot place on
  * a named branch is not covered.
+ * `plainText`: the command has no quotes, backslashes or backticks, so every word that looks like a redirection is one,
+ * and redirections are left out (`git push origin feat/x 2>&1 | tail`). Otherwise they stay in as refspecs, which match no
+ * branch: a quoted `">main:main"` is a refspec (the branch `>main` to `main`), the words keep no quotes, and a command
+ * that spells the same push twice is read once, so no part of a quoted command can tell one from a redirection.
  */
-export function gitPushDestinations(analysis) {
+export function gitPushDestinations(analysis, { plainText = false } = {}) {
 	const seen = new Map();
 	for (const segment of analysis.sequence ?? analysis.segments) {
 		const words = segment.rawTokens;
@@ -1165,7 +1169,8 @@ export function gitPushDestinations(analysis) {
 			let j = i + 1;
 			while (j < words.length && words[j].startsWith("-")) j += GIT_OPTIONS_WITH_VALUE.has(words[j].toLowerCase()) ? 2 : 1;
 			if (words[j]?.toLowerCase() !== "push") continue;
-			const push = parsePush(words.slice(j + 1));
+			const args = words.slice(j + 1);
+			const push = parsePush(plainText ? withoutRedirections(args) : args);
 			seen.set(JSON.stringify(push), push);
 		}
 	}
@@ -1683,7 +1688,7 @@ export function evaluateCommandRules(workspaceRoot, command, env = process.env, 
 		gitPush: remoteGitWrites.length > 0,
 		remoteGitWrite: remoteGitWrites[0] ?? null,
 		remoteGitWrites,
-		pushDestinations: remoteGitWrites.length ? gitPushDestinations(analysis) : [],
+		pushDestinations: remoteGitWrites.length ? gitPushDestinations(analysis, { plainText: !/["'`\\]/.test(command) }) : [],
 		hardDenies: matches.filter((match) => match.tier === "T6"),
 		approvals: matches.filter((match) => match.tier === "T5" && !approved.has(match.id)),
 		limitExceeded: null,

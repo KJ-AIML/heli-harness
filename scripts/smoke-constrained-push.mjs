@@ -79,6 +79,10 @@ for (const command of [
 	"git -C . push origin feat/run-x",
 	"npm test && git push origin feat/run-x",
 	"git push --dry-run origin main && git push origin feat/run-x",
+	// Redirections are not refspecs (they read as branches `2>&1`, `>`, `/tmp/push.log`, so every such push was refused).
+	"git push -u origin feat/run-x 2>&1 | tail -4",
+	"git push origin feat/run-x > /tmp/push.log 2>&1",
+	"git push origin feat/run-x >main:main", // bash writes the output to a file named main:main
 ]) {
 	assert.equal(verdict(command), "allow", command);
 }
@@ -97,6 +101,13 @@ for (const command of [
 	"git push --dry-run origin feat/run-x",
 	"gh pr merge 12 --squash",
 	"git subtree push --prefix dist origin feat/run-x",
+	"git push origin main 2>&1 | tail -4",
+	// Quoted or escaped, `>main:main` is a refspec (the branch `>main` pushed to main), and the words keep no quotes: with
+	// any quoting in the command, nothing is taken for a redirection.
+	"git push origin feat/run-x \">main:main\"",
+	"git push origin feat/run-x '>main:main'",
+	"git push origin feat/run-x \\>main:main",
+	"git push origin feat/run-x >main:main; git push origin \">main:main\"",
 ]) {
 	assert.equal(verdict(command), "REMOTE_PUSH_DENIED", command);
 }

@@ -19,6 +19,7 @@
  * `heli run done` or `heli run blocked "<what it needs>"`.
  */
 import { randomUUID } from "node:crypto";
+import { statSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { ensureDir, listFileNames, readJson, readText, writeJsonAtomic } from "./fs-atomic.mjs";
 import { fileSha256, issueGrant, revokeGrant } from "./grant.mjs";
@@ -34,7 +35,8 @@ export const MAX_RUN_CONTINUATIONS = 40;
 // Branches a run never pushes: the usual default branches (and the remote's own default, see approveRun).
 const PROTECTED_BRANCHES = new Set(["main", "master", "trunk", "develop", "production", "release"]);
 const ENVELOPE_KEYS = new Set(["branch", "push", "remote", "hours", "keep-going"]);
-// The agent session a run binds to at approval: the one most recently active near the plan, within this window.
+// The agent session a run binds to at approval: the one most recently active near the plan, seen at most this long
+// before the plan was written, or since.
 const BIND_WINDOW_MS = 30 * 60 * 1000;
 
 function error(code, message) {
@@ -117,7 +119,9 @@ export function currentRun(workspaceRoot, { runId = null, env = process.env } = 
 
 /**
  * The agent session the run keeps going: the active session most recently seen working where the plan is (its
- * worktree holds the plan, or the plan's folder holds it), within the last half hour. null when there is none.
+ * worktree holds the plan, or the plan's folder holds it), at most half an hour before the plan was last written, or
+ * since. The window counts from the plan, not from the approval: the agent that wrote it is idle while it waits for
+ * the user, however long that takes. null when there is none.
  */
 export function bindableSession(workspaceRoot, planPath, { now = Date.now() } = {}) {
 	const planDir = canonicalizePath(dirname(planPath));
@@ -126,8 +130,14 @@ export function bindableSession(workspaceRoot, planPath, { now = Date.now() } = 
 		const tree = canonicalizePath(worktree);
 		return planDir === tree || planDir.startsWith(`${tree}/`) || tree.startsWith(`${planDir}/`);
 	};
+	let writtenAt = now;
+	try {
+		writtenAt = Math.min(now, statSync(planPath).mtimeMs);
+	} catch {
+		/* no plan file: count from now */
+	}
 	return listActiveSessions(workspaceRoot)
-		.filter((session) => near(session.worktreePath) && now - Date.parse(session.lastSeenAt || 0) <= BIND_WINDOW_MS)
+		.filter((session) => near(session.worktreePath) && Date.parse(session.lastSeenAt || 0) >= writtenAt - BIND_WINDOW_MS)
 		.sort((a, b) => String(b.lastSeenAt).localeCompare(String(a.lastSeenAt)))[0] || null;
 }
 
