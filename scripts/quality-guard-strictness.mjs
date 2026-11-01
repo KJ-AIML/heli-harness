@@ -14,9 +14,15 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { scrubHeliProcessEnv } from "./lib/hermetic-env.mjs";
 
 const root = process.cwd();
 const results = { hardPass: 0, hardFail: 0, softGaps: [] };
+// The hooks run with a Heli home of their own, never the developer's ~/.heli: run from a checkout inside a linked
+// workspace, they opened sessions and wrote mutation leases there, a phantom writer that blocked the developer's agents.
+scrubHeliProcessEnv();
+const heliHome = mkdtempSync(join(tmpdir(), "heli-strict-home-"));
+const hermeticEnv = { ...process.env, HELI_CONFIG_DIR: join(heliHome, "config"), HELI_DATA_DIR: join(heliHome, "data") };
 
 function hard(label, fn) {
 	try {
@@ -41,6 +47,7 @@ function runHook(relScript, sample, cwd = root) {
 		cwd,
 		input: JSON.stringify(sample),
 		encoding: "utf8",
+		env: hermeticEnv,
 		stdio: ["pipe", "pipe", "pipe"],
 	});
 	let body = {};
@@ -546,7 +553,7 @@ function runHookEnv(relScript, sample, cwd, env) {
 		cwd,
 		input: JSON.stringify(sample),
 		encoding: "utf8",
-		env: { ...process.env, ...env },
+		env: { ...hermeticEnv, ...env },
 		stdio: ["pipe", "pipe", "pipe"],
 	});
 	let body = {};
@@ -685,7 +692,7 @@ gap(
 );
 
 // cleanup fixtures
-for (const d of [stuckDir, mismatchDir, cleanDir, corruptSchemaDir, corruptTaskDir, controlPlaneDir, bootstrapDir, tierDir]) {
+for (const d of [stuckDir, mismatchDir, cleanDir, corruptSchemaDir, corruptTaskDir, controlPlaneDir, bootstrapDir, tierDir, heliHome]) {
 	try { rmSync(d, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
