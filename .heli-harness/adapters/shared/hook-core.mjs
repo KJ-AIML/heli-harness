@@ -898,11 +898,13 @@ export function evaluatePreToolUse({
 	const requirements = [];
 	const resourceFlag = grantResourceFlag(ctx);
 	if (commandPolicy?.gitPush && !allowGitPushScoped(scope)) {
+		const remote = commandPolicy.remoteGitWrite || "git push";
+		const blocked = remote === "git push" ? "git push" : `${remote} (a remote git write, like git push)`;
 		requirements.push({
 			action: "git.push",
 			code: "REMOTE_PUSH_DENIED",
 			reason:
-				`Heli-Harness blocks git push without scoped authority. Ask the user to run \`heli grant issue --action git.push --scope once${resourceFlag}\` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_GIT_PUSH or YOLO.`,
+				`Heli-Harness blocks ${blocked} without scoped authority. Ask the user to run \`heli grant issue --action git.push --scope once${resourceFlag}\` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_GIT_PUSH or YOLO.`,
 		});
 	}
 	const namesEnvFile = (entry) => entry.normalized && namesSecretEnvFile(entry.normalized);

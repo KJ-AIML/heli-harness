@@ -5,6 +5,7 @@
 ### Security
 
 - An agent can no longer change the rules it runs under. In a linked project, agent writes to `.heli/safety/**` (the command rules the hooks read on every call), `.heli/policies/**`, `.heli/workspace.json` and `.heli/heli.lock`, and moving or removing `.heli` itself, are refused with `HELI_POLICY_PROTECTED` for file tools, shell commands and MCP writes, under YOLO too. Before, an agent could delete a project T5/T6 rule, or the binding, mid-session. Reading them is fine; `.heli/profiles` and `.heli/skills` stay agent-writable; an embedded workspace (the Heli source checkout dogfoods one) is unchanged.
+- Remote writes that are not spelled `git push` need approval too. `gh pr merge` and `glab mr merge` (which land a pull request on its base branch) and `git subtree push` now go through the push gate and the same `git.push` approval, with a reason that names the command. The shipped `command-rules.json` adds T5 rules for `gh release create`, `docker push`, `kubectl apply|delete` (not with `--dry-run=client|server`) and `terraform apply|destroy`; `heli update` merges them into existing projects. Pinned by `scripts/smoke-remote-writes.mjs`.
 - `heli governance set` is human-only like `heli grant issue`: the CLI needs an interactive terminal and the hooks refuse an agent-run one, since `observe` switches the live write-conflict gate off for every session. Both pinned by `scripts/smoke-policy-protection.mjs`.
 
 ### Fixed

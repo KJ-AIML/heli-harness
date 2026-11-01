@@ -712,6 +712,16 @@ function publishDryRun(rest) {
 	return dryRun;
 }
 
+/** `kubectl apply|delete --dry-run=client|server` (or the old bare `--dry-run`): the last word that sets it decides. */
+function kubectlDryRun(rest) {
+	let dryRun = false;
+	for (const word of withoutRedirections(rest)) {
+		if (word === "--dry-run" || word === "--dry-run=client" || word === "--dry-run=server") dryRun = true;
+		else if (word.startsWith("--dry-run=")) dryRun = false;
+	}
+	return dryRun;
+}
+
 /** `heli sync auto` / `heli sync e2e` with no on/off: prints the setting (lib/cli/cloud.mjs runSync). */
 function heliSyncReadOnly(rest) {
 	const words = withoutRedirections(rest).filter((word) => !word.startsWith("-"));
@@ -727,6 +737,8 @@ const READ_ONLY_FORMS = new Map([
 	["pnpm-publish", { words: "pnpm publish", readOnly: publishDryRun }],
 	["heli-cloud-sync", { words: "heli sync", readOnly: heliSyncReadOnly }],
 	["heli-mjs-cloud-sync", { words: "heli.mjs sync", readOnly: heliSyncReadOnly }],
+	["kubectl-apply", { words: "kubectl apply", readOnly: kubectlDryRun }],
+	["kubectl-delete", { words: "kubectl delete", readOnly: kubectlDryRun }],
 ]);
 
 /**
@@ -1069,6 +1081,19 @@ export function matchCommandRules(analysis, projectRules = []) {
 /** True when any segment runs `git ... push` (after git global options are removed), in any reading of the text. */
 export function commandRunsGitPush(analysis) {
 	return (analysis.sequence ?? analysis.segments).some((segment) => commandMatchesRuleTokens(segment.tokens, ["git", "push"]));
+}
+
+// Remote git writes the push gate (the `git.push` approval) covers: a push, and the forge commands that write the remote's
+// branches without one (a pull request merged by gh or glab lands on its base branch, often the default one).
+const REMOTE_GIT_WRITES = [["git", "push"], ["git", "subtree", "push"], ["gh", "pr", "merge"], ["glab", "mr", "merge"]];
+
+/** The first remote git write a command runs (`"git push"`, `"gh pr merge"`, ...), in any reading of the text, or null. */
+export function commandRemoteGitWrite(analysis) {
+	for (const segment of analysis.sequence ?? analysis.segments) {
+		const words = REMOTE_GIT_WRITES.find((form) => commandMatchesRuleTokens(segment.tokens, form));
+		if (words) return words.join(" ");
+	}
+	return null;
 }
 
 export function hardDenyReason(match) {
@@ -1547,7 +1572,9 @@ function limitExceededReason(limitExceeded) {
  * Evaluate a command against built-in + workspace rules.
  * @param {{ comments?: "posix"|"powershell"|null }} [options] `comments`: the shell that runs the command, when it is known;
  *   its comments are not commands (see analyzeCommand).
- * @returns {{ status: string, rulesPath: string|null, analysis: object, gitPush: boolean, hardDenies: object[], approvals: object[], limitExceeded: null|{ limit: string, max: number, message: string, reason: string } }}
+ * @returns {{ status: string, rulesPath: string|null, analysis: object, gitPush: boolean, remoteGitWrite: string|null, hardDenies: object[], approvals: object[], limitExceeded: null|{ limit: string, max: number, message: string, reason: string } }}
+ *   `gitPush`: the command writes a remote's git refs, `remoteGitWrite` says how (`"git push"`, `"gh pr merge"`, see
+ *   commandRemoteGitWrite); both need the `git.push` approval.
  *   `approvals` excludes T5 ids approved via HELI_ALLOW_COMMAND; T6 is never approvable.
  *   `limitExceeded` is set when the command is over the analysis budget: no rule was
  *   evaluated, and the caller must deny it with `limitExceeded.reason`.
@@ -1561,18 +1588,21 @@ export function evaluateCommandRules(workspaceRoot, command, env = process.env, 
 			rulesPath: loaded.rulesPath,
 			analysis,
 			gitPush: false,
+			remoteGitWrite: null,
 			hardDenies: [],
 			approvals: [],
 			limitExceeded: { ...analysis.limitExceeded, reason: limitExceededReason(analysis.limitExceeded) },
 		};
 	}
 	const matches = matchCommandRules(analysis, loaded.projectRules);
+	const remoteGitWrite = commandRemoteGitWrite(analysis);
 	const approved = new Set(String(env.HELI_ALLOW_COMMAND || "").split(",").map((value) => value.trim()).filter(Boolean));
 	return {
 		status: loaded.status,
 		rulesPath: loaded.rulesPath,
 		analysis,
-		gitPush: commandRunsGitPush(analysis),
+		gitPush: remoteGitWrite !== null,
+		remoteGitWrite,
 		hardDenies: matches.filter((match) => match.tier === "T6"),
 		approvals: matches.filter((match) => match.tier === "T5" && !approved.has(match.id)),
 		limitExceeded: null,
