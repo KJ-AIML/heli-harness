@@ -1,174 +1,81 @@
 # Heli-Harness
 
-Heli-Harness provides the embedded governance protocol and compatibility assets for Heli v0.11.2. The current architecture is a portable governance kernel with explicit project binding and execution-local/resource-scoped authority. In a linked project, `.heli/workspace.json`, `.heli/heli.lock`, trusted user/global config, and CLI-resolved execution state take precedence over legacy embedded workspace state. In a deliberately embedded/hermetic install, this file remains the local protocol entry point.
+Heli-Harness v0.11.2 is the governance protocol for coding agents in this workspace. Heli's hooks enforce a small set of hard rules; the rest of this file is how to work well under them. In a **linked** project the binding lives in `.heli/` and live authority (sessions, grants, resource authority, YOLO) is execution-local. An **embedded** workspace keeps everything in `.heli-harness/`; there, also read `HARNESS-embedded.md`.
 
-## v0.11 layout and authority
+## Start
 
-- First run `heli status` (and `heli doctor` when needed) to determine whether the project is **linked** or **embedded compatibility**.
-- In linked mode, start from the linked project root. Project identity/config lives under `.heli/`; live grants, sessions, resource authority, credentials, capability observations, and process state are execution-local and must not be inferred from committed project files.
-- In embedded compatibility mode, `.heli-harness/` contains the self-contained distribution and operational state.
-- Resource/worktree authority is the conflicting-write boundary in linked mode. A task name is optional work-record/provenance, not the root authorization key.
-- S0-S3 are workflow/risk summaries, not permission levels.
-- Temporary approval should use scoped grants; T6 hard-deny behavior remains non-grantable by normal temporary approval.
-- Evidence may be portable. Authorization does not become portable because a repo, bundle, or workspace ID is copied.
+- Run `heli status` when Heli state matters for the task: layout, target repo, YOLO, other sessions.
+- Identify the target repo before editing. In a workspace with several repos, do not guess.
+- Read the target's repo profile (`.heli/profiles/` or `.heli-harness/profiles/`) and repo-local `AGENTS.md`, `CLAUDE.md`, `README*`, package and test configuration where relevant. Do not assume branch, test, release, deploy or ownership policy they do not state.
+- Preserve dirty user work: never revert, overwrite, move or delete changes you did not make unless the user asks.
 
-## Operating Model
+## What the hooks enforce
 
-- The agent starts from the linked project root. For embedded compatibility installs, start from the workspace root that contains `.heli-harness/`.
-- The agent must identify the target repo before editing.
-- In multi-repo workspaces, the agent should read `.heli-harness/workspace/index.json` and select a target repo before write workflows begin.
-- The agent should treat `.heli-harness/workspace/target.json` as the active target record when it exists.
-- The agent must read the relevant profile in `.heli-harness/profiles/` when one exists.
-- If no profile exists yet for the identified target repo, the agent should create one from `.heli-harness/templates/repo-profile.md` before S2/S3 work, so branch policy, test commands, and other project-specific facts become durable and discoverable instead of verbal-only for this session.
-- A task that naturally breaks into 3+ discrete steps must have those steps recorded in `.heli-harness/state/plan.md` (from `.heli-harness/templates/plan.md`) before starting, with `Files` and `Verify` filled in per step. Immediately after a step's verification passes — not batched at the end — fill that step's `Evidence` (command + result, or commit SHA) and set `Status: complete` before starting the next step. On a failed verification, increment that step's `Attempts` and record what failed in `Evidence`, mirroring the Done Criteria rule below at step granularity. `current-task.md`'s `Plan:` field should point at `.heli-harness/state/plan.md` when one exists, or read `n/a` otherwise.
-- **Plan/task freshness (mandatory):** same-turn Evidence after verify; never leave `Next smallest action` or plan Status lagging after a blocking discovery (e.g. "await auth" after auth was granted, or "rebind pin" after the action is proven unsupported). When strategy shifts, update plan `Active strategy` / `Supersedes` so old eras do not look current.
-- **Evidence purity:** plan/task Evidence holds measured results only. Do not record product-defect hypotheses until `verify-premise` confirms them.
-- **Resume card + gate packet:** keep the Resume card in `current-task.md` current after every verify or blocker. For multi-gate S2/S3 ops (smoke, launch, staging), use `.heli-harness/templates/ops-gate-packet.md` and fail closed on typed blockers.
-- **Linked vs embedded compatibility:** linked v0.11 projects use execution-local resource authority and do not require a named task for ordinary reversible work. Embedded compatibility installs use the older concurrent/legacy task/session layout; the `concurrent-upgrade` skill applies only to that compatibility path.
-- `current-task.md`'s `Step count` field is a self-reported number of discrete steps in the current task (0 if the task isn't naturally step-shaped). Set it honestly before starting, not as a formality — it is what lets session-start context warn when `Step count` is 3+ but `Plan` is still `n/a`, catching the exact case where a task obviously needed a plan.md and didn't get one. This is a warning, not a blocking gate: it surfaces the gap instead of leaving it silent, but it does not stop you from proceeding.
-- The agent must read policy overlays in `.heli-harness/policies/` when they exist.
-- The agent must read safety overlays in `.heli-harness/safety/` when they exist.
-- The agent must also read repo-local `AGENTS.md`, `CLAUDE.md`, `README*`, package files, build files, and test configuration where relevant.
-- Create or update a durable task/work record when work spans sessions, needs handoff, coordinates multiple actors, carries significant verification obligations, or requires durable diagnosis/evidence. Ordinary reversible linked-mode edits do not require a named task merely to become authorized. Embedded compatibility mode keeps its existing task-state paths.
-- The agent must preserve dirty user work. Never revert, overwrite, move, or delete user changes unless explicitly asked.
-- The agent must not assume branch policy, test commands, generated-file policy, release process, deployment policy, or ownership unless a repo profile or repo docs say so.
-- Repo profiles remain descriptive. Team rules belong in policy overlays, and command-risk guidance belongs in safety overlays.
-- Repo profiles should classify weak existing patterns as tech debt when appropriate, include evidence paths for meaningful claims, and record safer alternatives for future work.
-- Write workflows in multi-repo workspaces should not proceed silently when target identity is ambiguous.
-- In linked mode, inspect current resource authority through Heli rather than relying on advisory lock templates. In embedded compatibility mode, advisory lock files may still provide coordination hints.
-- On Claude Code and Codex native plugin installs, `PreToolUse` blocks `Edit`/`Write`/`apply_patch` calls when `.heli-harness/state/current-task.md` shows 2+ failed attempts on an incomplete task, or a target repo that doesn't match `.heli-harness/workspace/target.json` — update the state file (or run `heli target set <repo>`; `target.json` itself is protected Heli state) to resolve it before continuing. This closes the gap where a session in one CLI carries over stale or mismatched task state to a session in a different CLI without either agent noticing.
-- Embedded advisory lock templates are warnings, not distributed locks. Linked resource authority is a separate modeled governance state and must be evaluated through the canonical authority engine.
-- The agent must not run expensive loops repeatedly. Use the smallest useful check first, then widen only when evidence requires it.
-- After two failed **implementation/fix** attempts, stop coding and write a diagnosis with evidence, likely causes, and the next smallest action. Shell quoting, path, host-syntax, or module-resolution failures are **command friction** — track them separately and do not burn the two-strike engineering stop on them.
+- **Hard denies (T6):** recursive forced deletes, `git reset --hard`, destructive `git clean`, agent-run approval commands (`heli grant issue`, `heli yolo on`, `heli governance set`, takeovers), and writes to Heli's own state or to a linked project's governance files (`.heli/safety`, `.heli/policies`, the binding). Nothing lifts them.
+- **Approvals from the user's terminal:** remote git writes (`git push`, `gh pr merge`, `git subtree push`), `.env`-style secret writes, and T5 rules (publish, tag, release, deploy, live infrastructure). Read-only and `--dry-run` forms need none.
+- **Live write conflicts** with another session on the same paths.
+- T0–T4 are guidance, not runtime checks. Heli is a guardrail, not a sandbox.
 
-## Risk Tiers
+## When a call is denied
 
-- `S0`: Tiny direct change. Use the smallest relevant check first.
-- `S1`: Normal local fix or feature. Use focused verification and preserve scope.
-- `S2`: Cross-file, API, data, security, concurrency, user-flow, or production-impacting work. Requires plan, impact analysis, verification evidence, and rollback notes where relevant.
-- `S3`: One-way-door or high-blast-radius action such as production deploy, destructive migration, force push, bypassing protection, credential rotation, or irreversible data change. Requires explicit user approval and rollback or mitigation notes.
+Every deny ends with `Heli recovery: …` and `Next action: …`.
 
-## Evidence-Governed Diagnosis
+- `SELF_RECOVERABLE`: take the next action and continue. Do not stop to ask.
+- `HUMAN_REQUIRED`: do not work around it. Ask the user once, and keep working on the parts of the task that do not need the decision.
+- `HARD_DENY`: do not retry it or work around it. Continue another way, or tell the user why the task needs it.
 
-Heli vNext uses a lightweight claim → evidence → transition record when a
-premise is disputed, a failure is recorded, a subsystem changes, an expensive
-retry is requested, or a material completion claim is made. In concurrent mode,
-the machine-readable current state is
-`.heli-harness/tasks/<task-id>/diagnosis.json`; `events.jsonl` preserves the
-append-only history. Legacy workspaces use `.heli-harness/state/diagnosis.json`.
+Never retry an unchanged denied action.
 
-The closest proven boundary is a fact, not a causal story. A new normalized
-failure class must re-enter `verify-premise`/`debug`/`impact`/`incident` routing;
-the old fix-loop context cannot continue silently. Contradicting evidence marks
-the active hypothesis `CONTRADICTED`. Same-class implementation failures use
-the diagnosis-specific attempt counter and trigger re-evaluation after two;
-different classes do not share that counter.
+## Keep going
 
-Repeated costly work must carry structured `heli_action` metadata or pass
-`heli diagnosis gate`. The gate requires a relevant material change, new
-discriminating evidence after cheaper checks, a bounded transient policy, or
-explicit human override. S0/S1 work remains autonomous; S2 material work may
-continue with an independent-review requirement; S3 and production mutation
-remain human-controlled. YOLO does not bypass ownership, diagnosis reroute,
-retry, S3, or production gates.
+- A deny or a failing check blocks one step, not the task. End your turn when the work is done, or when every remaining step needs the user, not before.
+- **Two strikes:** when the same check fails twice after real fixes and you have no new information, stop repeating that fix. Write a short diagnosis (what failed, likely causes, the next smallest action) and continue with it. Shell quoting, path, syntax or module-resolution errors are command friction, not strikes.
+- Do not repeat an expensive or costly action without a material change or new evidence.
+- Use the smallest useful check first; widen only when the evidence asks for it.
 
-Runtime enforcement is host-specific. Supported PreToolUse/tool-call adapters
-call the shared evaluator and are covered by smoke/live evidence. Cursor,
-generic, AXGA without a proven hook contract, and other advisory hosts receive
-the protocol as context only; Markdown presence is never described as
-mechanical enforcement.
+## Risk tiers
 
-## Required Task State
+Workflow summaries, not permission levels.
 
-Before non-trivial edits, update `.heli-harness/state/current-task.md` with:
+- `S0`: tiny direct change. The smallest relevant check.
+- `S1`: normal fix or feature. Focused verification, scope preserved.
+- `S2`: cross-file, API, data, security, concurrency, user-flow or production-impacting work. A short plan, an impact check, verification evidence, and rollback notes where relevant.
+- `S3`: one-way door (production deploy, destructive migration, force push, bypassing protection, credential rotation, irreversible data change). Explicit user approval first, with rollback or mitigation notes.
 
-- target repo
-- task
-- mode
-- risk tier
-- plan
-- step count
-- files expected to change
-- dirty files observed
-- planned verification
-- relevant skills consulted
-- current status
-- failed attempts count
-- command friction count (optional but recommended)
-- next smallest action
-- resume card (kept current)
+## Done
 
-## Done Criteria
+A task is done when the repo's verification command (or the smallest relevant check) ran and passed, only the files you meant to change changed, and no new errors, warnings or test failures appeared. Say what you did not verify. "Most tests pass" or "it looks right" is not done.
 
-A task is done when:
+## Durable records
 
-- The verification command from the repo profile (or the smallest relevant check) ran and passed.
-- `git status` shows only the files listed in "files expected to change" were modified. No unintended files changed.
-- No new errors, warnings, or test failures were introduced.
-- Task state in `current-task.md` is updated: status set to `complete`, failed attempts count recorded.
+A work record is optional. Use `heli task` when work spans sessions, needs a handoff, coordinates several agents, or carries significant verification or diagnosis. When a premise is disputed, a failure recurs, the responsible subsystem changes or a costly retry is requested, record claim → evidence → transition with `heli diagnosis` (the `evidence-gates` skill). S3 and production mutations stay human-controlled; YOLO lifts neither diagnosis nor retry gates.
 
-If verification fails:
+## Skills
 
-1. Increment the failed attempts count in `current-task.md`.
-2. Record what failed and why in the state file.
-3. Route to `skills/fix-loop` for disciplined retry, or stop and write a diagnosis after two failed attempts.
+Heli skills hold the detailed workflows. When a trigger applies, load the skill (the host skill tool, or `skills/<name>/SKILL.md`). Read each skill once per session, and again only if it changed or your context was compacted. A skill never grants authority.
 
-Do not mark a task complete because "most tests pass" or "it looks right." Run the command, read the output, confirm with evidence.
+- `using-heli-skills` / `flow`: choosing the workflow when it is unclear.
+- `engineering`: risk tier and done criteria.
+- `verify-premise`: before fixing a claimed bug or acting on a disputed premise.
+- `impact`: before edits that may affect callers, data, APIs, UI flows or operations.
+- `debug`: a confirmed but unexplained failure. `fix-loop`: failed tests or repeated fix attempts.
+- `audit`: read-only verification of a diff, PR or claimed fix. `test-coverage` / `test-validation`: missing tests, verification commands.
+- `heli-governance` / `heli-target`: target and authority questions. `heli-assistant`: what to do next with Heli.
+- `branch`, `release`, `deps`, `incident`, `gh-write`: only when their operation applies.
+- `cloud-sync`: before any `heli auth|ws|push|pull|sync|init` command.
 
-## Skill Routing
+## Cloud sync boundary
 
-The canonical skill library lives under `.heli-harness/skills/`. Host plugins that support native skills (Codex, Claude, and other skill-capable plugins) ship a **full copy** of that library under their plugin `skills/` directory. Workspace install and host plugin activation remain separate: `heli install` places files on disk; host-native skill inventory requires the host plugin to be installed/loaded.
+Cloud sync (`heli auth|ws|push|pull|sync|init`) is optional and user-owned. Local-only is the default, and no governance path needs the network. The agent must:
 
-SessionStart injects a short **skill-usage bootstrap** (plus separate task/session governance context). The meta skill `using-heli-skills` defines the full selection protocol.
+- never run `heli auth login`, `heli ws create|link`, `heli push`, `heli pull`, `heli sync` or `heli init` unless the user asked for that sync action (`heli push`/`heli sync` upload workspace context: T5 egress);
+- never create, edit or delete `state/sync.json` or `~/.heli/credentials.json` by hand;
+- never turn auto-sync (`heli sync auto`, `heli sync e2e`) on or off, or reconfigure it, on its own initiative;
+- treat auto-push output after `heli task complete` (`Pushed vN ...` / `sync.auto: push skipped ...`) as informational: a skipped auto-push is not a failure and needs no retry;
+- report a blocked push (secret findings) to the user; only the user decides on `--allow-secrets`.
 
-When a skill matches the task:
+The user opts out with `heli ws unlink` (server copies remain until `heli ws delete`).
 
-1. Prefer the host skill tool when the Heli plugin is loaded and the skill is in inventory.
-2. Otherwise read `.heli-harness/skills/<name>/SKILL.md` (and linked `references/`) with your file tools — still mandatory when the trigger applies.
+## Adapter boundary
 
-If a trigger condition applies, this is not optional or discretionary:
-
-- Use `using-heli-skills` when starting work or when skill selection is unclear.
-- Use `flow` for ambiguous task routing.
-- Use `engineering` for risk tiering and done criteria.
-- Use `verify-premise` before fixing a claimed bug or acting on a disputed premise.
-- Use `impact` before edits that may affect callers, data, APIs, UI flows, or operations — including destructive multi-path cleanup.
-- Use `concurrent-upgrade` when parallel agents share a legacy workspace or after update still shows mode legacy.
-- Use `debug` to reproduce, isolate, and explain confirmed bugs.
-- Use `fix-loop` after failed tests or repeated fix attempts.
-- Use `audit` for read-only verification of a diff, PR, or claimed fix.
-- Use `test-coverage` to identify missing or weak tests.
-- Use `test-validation` to validate repo profile commands, classify failures, and confirm safe non-mutating verification.
-- Use `heli-governance` / `heli-target` for parent-workspace and target discipline.
-- Use `branch`, `release`, `deps`, `incident`, and `gh-write` only when their scoped operation applies.
-- Use `cloud-sync` before running any `heli auth|ws|push|pull|sync|init` command or when sync state (`state/sync.json`, auto-push output) appears in a session.
-
-Record which skills actually applied (or "none applied" if genuinely none did) in `current-task.md`'s `Relevant skills consulted` field — that field existing is what makes a skipped skill a visible blank instead of a silent omission.
-
-### Red flags — these mean stop and check for a matching skill
-
-| Thought | Reality |
-|---------|---------|
-| "This is a simple question, I don't need the skill" | Simple tasks are exactly where this discipline drifts first. Check anyway. |
-| "I'll just fix this one thing directly" | That is what `fix-loop` / `debug` are for once you're past a first attempt. |
-| "There's no Skill-tool entry for this, so it must not apply here" | Read the skill file; it still applies. Host plugin activation may be missing. |
-| "I already know what this skill says" | Skills evolve. Read the current body instead of relying on memory of it. |
-| "This will slow me down" | An unaudited diff, an unverified fix, or a skipped impact check costs more later than reading one file now. |
-
-## Cloud Sync Boundary
-
-Cloud sync (`heli auth|ws|push|pull|sync|init`) is optional and user-owned. Local-only is the default: with no login and no linked workspace, nothing ever leaves the machine, and no governance path requires the network.
-
-The agent must:
-
-- Never run `heli auth login`, `heli ws create|link`, `heli push`, `heli pull`, `heli sync`, or `heli init` unless the user explicitly asked for that sync action. `heli push`/`heli sync` upload workspace context (profiles, policies, task history) to a server — treat as T5 egress; command-tier rules enforce this where hooks are live.
-- Never create, edit, or delete `state/sync.json` or `~/.heli/credentials.json` by hand — they are machine-local control-plane state, owned by the CLI.
-- Never disable, enable, or reconfigure auto-sync (`heli sync auto`, `heli sync e2e`) on its own initiative.
-- Treat auto-push output after `heli task complete` (`Pushed vN ...` / `sync.auto: push skipped ...`) as informational — a skipped auto-push is not a task failure and needs no retry.
-- Surface, not bypass, a blocked push (secret findings): report the findings to the user; only the user decides on `--allow-secrets`.
-
-The user opts out at any time with `heli ws unlink` (returns the workspace to local-only; server copies remain until `heli ws delete`).
-
-## Adapter Boundary
-
-Tool-specific setup lives only in `.heli-harness/adapters/`. Core harness protocols must say "the agent must", not "Codex should" or "Claude should".
+Tool-specific setup lives only in `.heli-harness/adapters/`. Core protocols say "the agent must", not "Codex should" or "Claude should".

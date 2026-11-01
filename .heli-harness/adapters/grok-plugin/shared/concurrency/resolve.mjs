@@ -1,7 +1,8 @@
 /**
  * Shared execution-context resolver used by all runtime adapters.
  */
-import { isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { pathExists, readJson, readText } from "./fs-atomic.mjs";
 import {
 	findWorkspaceRoot,
@@ -603,13 +604,38 @@ export function evaluateOwnershipGate(ctx, {
 	return { deny: false, ok: true };
 }
 
+// The protocol's core for a linked session, inline: a linked project has no `.heli-harness/HARNESS.md` of its own.
+const LINKED_SESSION_RULES =
+	"A deny ends with `Heli recovery:`: clear a SELF_RECOVERABLE block yourself and continue; for HUMAN_REQUIRED ask the user once and keep working on what does not need it; never work around a HARD_DENY. End your turn only when the work is done or every remaining step needs the user. When the same check fails twice after real fixes with no new information, write a short diagnosis and change approach.";
+
+let packagedHarness;
+/** The HARNESS.md of the Heli package this module runs from (the folder that holds it and `adapters/`), or null. */
+function packagedHarnessPath() {
+	if (packagedHarness !== undefined) return packagedHarness;
+	packagedHarness = null;
+	let dir = dirname(fileURLToPath(import.meta.url));
+	for (let depth = 0; depth < 6; depth += 1) {
+		if (pathExists(join(dir, "HARNESS.md")) && pathExists(join(dir, "adapters"))) {
+			packagedHarness = join(dir, "HARNESS.md");
+			break;
+		}
+		const parent = dirname(dir);
+		if (parent === dir) break;
+		dir = parent;
+	}
+	return packagedHarness;
+}
+
 /**
  * Build compact SessionStart context for concurrent or legacy mode.
  */
 export function buildConcurrentSessionContext(ctx, { env = process.env } = {}) {
+	const linked = Boolean(ctx.workspaceRoot) && ctx.concurrentMode && isLinkedWorkspace(ctx.workspaceRoot);
 	const lines = [
 		"Heli-Harness plugin context:",
-		"Read .heli-harness/HARNESS.md before substantive work.",
+		linked
+			? `Heli rules: ${LINKED_SESSION_RULES} Full protocol: ${packagedHarnessPath() || "HARNESS.md in the installed Heli package"}.`
+			: "Read .heli-harness/HARNESS.md before substantive work.",
 		"Instruction files are not a sandbox; plugin hooks are guardrails only.",
 	];
 

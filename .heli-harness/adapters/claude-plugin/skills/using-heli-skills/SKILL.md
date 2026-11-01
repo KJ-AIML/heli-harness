@@ -66,7 +66,7 @@ These are workflow/risk summaries, not permission levels.
 2. Resolve linked vs embedded layout when Heli state matters.
 3. Identify the workflow/risk profile.
 4. Check active escalation triggers.
-5. Read the current body of each selected specialist skill.
+5. Read the current body of each selected specialist skill, once per session (again only if it changed or the context was compacted).
 6. Load only relevant skill/reference material.
 7. Preserve user intent, trusted policy, authority, grants, and safety boundaries.
 8. Do not let skill selection itself mutate authority identity.

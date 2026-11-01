@@ -105,7 +105,7 @@ export function buildSkillUsageBootstrap() {
 		"Heli skill usage:",
 		"Heli skills are mandatory workflow resources when they match the task — not optional docs.",
 		"Before substantive action, check for a relevant Heli skill (host skill inventory when the plugin is loaded, or .heli-harness/skills/<name>/SKILL.md).",
-		"Load only matching skills; read the current skill body; do not invent skills; do not load every skill.",
+		"Load only matching skills; read each one's current body once per session (again only if it changed or the context was compacted); do not invent skills; do not load every skill.",
 		"Process/workflow skills outrank implementation detail. Explicitly requested skills must be loaded.",
 		"User instructions and Heli safety/ownership rules remain authoritative. Skill use does not change task, session, worktree, or lease identity.",
 		"Subagents on a tightly scoped task should not restart the full controller skill stack.",
