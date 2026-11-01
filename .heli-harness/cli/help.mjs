@@ -124,10 +124,10 @@ const COMMANDS = {
 		},
 	},
 	yolo: {
-		usage: "heli yolo <on|off|status> [path] [--hours N]",
-		summary: "Manage the local reduced-protection switch. YOLO never bypasses writer/resource ownership.",
+		usage: "heli yolo <on|off|status> [path] [--hours N | --no-expiry]",
+		summary: "Manage the local reduced-protection switch (expires after 8 hours unless --hours or --no-expiry). YOLO never bypasses writer/resource ownership.",
 		subcommands: {
-			on: "heli yolo on [path] [--hours N]",
+			on: "heli yolo on [path] [--hours N | --no-expiry]",
 			off: "heli yolo off [path]",
 			status: "heli yolo status [path]",
 		},

@@ -5,6 +5,10 @@ import { assertHumanTerminal } from "./human-gate.mjs";
 import { findWorkspaceRoot, pathsFor } from "../adapters/shared/concurrency/paths.mjs";
 
 const YOLO_REL = join(".heli-harness", "state", "yolo.json");
+// `heli yolo on` without --hours: long enough for a working session, short enough that a forgotten switch does not leave
+// the workspace unguarded for good. `--no-expiry` keeps it on until `heli yolo off`.
+export const DEFAULT_YOLO_HOURS = 8;
+const LIFTS = "the push gate, .env writes, T5 approvals and stuck-task gates (T6 hard denies, Heli's self-protection, the project's governance files and live write conflicts still apply)";
 
 function yoloPath(cwd) {
 	const root = findWorkspaceRoot(cwd);
@@ -29,7 +33,8 @@ function readYolo(cwd) {
 	}
 }
 
-export function yoloOn(cwd, { hours } = {}) {
+/** @param {{ hours?: number|null }} [options] `hours`: how long it stays on; `null` for no expiry; default DEFAULT_YOLO_HOURS. */
+export function yoloOn(cwd, { hours = DEFAULT_YOLO_HOURS } = {}) {
 	const path = yoloPath(cwd);
 	const linked = path !== join(cwd, YOLO_REL);
 	if (!linked && !existsSync(join(cwd, ".heli-harness", "HARNESS.md"))) {
@@ -40,9 +45,9 @@ export function yoloOn(cwd, { hours } = {}) {
 		enabled: true,
 		enabledAt: new Date().toISOString(),
 		enabledBy: "heli yolo on",
-		note: "Opt-in unguarded mode: Heli PreToolUse skips git-push/.env/stuck-task gates. Not a sandbox. Disable with: heli yolo off",
+		note: `Opt-in unguarded mode: Heli PreToolUse lifts ${LIFTS}. Not a sandbox. Disable with: heli yolo off`,
 	};
-	if (hours && Number(hours) > 0) {
+	if (hours !== null && Number(hours) > 0) {
 		payload.expiresAt = new Date(Date.now() + Number(hours) * 3600_000).toISOString();
 	}
 	writeFileSync(yoloPath(cwd), `${JSON.stringify(payload, null, 2)}\n`, "utf8");
@@ -73,17 +78,19 @@ export function yoloStatus(cwd) {
 }
 
 /**
- * CLI: heli yolo on|off|status [path] [--hours N]
+ * CLI: heli yolo on|off|status [path] [--hours N | --no-expiry]
  * @param {{ terminal?: { stdin: boolean, stdout: boolean } }} [options]
  *   terminal: test seam only; the CLI entry never passes it, so the real TTY state decides.
  */
 export function runYolo(args, { terminal } = {}) {
 	const sub = (args[0] || "status").toLowerCase();
-	let hours;
+	let hours = DEFAULT_YOLO_HOURS;
 	const rest = [];
 	for (let i = 1; i < args.length; i++) {
 		if (args[i] === "--hours" && args[i + 1]) {
 			hours = Number(args[++i]);
+		} else if (args[i] === "--no-expiry") {
+			hours = null;
 		} else {
 			rest.push(args[i]);
 		}
@@ -95,8 +102,8 @@ export function runYolo(args, { terminal } = {}) {
 		const data = yoloOn(cwd, { hours });
 		console.log(`Heli YOLO ON for ${cwd}`);
 		console.log(`  file: ${yoloPath(cwd)}`);
-		if (data.expiresAt) console.log(`  expires: ${data.expiresAt}`);
-		console.log("  PreToolUse will skip git-push / .env / stuck-task gates until you run: heli yolo off");
+		console.log(data.expiresAt ? `  expires: ${data.expiresAt} (--hours N to change, --no-expiry to keep it on)` : "  expires: never (--no-expiry): it stays on until heli yolo off");
+		console.log(`  PreToolUse lifts ${LIFTS} until it expires or you run: heli yolo off`);
 		console.log("  Shell alternative: set HELI_YOLO=1 for this process only.");
 		return;
 	}
@@ -120,6 +127,6 @@ export function runYolo(args, { terminal } = {}) {
 		return;
 	}
 
-	console.error("Usage: heli yolo <on|off|status> [path] [--hours N]");
+	console.error("Usage: heli yolo <on|off|status> [path] [--hours N | --no-expiry]");
 	process.exit(1);
 }

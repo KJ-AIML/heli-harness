@@ -30,7 +30,7 @@ import {
 	findActiveWriteLeaseForWorktree,
 } from "./lease.mjs";
 import { effectiveSessionAuthority } from "./authority.mjs";
-import { resolveYolo } from "./yolo-scope.mjs";
+import { resolveYolo, yoloSessionLine } from "./yolo-scope.mjs";
 import { readDiagnosis } from "./diagnosis.mjs";
 import { isLinkedWorkspace, readProjectBinding } from "./project-binding.mjs";
 import { classifyToolPaths } from "./protected-paths.mjs";
@@ -635,6 +635,8 @@ export function buildConcurrentSessionContext(ctx, { env = process.env } = {}) {
 		lines.push(`- Resource: ${ctx.worktreeRoot || "n/a"}`);
 		lines.push(`- Resource authority: ${active ? (active.sessionId === ctx.sessionId ? `held by this session (generation ${active.generation || 1}, revision ${active.revision || 1})` : `held by session ${active.sessionId}`) : authority?.invalid ? "malformed (writes fail closed)" : "available; first guarded mutation acquires it conflict-safely"}`);
 		lines.push("- Project binding lives under .heli/; grants, sessions, live authority, and capability observations remain execution-local.");
+		const yolo = yoloSessionLine({ workspaceRoot: ctx.workspaceRoot, cwd: ctx.worktreeRoot || ctx.workspaceRoot, taskId: ctx.taskId, sessionId: ctx.sessionId, env, legacyMode: false });
+		if (yolo) lines.push("", yolo);
 		if (!ctx.taskId && ctx.worktreeRoot) {
 			const continuation = continuationForWorktree(ctx.workspaceRoot, ctx.worktreeRoot, { env });
 			if (continuation) {
