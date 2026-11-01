@@ -1,8 +1,8 @@
 /**
- * Scoped grants live outside project-controlled files.
- *
- * Every grant is bound to the local execution identity. A committed workspace
- * id alone never activates a grant in another checkout or machine.
+ * Scoped grants live outside project-controlled files, in the machine-local Heli
+ * data directory: a committed workspace id never activates a grant on another
+ * machine. A grant is usable from any checkout of its workspace on this machine
+ * unless `executionId` pins it to one.
  */
 import { join } from "node:path";
 import {

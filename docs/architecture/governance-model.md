@@ -125,19 +125,19 @@ The governed agent cannot change the rules it runs under either. In a linked pro
 
 ## Scoped grants
 
-A grant carries governance-relevant scope such as:
+A grant carries governance-relevant scope:
 
 - grant ID;
-- issuer/approval provenance;
-- actor/subject;
-- action selector;
-- resource selector;
-- execution scope;
-- optional host-session binding;
-- created/expiry time;
-- use count/end condition;
-- revocation state;
-- delegation ceiling where applicable.
+- issuer (`local-user`: the human at the terminal that ran `heli grant issue`);
+- action selector (`git.push`, `env.write`, `command.approval.<rule-id>`; a trailing `*` matches a family);
+- resource selector (a worktree, or `workspace` for every resource of the workspace);
+- optional execution scope (`--execution` pins one checkout; by default any checkout of the workspace on this machine);
+- optional host-session binding (`--scope session`);
+- created/expiry time (`--minutes`; `--scope time` defaults to 60 minutes);
+- end condition: one use (`--scope once`) or reusable until expiry or revocation;
+- revocation state.
+
+The trusted-policy ceiling (`grantableActions`) limits which actions can be granted at all, and is checked again whenever a grant is used. Delegation (a grant that issues grants) and N-use counts are not implemented.
 
 Typical UX:
 

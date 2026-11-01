@@ -6,6 +6,8 @@
 
 Risk tiers summarize workflow impact; they are not authority levels. Actual permission depends on trusted policy, scoped grant when needed, current resource authority, and enforcement/evidence coverage.
 
+**What the hooks enforce:** T6 rules (hard deny) and T5 rules (approval), plus the built-in push gate and `.env` gate. T0–T4 below are guidance for agents and reviewers, not runtime checks: a T3 or T4 entry in `command-rules.json` (and its `defaultTierGuidance`) is not enforced. Give a rule tier T5 if it must wait for approval.
+
 ## Built-in hard-deny floor
 
 The kernel ships non-removable rules that apply even when this workspace's `command-rules.json` is empty. A project rule that reuses a built-in id is ignored, so a built-in can be neither removed nor weakened. Every rule is evaluated: any T6 match is a hard deny that scoped grants, YOLO and `HELI_ALLOW_COMMAND` cannot override, and each matched T5 rule needs its own approval.
@@ -50,7 +52,7 @@ Read-only forms of the shipped T5 release rules are not release actions and need
 ## T4 - Network, API, or cost-bearing actions
 
 - Examples: billable API calls, remote downloads, hosted test runs
-- Default guidance: require the applicable scoped approval/policy evidence
+- Default guidance: follow the applicable policy evidence; not enforced at runtime (use a T5 rule for anything that must wait for approval)
 
 ## T5 - Git, release, or deploy actions
 

@@ -8,6 +8,10 @@
 - Remote writes that are not spelled `git push` need approval too. `gh pr merge` and `glab mr merge` (which land a pull request on its base branch) and `git subtree push` now go through the push gate and the same `git.push` approval, with a reason that names the command. The shipped `command-rules.json` adds T5 rules for `gh release create`, `docker push`, `kubectl apply|delete` (not with `--dry-run=client|server`) and `terraform apply|destroy`; `heli update` merges them into existing projects. Pinned by `scripts/smoke-remote-writes.mjs`.
 - `heli governance set` is human-only like `heli grant issue`: the CLI needs an interactive terminal and the hooks refuse an agent-run one, since `observe` switches the live write-conflict gate off for every session. Both pinned by `scripts/smoke-policy-protection.mjs`.
 
+### Documentation
+
+- Docs now describe what the code does: `command-tiers.md` says the hooks enforce T5/T6 rules (plus the push and `.env` gates) and that T0–T4 are guidance only (a T3/T4 entry in `command-rules.json` is not enforced); the governance model lists the grant fields that exist (issuer, action, resource, optional execution/session/time scope, once or reusable, revocation) and says delegation and N-use counts are not implemented; the README and `grant.mjs` no longer say every grant is bound to one execution (any checkout on the machine unless `--execution` pins one).
+
 ### Fixed
 
 - YOLO ends on its own, and sessions say when it is on. `heli yolo on` now expires after 8 hours unless `--hours N` or `--no-expiry` says otherwise (it used to stay on until `heli yolo off`), and while YOLO is on every linked SessionStart carries a warning with its source and expiry, what it lifts (push gate, `.env` writes, T5 approvals, stuck-task gates) and what it never lifts. `yolo-mode.md` now describes the linked-project file location, the session/task sources and the full lists of what YOLO lifts and keeps. Pinned by `scripts/smoke-yolo-expiry.mjs`.
