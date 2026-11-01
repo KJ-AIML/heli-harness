@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Approved runs: a human approves a plan once, and the agent works it without asking about what the plan approved. The plan names what it needs in a fenced `heli-run` block (`branch`, `push`, `remote`, `hours`, `keep-going`); `heli run approve plan.md` (an interactive terminal only; the hooks refuse an agent-run one) shows what the run allows and what stays blocked, then records it in Heli's own data directory, bound to the agent session working near the plan. A run with `push: yes` issues a `git.push` grant limited to that branch of that remote: every push a command makes must land, unforced, on it (Heli asks git where a bare `git push` or `HEAD` goes); `main`, `master` and the remote's default branch are refused at approval; tags, `--all`, deletions and `gh pr merge` are not covered; the grant is void as soon as the plan's text changes and revoked when the run ends. The agent reports with `heli run done`, `heli run blocked "<what it needs>"` (and `resume`), and anyone can `heli run stop` it. `heli run status` lists runs. Every other block (T6, `.env`, publish/tag/deploy approvals, Heli's state, the project's governance files) is unchanged. Grants can carry a `constraint` generally. Pinned by `scripts/smoke-constrained-push.mjs` and `scripts/smoke-approved-runs.mjs`.
+
 ### Security
 
 - An agent can no longer change the rules it runs under. In a linked project, agent writes to `.heli/safety/**` (the command rules the hooks read on every call), `.heli/policies/**`, `.heli/workspace.json` and `.heli/heli.lock`, and moving or removing `.heli` itself, are refused with `HELI_POLICY_PROTECTED` for file tools, shell commands and MCP writes, under YOLO too. Before, an agent could delete a project T5/T6 rule, or the binding, mid-session. Reading them is fine; `.heli/profiles` and `.heli/skills` stay agent-writable; an embedded workspace (the Heli source checkout dogfoods one) is unchanged.

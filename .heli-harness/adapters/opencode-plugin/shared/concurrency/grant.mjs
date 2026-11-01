@@ -4,6 +4,7 @@
  * machine. A grant is usable from any checkout of its workspace on this machine
  * unless `executionId` pins it to one.
  */
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import {
 	claimDirExclusive,
@@ -164,9 +165,14 @@ export function issueGrant(workspaceRoot, {
 	// Explicit execution pin (issue #35): null means the grant is usable from any
 	// checkout of this workspace+resource. Passing an execution id narrows it.
 	executionId = null,
+	// Narrows the grant to some calls of its action (see constraintAllows); null allows every one.
+	constraint = null,
+	// The approved run that issued it (heli run approve), revoked with the run.
+	runId = null,
 	env = process.env,
 } = {}) {
 	if (!action) throw error("GRANT_ACTION_REQUIRED", "grant action required");
+	if (constraint && constraint.kind !== "git-push") throw error("INVALID_GRANT_CONSTRAINT", `unknown grant constraint: ${constraint.kind}`);
 	if (!SCOPES.has(scope)) throw error("INVALID_GRANT_SCOPE", `invalid grant scope: ${scope}`);
 	if (scope === "session" && !subjectSessionId) {
 		throw error("GRANT_SESSION_REQUIRED", "session-scoped grant requires subjectSessionId");
@@ -201,6 +207,8 @@ export function issueGrant(workspaceRoot, {
 			revokedAt: null,
 			consumedAt: null,
 			reason: reason || null,
+			...(constraint ? { constraint } : {}),
+			...(runId ? { runId } : {}),
 		};
 		store.grants.push(grant);
 		writeStore(workspaceRoot, store, { env });
@@ -224,10 +232,31 @@ function resourceMatches(grantResource, requested, workspaceKey) {
 	return grantResource.type === requested?.type && grantResource.id === requested?.id;
 }
 
+/** sha256 of a file's text, or null when it cannot be read. */
+export function fileSha256(path) {
+	const text = readText(path);
+	return text === null || text === undefined ? null : createHash("sha256").update(text).digest("hex");
+}
+
+/**
+ * Whether a constrained grant covers the call: a `git-push` constraint (an approved run's) covers a remote git write only
+ * when every push it makes lands, unforced, on one of `branches` of `remote` (`target.pushes`, resolved by the hook; null
+ * or empty when they cannot be told, which is never covered), and while the plan it was approved from is unchanged.
+ */
+function constraintAllows(constraint, target) {
+	if (!constraint) return true;
+	if (constraint.kind !== "git-push") return false;
+	if (constraint.planPath && fileSha256(constraint.planPath) !== constraint.planSha256) return false;
+	const pushes = target?.pushes;
+	if (!Array.isArray(pushes) || !pushes.length) return false;
+	return pushes.every((push) => push && !push.force && push.remote === constraint.remote && (constraint.branches || []).includes(push.branch));
+}
+
 function grantMatches(grant, {
 	action,
 	sessionId = null,
 	resource = null,
+	target = null,
 	paths,
 	now = Date.now(),
 }) {
@@ -239,6 +268,7 @@ function grantMatches(grant, {
 	if (!actionMatchesPattern(action, grant.action) && !actionMatchesPattern(grant.action, action)) return false;
 	if (!resourceMatches(grant.resource, resource, paths.workspaceKey)) return false;
 	if (grant.scope === "session" && grant.subjectSessionId !== sessionId) return false;
+	if (grant.constraint && !constraintAllows(grant.constraint, target)) return false;
 	return true;
 }
 
@@ -254,12 +284,13 @@ export function findApplicableGrant(workspaceRoot, {
 	action,
 	sessionId = null,
 	resource = null,
+	target = null,
 	env = process.env,
 } = {}) {
 	const paths = grantStorePaths(workspaceRoot, { env });
 	const store = readStore(workspaceRoot, { env });
 	return store.grants.find((grant) =>
-		grantMatches(grant, { action, sessionId, resource, paths }),
+		grantMatches(grant, { action, sessionId, resource, target, paths }),
 	) || null;
 }
 
@@ -271,11 +302,12 @@ export function findUsableGrant(workspaceRoot, {
 	action,
 	sessionId = null,
 	resource = null,
+	target = null,
 	env = process.env,
 } = {}) {
 	const policy = evaluateGrantPolicy(workspaceRoot, action, { env });
 	if (!policy.grantable || policy.hardDenied) return null;
-	return findApplicableGrant(workspaceRoot, { action, sessionId, resource, env });
+	return findApplicableGrant(workspaceRoot, { action, sessionId, resource, target, env });
 }
 
 /**
@@ -294,7 +326,7 @@ export function findUsableGrants(workspaceRoot, requests = [], { env = process.e
 	const ledger = pruneConsumptionLedger(readConsumptionLedger(workspaceRoot, { env }));
 	const now = Date.now();
 	const taken = new Map();
-	return requests.map(({ action, sessionId = null, resource = null, callKey = null }) => {
+	return requests.map(({ action, sessionId = null, resource = null, target = null, callKey = null }) => {
 		const policy = evaluateGrantPolicy(workspaceRoot, action, { env });
 		if (!policy.grantable || policy.hardDenied) return null;
 		if (callKey) {
@@ -307,7 +339,7 @@ export function findUsableGrants(workspaceRoot, requests = [], { env = process.e
 			}
 		}
 		const grant = store.grants.find((candidate) =>
-			grantMatches(candidate, { action, sessionId, resource, paths, now }) &&
+			grantMatches(candidate, { action, sessionId, resource, target, paths, now }) &&
 			(candidate.scope !== "once" || Number(candidate.remainingUses || 0) > (taken.get(candidate.grantId) || 0)),
 		);
 		if (!grant) return null;
@@ -320,6 +352,7 @@ export function consumeApplicableGrant(workspaceRoot, {
 	action,
 	sessionId = null,
 	resource = null,
+	target = null,
 	env = process.env,
 	// Per-call identity from the host hook payload: one tool call may be evaluated
 	// by more than one registered hook set. Same key replays the first consume.
@@ -343,11 +376,11 @@ export function consumeApplicableGrant(workspaceRoot, {
 	// Read-only probe first: hooks call this on every guarded action, and the
 	// mutex below creates the grant-store directory. No matching grant means
 	// nothing to consume, so never touch the filesystem in that case.
-	if (!findApplicableGrant(workspaceRoot, { action, sessionId, resource, env })) return null;
+	if (!findApplicableGrant(workspaceRoot, { action, sessionId, resource, target, env })) return null;
 	return withGrantMutex(workspaceRoot, (paths) => {
 		const store = readStore(workspaceRoot, { env });
 		const index = store.grants.findIndex((grant) =>
-			grantMatches(grant, { action, sessionId, resource, paths }),
+			grantMatches(grant, { action, sessionId, resource, target, paths }),
 		);
 		if (index < 0) return null;
 		const grant = { ...store.grants[index] };

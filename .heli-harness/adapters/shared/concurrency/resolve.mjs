@@ -32,6 +32,7 @@ import {
 } from "./lease.mjs";
 import { effectiveSessionAuthority } from "./authority.mjs";
 import { resolveYolo, yoloSessionLine } from "./yolo-scope.mjs";
+import { runSessionLine } from "./runs.mjs";
 import { readDiagnosis } from "./diagnosis.mjs";
 import { isLinkedWorkspace, readProjectBinding } from "./project-binding.mjs";
 import { classifyToolPaths } from "./protected-paths.mjs";
@@ -663,6 +664,8 @@ export function buildConcurrentSessionContext(ctx, { env = process.env } = {}) {
 		lines.push("- Project binding lives under .heli/; grants, sessions, live authority, and capability observations remain execution-local.");
 		const yolo = yoloSessionLine({ workspaceRoot: ctx.workspaceRoot, cwd: ctx.worktreeRoot || ctx.workspaceRoot, taskId: ctx.taskId, sessionId: ctx.sessionId, env, legacyMode: false });
 		if (yolo) lines.push("", yolo);
+		const run = runSessionLine(ctx.workspaceRoot, { sessionId: ctx.sessionId, env });
+		if (run) lines.push("", run);
 		if (!ctx.taskId && ctx.worktreeRoot) {
 			const continuation = continuationForWorktree(ctx.workspaceRoot, ctx.worktreeRoot, { env });
 			if (continuation) {

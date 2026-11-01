@@ -5,6 +5,7 @@
  * v0.5.24: concurrent session foundation via ./concurrency/*
  */
 
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -456,7 +457,8 @@ function grantResourceFlag(ctx) {
 	return ` --resource ${/^[\w@%+=:,./\\-]+$/.test(worktree) ? worktree : JSON.stringify(worktree)}`;
 }
 
-function grantRequest(ctx, action, env) {
+/** `target`: what the call does beyond its action, for a grant with a constraint (see resolvePushTargets). */
+function grantRequest(ctx, action, env, target = null) {
 	return {
 		action,
 		sessionId: ctx.sessionId || null,
@@ -464,20 +466,62 @@ function grantRequest(ctx, action, env) {
 			type: "worktree",
 			id: resourceIdForWorktree(ctx.worktreeRoot || ctx.workspaceRoot),
 		},
+		target,
 		env,
 	};
+}
+
+/** git's trimmed output in a folder, or null when it fails. */
+function gitOutput(cwd, args) {
+	const result = spawnSync("git", ["-C", cwd, ...args], { encoding: "utf8", timeout: 5000 });
+	return result.status === 0 ? String(result.stdout || "").trim() || null : null;
+}
+
+/**
+ * Where a command's remote git writes land, for a grant limited to some branches (an approved run's): `[{ remote,
+ * branch, force }]`, asking git in the worktree for what the command leaves to it (a bare `git push` goes to `@{push}`,
+ * `HEAD` is the current branch). null when any write cannot be placed on a named branch: `gh pr merge` (its base branch),
+ * `--tags`, `--all`, a deletion, a ref outside refs/heads, a remote git's configuration does not name. A dry run lands nowhere.
+ */
+function resolvePushTargets(commandPolicy, ctx) {
+	if ((commandPolicy?.remoteGitWrites || []).some((form) => form !== "git push")) return null;
+	const worktree = ctx.worktreeRoot || ctx.workspaceRoot;
+	if (!worktree) return null;
+	const targets = [];
+	for (const push of commandPolicy?.pushDestinations || []) {
+		if (push.dryRun) continue;
+		if (push.wide) return null;
+		if (!push.refspecs.length) {
+			const upstream = gitOutput(worktree, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{push}"]);
+			const slash = upstream ? upstream.indexOf("/") : -1;
+			if (slash <= 0 || (push.remote && push.remote !== upstream.slice(0, slash))) return null;
+			targets.push({ remote: upstream.slice(0, slash), branch: upstream.slice(slash + 1), force: push.force });
+			continue;
+		}
+		for (const spec of push.refspecs) {
+			const plain = spec.replace(/^\+/, "");
+			if (!push.remote || plain.startsWith(":")) return null;
+			let branch = plain.includes(":") ? plain.slice(plain.indexOf(":") + 1) : plain;
+			if (branch === "HEAD" || branch === "@") branch = gitOutput(worktree, ["symbolic-ref", "--short", "-q", "HEAD"]);
+			if (!branch) return null;
+			if (branch.startsWith("refs/heads/")) branch = branch.slice("refs/heads/".length);
+			else if (branch.startsWith("refs/")) return null;
+			targets.push({ remote: push.remote, branch, force: push.force || spec.startsWith("+") });
+		}
+	}
+	return targets;
 }
 
 /**
  * Read-only: the grant each action would consume, in order, counting the uses an earlier
  * action of the same call takes (one `once` grant pays for one action). null means no usable
- * grant is left for that action. Never consumes a use.
+ * grant is left for that action. Never consumes a use. `targets[i]` goes with `actions[i]`.
  */
-function findScopedGrants(ctx, actions, env = process.env) {
+function findScopedGrants(ctx, actions, env = process.env, targets = []) {
 	if (!ctx?.workspaceRoot) return actions.map(() => null);
 	try {
-		return findUsableGrants(ctx.workspaceRoot, actions.map((action) => ({
-			...grantRequest(ctx, action, env),
+		return findUsableGrants(ctx.workspaceRoot, actions.map((action, index) => ({
+			...grantRequest(ctx, action, env, targets[index] ?? null),
 			callKey: grantCallKey(ctx, action, env),
 		})), { env });
 	} catch {
@@ -487,11 +531,11 @@ function findScopedGrants(ctx, actions, env = process.env) {
 }
 
 /** Consume one use; call only once the final decision is allow. */
-function consumeScopedGrant(ctx, action, env = process.env) {
+function consumeScopedGrant(ctx, action, env = process.env, target = null) {
 	if (!ctx?.workspaceRoot || !action) return null;
 	try {
 		return consumeApplicableGrant(ctx.workspaceRoot, {
-			...grantRequest(ctx, action, env),
+			...grantRequest(ctx, action, env, target),
 			callKey: grantCallKey(ctx, action, env),
 		});
 	} catch {
@@ -981,9 +1025,12 @@ function decidePreToolUse({
 	if (commandPolicy?.gitPush && !allowGitPushScoped(scope)) {
 		const remote = commandPolicy.remoteGitWrite || "git push";
 		const blocked = remote === "git push" ? "git push" : `${remote} (a remote git write, like git push)`;
+		const pushes = resolvePushTargets(commandPolicy, ctx);
 		requirements.push({
 			action: "git.push",
 			code: "REMOTE_PUSH_DENIED",
+			// For a grant limited to some branches (an approved run's); an unlimited grant ignores it.
+			target: { pushes },
 			reason:
 				`Heli-Harness blocks ${blocked} without scoped authority. Ask the user to run \`heli grant issue --action git.push --scope once${resourceFlag}\` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_GIT_PUSH or YOLO.`,
 		});
@@ -1019,7 +1066,7 @@ function decidePreToolUse({
 		});
 	}
 	// Planned as one set, so a grant that can pay for one approval is not counted for two.
-	const planned = findScopedGrants(ctx, requirements.map((requirement) => requirement.action), env);
+	const planned = findScopedGrants(ctx, requirements.map((requirement) => requirement.action), env, requirements.map((requirement) => requirement.target ?? null));
 	const missing = requirements.filter((_, index) => !planned[index]);
 	if (missing.length) {
 		return {
@@ -1040,7 +1087,7 @@ function decidePreToolUse({
 	// Final decision is allow: consume one use of each approval now.
 	const appliedGrants = [];
 	for (const requirement of requirements) {
-		const grant = consumeScopedGrant(ctx, requirement.action, env);
+		const grant = consumeScopedGrant(ctx, requirement.action, env, requirement.target ?? null);
 		if (!grant) {
 			return {
 				deny: true,

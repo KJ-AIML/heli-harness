@@ -932,6 +932,8 @@ function privilegedHeliCommand(args) {
 	if (command === "session" && sub === "transfer-write") return "heli session transfer-write";
 	// `observe` switches the live-conflict gate off for every session of the workspace.
 	if (command === "governance" && sub === "set") return "heli governance set";
+	// Approving a plan is the human's: the run it records lets the agent push.
+	if (command === "run" && sub === "approve") return "heli run approve";
 	if (command === "host" && (sub === "remove" || sub === "uninstall")) return `heli host ${sub}`;
 	if (command === "uninstall") return "heli uninstall";
 	if (carriesAcceptPolicyFlag(args)) return `heli ${command.startsWith("-") ? "" : `${command} `}${ACCEPT_POLICY_FLAG}`;
@@ -1089,11 +1091,85 @@ const REMOTE_GIT_WRITES = [["git", "push"], ["git", "subtree", "push"], ["gh", "
 
 /** The first remote git write a command runs (`"git push"`, `"gh pr merge"`, ...), in any reading of the text, or null. */
 export function commandRemoteGitWrite(analysis) {
+	return commandRemoteGitWrites(analysis)[0] ?? null;
+}
+
+/** Every kind of remote git write a command runs, in any reading of the text, first seen first. */
+export function commandRemoteGitWrites(analysis) {
+	const found = new Set();
 	for (const segment of analysis.sequence ?? analysis.segments) {
-		const words = REMOTE_GIT_WRITES.find((form) => commandMatchesRuleTokens(segment.tokens, form));
-		if (words) return words.join(" ");
+		for (const form of REMOTE_GIT_WRITES) {
+			if (commandMatchesRuleTokens(segment.tokens, form)) found.add(form.join(" "));
+		}
 	}
-	return null;
+	return [...found];
+}
+
+// `git push` options that take the next word as their value (`--repo origin`, `-o ci.skip`).
+const PUSH_OPTIONS_WITH_VALUE = new Set(["--repo", "--push-option", "--receive-pack", "--exec", "--recurse-submodules", "--signed"]);
+// Options with which a push writes more than the branches it names: every branch, tags, a mirror, deletions.
+const PUSH_WIDE_OPTIONS = new Set(["--all", "--branches", "--mirror", "--tags", "--follow-tags", "--delete", "--prune"]);
+
+/** One `git push`'s words after `push`, as `{ remote, refspecs, force, wide, dryRun }` (see gitPushDestinations). */
+function parsePush(args) {
+	let remote = null;
+	let force = false;
+	let wide = null;
+	let dryRun = false;
+	const positional = [];
+	for (let k = 0; k < args.length; k += 1) {
+		const word = args[k];
+		if (word === "--") {
+			positional.push(...args.slice(k + 1));
+			break;
+		}
+		if (word.startsWith("--")) {
+			const name = word.split("=")[0].toLowerCase();
+			const value = word.includes("=") ? word.slice(word.indexOf("=") + 1) : null;
+			if (name === "--force" || name === "--force-with-lease" || name === "--force-if-includes") force = true;
+			else if (PUSH_WIDE_OPTIONS.has(name)) wide ??= name;
+			else if (name === "--dry-run") dryRun = true;
+			else if (name === "--repo") remote = value ?? args[++k] ?? null;
+			else if (PUSH_OPTIONS_WITH_VALUE.has(name) && value === null) k += 1;
+			continue;
+		}
+		if (word.startsWith("-") && word.length > 1) {
+			// A short-option cluster (`-uf`): -f forces, -d deletes, -n is a dry run, -o takes the next word.
+			const letters = word.slice(1);
+			if (letters.includes("f")) force = true;
+			if (letters.includes("d")) wide ??= "--delete";
+			if (letters.includes("n")) dryRun = true;
+			if (letters.endsWith("o")) k += 1;
+			continue;
+		}
+		positional.push(word);
+	}
+	const [named = null, ...refspecs] = positional;
+	if (refspecs.some((spec) => spec.startsWith("+"))) force = true;
+	return { remote: remote ?? named, refspecs: remote ? positional : refspecs, force, wide, dryRun };
+}
+
+/**
+ * What each `git push` in a command writes, read from the words as written (branch names keep their case) in every
+ * reading of the text: `{ remote, refspecs, force, wide, dryRun }` per distinct push. `remote` is null and `refspecs` empty
+ * when the command leaves them to git's configuration; `wide` names an option that writes more than the branches listed
+ * (`--tags`, `--all`, `--delete` ...). For a grant that allows pushes to some branches only: anything it cannot place on
+ * a named branch is not covered.
+ */
+export function gitPushDestinations(analysis) {
+	const seen = new Map();
+	for (const segment of analysis.sequence ?? analysis.segments) {
+		const words = segment.rawTokens;
+		for (let i = 0; i < words.length; i += 1) {
+			if (programName(words[i]) !== "git") continue;
+			let j = i + 1;
+			while (j < words.length && words[j].startsWith("-")) j += GIT_OPTIONS_WITH_VALUE.has(words[j].toLowerCase()) ? 2 : 1;
+			if (words[j]?.toLowerCase() !== "push") continue;
+			const push = parsePush(words.slice(j + 1));
+			seen.set(JSON.stringify(push), push);
+		}
+	}
+	return [...seen.values()];
 }
 
 export function hardDenyReason(match) {
@@ -1574,7 +1650,8 @@ function limitExceededReason(limitExceeded) {
  *   its comments are not commands (see analyzeCommand).
  * @returns {{ status: string, rulesPath: string|null, analysis: object, gitPush: boolean, remoteGitWrite: string|null, hardDenies: object[], approvals: object[], limitExceeded: null|{ limit: string, max: number, message: string, reason: string } }}
  *   `gitPush`: the command writes a remote's git refs, `remoteGitWrite` says how (`"git push"`, `"gh pr merge"`, see
- *   commandRemoteGitWrite); both need the `git.push` approval.
+ *   commandRemoteGitWrite; `remoteGitWrites` lists every kind); all need the `git.push` approval. `pushDestinations`
+ *   are its `git push`es as gitPushDestinations reads them, for a grant limited to some branches.
  *   `approvals` excludes T5 ids approved via HELI_ALLOW_COMMAND; T6 is never approvable.
  *   `limitExceeded` is set when the command is over the analysis budget: no rule was
  *   evaluated, and the caller must deny it with `limitExceeded.reason`.
@@ -1589,20 +1666,24 @@ export function evaluateCommandRules(workspaceRoot, command, env = process.env, 
 			analysis,
 			gitPush: false,
 			remoteGitWrite: null,
+			remoteGitWrites: [],
+			pushDestinations: [],
 			hardDenies: [],
 			approvals: [],
 			limitExceeded: { ...analysis.limitExceeded, reason: limitExceededReason(analysis.limitExceeded) },
 		};
 	}
 	const matches = matchCommandRules(analysis, loaded.projectRules);
-	const remoteGitWrite = commandRemoteGitWrite(analysis);
+	const remoteGitWrites = commandRemoteGitWrites(analysis);
 	const approved = new Set(String(env.HELI_ALLOW_COMMAND || "").split(",").map((value) => value.trim()).filter(Boolean));
 	return {
 		status: loaded.status,
 		rulesPath: loaded.rulesPath,
 		analysis,
-		gitPush: remoteGitWrite !== null,
-		remoteGitWrite,
+		gitPush: remoteGitWrites.length > 0,
+		remoteGitWrite: remoteGitWrites[0] ?? null,
+		remoteGitWrites,
+		pushDestinations: remoteGitWrites.length ? gitPushDestinations(analysis) : [],
 		hardDenies: matches.filter((match) => match.tier === "T6"),
 		approvals: matches.filter((match) => match.tier === "T5" && !approved.has(match.id)),
 		limitExceeded: null,
