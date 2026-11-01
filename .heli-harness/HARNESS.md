@@ -33,6 +33,10 @@ Never retry an unchanged denied action.
 - Do not repeat an expensive or costly action without a material change or new evidence.
 - Use the smallest useful check first; widen only when the evidence asks for it.
 
+## Approved runs
+
+For long or unattended work, write the plan with a ```` ```heli-run ```` block (`branch`, `push: yes`, `hours`) and ask the user once to run `heli run approve <plan>`. While SessionStart says a run is active: work the plan without asking about what it approves, push only to its branch, never edit its `heli-run` block (that voids the approval), and end with `heli run done`, or `heli run blocked "<what you need>"` when every remaining step needs the user.
+
 ## Risk tiers
 
 Workflow summaries, not permission levels.

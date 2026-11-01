@@ -174,6 +174,28 @@ A grant is for the worktree of the folder you run `heli grant issue` in (or name
 
 Project-controlled files may narrow trusted policy, but cannot silently elevate the built-in/user ceiling.
 
+## Approved runs
+
+Approve a plan once, and let the agent work it while you are away. The agent writes the plan with what it needs:
+
+````markdown
+```heli-run
+branch: feat/report-export
+push: yes
+hours: 8
+```
+````
+
+You review it and approve it in your own terminal:
+
+```bash
+heli run approve plan.md   # shows what it allows and what stays blocked, then asks
+heli run status            # what the run is doing, or what it is blocked on
+heli run stop              # end it at any time
+```
+
+Until the run ends or expires, the agent may push to `feat/report-export` only: `main`, other branches, force pushes, tags, publish/deploy approvals, `.env` writes and T6 commands stay blocked, and editing the plan voids the approval. On Claude Code a Stop hook keeps the agent working until it reports `heli run done`, or `heli run blocked "<what it needs from you>"` when every remaining step needs you.
+
 ## Explain and decision receipts
 
 Human CLI, machine-readable surfaces, hooks, and explain share the same governance semantics.
