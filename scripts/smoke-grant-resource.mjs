@@ -18,6 +18,8 @@ import { join } from "node:path";
 import { runGrant } from "../lib/cli/grant.mjs";
 import { linkProject } from "../lib/cli/link.mjs";
 import { setupHeli } from "../lib/cli/setup.mjs";
+import { resolveWorktreeRoot } from "../lib/concurrency/paths.mjs";
+import { resourceIdForWorktree } from "../lib/concurrency/resource-authority.mjs";
 import { evaluatePreToolUse } from "../.heli-harness/adapters/shared/hook-core.mjs";
 import { scrubHeliProcessEnv } from "./lib/hermetic-env.mjs";
 
@@ -59,8 +61,10 @@ const denied = push(app);
 assert.equal(denied.code, "REMOTE_PUSH_DENIED");
 const suggested = /`(heli grant issue [^`]+)`/.exec(denied.reason)?.[1];
 assert.ok(suggested, denied.reason);
-assert.match(suggested, /--resource /, suggested);
-assert.ok(suggested.includes(app), suggested);
+// The hook prints its canonical path (on Windows: lowercase, forward slashes, long names), so compare the resources.
+const flagged = /--resource (\S+)/.exec(suggested)?.[1];
+assert.ok(flagged, suggested);
+assert.equal(resourceIdForWorktree(resolveWorktreeRoot(flagged)), resourceIdForWorktree(resolveWorktreeRoot(app)), suggested);
 assert.doesNotMatch(/`(heli grant issue [^`]+)`/.exec(push(project).reason)[1], /--resource/);
 
 // 2. That exact command, run from a terminal somewhere else, makes the push pass.
