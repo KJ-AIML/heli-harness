@@ -91,6 +91,8 @@ same blocker + unchanged authority state
 
 A deny is a blocked call, not a reason to end the turn.
 
+A live write conflict with a lease that lapses within a minute (flow mode's mutation lease lapses 30 s after the holder's last write) is `SELF_RECOVERABLE` with `retryAfterSeconds`: the agent waits that long and retries once, and asks the human only if the retry is refused with the same blocker fingerprint, because then the other session is still writing there. A longer hold (strict mode's resource lease, an embedded task lease) stays `HUMAN_REQUIRED`. Enforcement is unchanged: the call is denied while the lease is live.
+
 The guard itself must stay deterministic and fail-closed. It must not depend on model memory to avoid loops.
 
 ## Human escalation

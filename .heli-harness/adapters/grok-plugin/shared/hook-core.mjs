@@ -521,13 +521,34 @@ const OWNERSHIP_RECOVERY = Object.freeze({
 	LEASE_RACE: { recoverability: "SELF_RECOVERABLE", nextAction: "Refresh status/authority once; retry only if the authority state changed." },
 });
 
+// A live write conflict with a short lease (flow mode's mutation lease lapses 30 s after the holder's last write) is
+// usually over before a human could answer: the agent waits it out and retries once, and asks only if the same blocker
+// is back. A longer hold (strict mode's resource lease, a task lease) still needs the user.
+const SHORT_HOLD_CODES = new Set(["MUTATION_CONFLICT", "RESOURCE_WRITER_HELD"]);
+const SHORT_HOLD_SECONDS = 60;
+
+/** Seconds until a conflicting lease lapses when that is soon, else null. */
+function shortHoldSeconds(lease) {
+	const expires = Date.parse(lease?.expiresAt || "");
+	if (!Number.isFinite(expires)) return null;
+	const seconds = Math.ceil((expires - Date.now()) / 1000);
+	return seconds >= 0 && seconds <= SHORT_HOLD_SECONDS ? seconds : null;
+}
+
 function ownershipRecovery(decision, ctx) {
 	const code = decision?.code || "GOVERNANCE_DENIED";
-	const spec = OWNERSHIP_RECOVERY[code] || {
-		recoverability: "SELF_RECOVERABLE",
-		nextAction: "Inspect heli status and heli explain authority before deciding whether to retry.",
-	};
 	const authority = decision?.authority || decision?.lease || null;
+	const lapse = SHORT_HOLD_CODES.has(code) ? shortHoldSeconds(authority) : null;
+	const retryAfterSeconds = lapse === null ? null : lapse + 1;
+	const spec = retryAfterSeconds !== null
+		? {
+			recoverability: "SELF_RECOVERABLE",
+			nextAction: `The other session's lease lapses in about ${retryAfterSeconds}s unless it writes again: wait that long, then retry once. If the retry is refused with this same Blocker, that session is still working here: ask the user whether to wait for it, move one of you to another git worktree, or approve a takeover.`,
+		}
+		: OWNERSHIP_RECOVERY[code] || {
+			recoverability: "SELF_RECOVERABLE",
+			nextAction: "Inspect heli status and heli explain authority before deciding whether to retry.",
+		};
 	const resourceId = authority?.resource?.id || (ctx?.worktreeRoot ? resourceIdForWorktree(ctx.worktreeRoot) : null);
 	const holderSessionId = authority?.sessionId || null;
 	const fingerprint = `heli-block-${hashText([
@@ -542,6 +563,7 @@ function ownershipRecovery(decision, ctx) {
 		retryable: false,
 		nextAction: spec.nextAction,
 		blockerFingerprint: fingerprint,
+		...(retryAfterSeconds !== null ? { retryAfterSeconds } : {}),
 	};
 }
 
@@ -557,7 +579,7 @@ function withRecoveryGuidance(reason, recovery) {
 	return [
 		reason,
 		`Heli recovery: ${recovery.recoverability}.`,
-		"Retry unchanged action: NO.",
+		recovery.retryAfterSeconds ? `Retry unchanged action: once, after about ${recovery.retryAfterSeconds}s.` : "Retry unchanged action: NO.",
 		`Next action: ${recovery.nextAction}`,
 		`Blocker: ${recovery.blockerFingerprint}`,
 		RECOVERY_CONDUCT[recovery.recoverability] ?? RECOVERY_CONDUCT.SELF_RECOVERABLE,
