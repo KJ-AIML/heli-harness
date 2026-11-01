@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Bash here-documents that a command only reads as data are no longer hard denies: a `git commit -F - <<'EOF'` message, a `gh pr create --body-file -` body or a `cat > script.sh <<'EOF'` script that mentions `rm -rf`, `git reset --hard` or `git push` is text, not commands. A body is still read as commands when anything in the command could run it (a shell, `eval`, `source`, a loop, `xargs`, a pipe or descriptor into a shell, `$(...)` in an unquoted body, a `VAR=` prefix such as `GIT_EDITOR=sh`, a git alias or config, a gh extension), and the command line around the body (`&& git push`, `> .env`) is read as before. Checked against the real bash in `scripts/smoke-command-heredocs.mjs`.
+- Text run by a tool named for bash is matched against the command rules only the way bash reads it. Its Windows reading, where `\"` ends a quote (so `git commit -m "a \" rm -rf b"` read as a delete), now only feeds the protected-path write check, the push gate and force-push rule, and Heli's own self-protection rules: a push or an agent approving itself is still refused in every spelling. Shells Heli cannot name (MCP command tools, Codex `shell`, Monitor) are read as before. The Pi extension keeps its own guard and is unchanged.
+
 ## v0.11.2 - Global workspace migration
 
 ### Added

@@ -188,7 +188,11 @@ function skipDollar(text, start) {
 	return next !== undefined && /[#?$!@*0-9-]/.test(next) ? start + 2 : start + 1;
 }
 
-/** The delimiter of a here-document whose `<<` ends just before `start`, or null when there is none. */
+/**
+ * The delimiter of a here-document whose `<<` ends just before `start`, or null when there is none. `quoted`: some of the
+ * delimiter word was quoted or escaped, so the shell expands nothing in the body. `plain`: the word is written plainly
+ * (letters, digits, `_.+-`, quoted or not, no `$`), so where its body ends is not in doubt.
+ */
 function heredocStart(text, start) {
 	let i = start;
 	let stripTabs = false;
@@ -197,8 +201,10 @@ function heredocStart(text, start) {
 		i += 1;
 	}
 	while (text[i] === " " || text[i] === "\t") i += 1;
+	const wordStart = i;
 	let delimiter = "";
 	let any = false;
+	let quoted = false;
 	while (i < text.length) {
 		const ch = text[i];
 		if (ch === "'") {
@@ -206,6 +212,7 @@ function heredocStart(text, start) {
 			if (end === -1) return null;
 			delimiter += text.slice(i + 1, end);
 			i = end + 1;
+			quoted = true;
 		} else if (ch === "\"") {
 			let end = i + 1;
 			let body = "";
@@ -217,10 +224,12 @@ function heredocStart(text, start) {
 			if (end >= text.length) return null;
 			delimiter += body;
 			i = end + 1;
+			quoted = true;
 		} else if (ch === "\\") {
 			if (i + 1 >= text.length) return null;
 			delimiter += text[i + 1];
 			i += 2;
+			quoted = true;
 		} else if (/[\s;&|()<>]/.test(ch)) {
 			break;
 		} else {
@@ -229,13 +238,20 @@ function heredocStart(text, start) {
 		}
 		any = true;
 	}
-	return any && delimiter !== "" ? { delimiter, stripTabs, end: i } : null;
+	if (!any || delimiter === "") return null;
+	const plain = /^[A-Za-z0-9_.+-]+$/.test(delimiter) && !/[$`]/.test(text.slice(wordStart, i));
+	return { delimiter, stripTabs, quoted, plain, end: i };
 }
 
-/** Past the bodies of the here-documents opened on the line that just ended (each ends at a line that is its delimiter). */
-function skipHeredocBodies(text, start, heredocs) {
+/**
+ * Past the bodies of the here-documents opened on the line that just ended (each ends at a line that is its delimiter).
+ * With `found`, each here-document is added to it with where its body starts and where it ends (past its delimiter line).
+ */
+function skipHeredocBodies(text, start, heredocs, found) {
 	let i = start;
-	for (const { delimiter, stripTabs } of heredocs) {
+	for (const heredoc of heredocs) {
+		const { delimiter, stripTabs } = heredoc;
+		const bodyStart = i;
 		while (i < text.length) {
 			const newline = text.indexOf("\n", i);
 			const lineEnd = newline === -1 ? text.length : newline;
@@ -244,12 +260,39 @@ function skipHeredocBodies(text, start, heredocs) {
 			i = newline === -1 ? text.length : newline + 1;
 			if (line === delimiter || line === `${delimiter}\r`) break;
 		}
+		found?.push({ ...heredoc, bodyStart, bodyEnd: i });
 	}
 	heredocs.length = 0;
 	return i;
 }
 
+/**
+ * The here-documents a POSIX shell reads in `text`, outside quotes and substitutions, in order:
+ * `{ operator, delimiter, quoted, plain, stripTabs, bodyStart, bodyEnd }` each (`operator` is where its `<<` is). [] when
+ * there is none, null when the text nests deeper than `maxDepth` (see stripComments). A here-document inside `$(...)` or
+ * backticks is not listed: what it holds may be run.
+ * @param {string} text @param {number} [maxDepth]
+ */
+export function posixHeredocs(text, maxDepth = MAX_SYNTAX_DEPTH) {
+	if (!text.includes("<<")) return [];
+	level = 0;
+	ceiling = maxDepth;
+	const found = [];
+	try {
+		scanPosix(text, found);
+	} catch (error) {
+		if (error === TOO_DEEP) return null;
+		throw error;
+	}
+	return found;
+}
+
 function posixComments(text) {
+	return scanPosix(text, null);
+}
+
+/** The comments of POSIX shell text, as [start, end, replacement]; with `found`, its here-documents are listed there too. */
+function scanPosix(text, found) {
 	const removed = [];
 	const heredocs = [];
 	const length = text.length;
@@ -259,7 +302,7 @@ function posixComments(text) {
 		const ch = text[i];
 		if (ch === "\n") {
 			i += 1;
-			if (heredocs.length) i = skipHeredocBodies(text, i, heredocs);
+			if (heredocs.length) i = skipHeredocBodies(text, i, heredocs, found);
 			wordStart = true;
 		} else if (ch === "\\") {
 			// A backslash before a newline joins the lines (the next character is judged by the one before the backslash).
@@ -302,7 +345,7 @@ function posixComments(text) {
 			} else if (ch === "<" && text[i + 1] === "<" && text[i + 2] !== "<") {
 				const heredoc = heredocStart(text, i + 2);
 				if (heredoc) {
-					heredocs.push(heredoc);
+					heredocs.push({ ...heredoc, operator: i });
 					i = heredoc.end;
 				} else {
 					i += 2;
