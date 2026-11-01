@@ -15,7 +15,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { linkProject } from "../lib/cli/link.mjs";
-import { runRun } from "../lib/cli/run.mjs";
+import { askYes, runRun } from "../lib/cli/run.mjs";
 import { setupHeli } from "../lib/cli/setup.mjs";
 import { listGrants } from "../lib/concurrency/grant.mjs";
 import { currentRun, listRuns, parseRunEnvelope, runSessionLine, runStoreDir } from "../lib/concurrency/runs.mjs";
@@ -95,6 +95,20 @@ for (const command of ["heli run status", "heli run done", "heli run blocked \"n
 	assert.equal(push(command).deny, false, `${command} gives no authority`);
 }
 assert.equal(listRuns(project, { env }).length, 0, "nothing was approved");
+
+// The confirmation waits for the answer. The terminal check reads process.stdin.isTTY, which puts the terminal into
+// non-blocking mode: the read failed with EAGAIN before the user could type, and that counted as a no.
+{
+	const typed = (text, busy) => (buffer) => {
+		if (busy-- > 0) throw Object.assign(new Error("EAGAIN: resource temporarily unavailable, read"), { code: "EAGAIN" });
+		return buffer.write(text);
+	};
+	assert.equal(askYes("", { read: typed("y\n", 3) }), true, "typed after three empty reads");
+	assert.equal(askYes("", { read: typed("yes\n", 0) }), true);
+	assert.equal(askYes("", { read: typed("\n", 2) }), false, "Enter is no");
+	assert.equal(askYes("", { read: () => 0 }), false, "end of input is no");
+	assert.equal(askYes("", { read: () => { throw Object.assign(new Error("EIO"), { code: "EIO" }); } }), false);
+}
 
 // A run never pushes a default branch: main/master and the like, or the remote's own default.
 writePlan("branch: main\npush: yes");
