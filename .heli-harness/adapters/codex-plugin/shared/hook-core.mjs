@@ -336,6 +336,23 @@ export function shellCommentSyntax(toolName) {
 	return null;
 }
 
+// A template committed on purpose, whatever stage it is for: `.env.example`, `.env.local.sample`, `.env.template`, `.env.dist`.
+const ENV_TEMPLATE = /^\.env(?:\.[^/]*)?\.(?:example|sample|template|dist)$/;
+
+/**
+ * Whether a path names a `.env`-style file that may hold secrets, the files the env.write gate guards: `.env`,
+ * `.env.<anything>` (`.env.local`, `.env.production`) and direnv's `.envrc`, but not a template (ENV_TEMPLATE); a
+ * `.env.<x>/` folder guards what is in it, as before. Case-insensitive, `\` or `/`.
+ */
+export function namesSecretEnvFile(path) {
+	const parts = String(path ?? "").replaceAll("\\", "/").toLowerCase().split("/");
+	const last = parts.length - 1;
+	return parts.some((part, index) => {
+		if (index < last) return part.startsWith(".env.");
+		return part === ".env" || part === ".envrc" || (part.startsWith(".env.") && !ENV_TEMPLATE.test(part));
+	});
+}
+
 /**
  * Tools whose `description` is prose about the call, never a stand-in for a missing `command` (on the shell tools of some
  * hosts a lone `description` is read as the command): an MCP tool's, since issue trackers and calendars have one, and Monitor's,
@@ -864,8 +881,7 @@ export function evaluatePreToolUse({
 				"Heli-Harness blocks git push without scoped authority. Ask the user to run `heli grant issue --action git.push --scope once` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_GIT_PUSH or YOLO.",
 		});
 	}
-	const envFile = /(^|\/)\.env(\.|$)/;
-	const namesEnvFile = (entry) => entry.normalized && envFile.test(entry.normalized.toLowerCase());
+	const namesEnvFile = (entry) => entry.normalized && namesSecretEnvFile(entry.normalized);
 	let envWrite;
 	if (mcp) {
 		// A read of a `.env` file is not a write, and an MCP tool's input is server-defined: only a call that looks like a write
@@ -873,11 +889,11 @@ export function evaluatePreToolUse({
 		// for every path it names, and otherwise only the paths under a destination-like key (`destination`, `output`, `to` ...).
 		const writes = isWrite || mcpToolWrites(name) || mcp.hasContentKey;
 		const written = new Set(writes ? structuredPaths : mcp.paths.filter((path) => path.destination).map((path) => path.text));
-		envWrite = [...written].some((path) => envFile.test(path.replaceAll("\\", "/").toLowerCase())) ||
+		envWrite = [...written].some(namesSecretEnvFile) ||
 			structuredEntries.some((entry) => written.has(entry.raw) && namesEnvFile(entry)) ||
 			shellEntries.some(namesEnvFile);
 	} else {
-		envWrite = paths.some((path) => envFile.test(path)) || [...structuredEntries, ...shellEntries].some(namesEnvFile);
+		envWrite = paths.some(namesSecretEnvFile) || [...structuredEntries, ...shellEntries].some(namesEnvFile);
 	}
 	if (envWrite && !allowEnvWriteScoped(scope)) {
 		requirements.push({

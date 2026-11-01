@@ -238,11 +238,15 @@ const bypassProbes = [
 		pattern: /git push/i,
 	},
 	{
-		label: "env via env.example (should ALLOW — not a secret file pattern .env)",
+		label: "env template .env.example (a committed template, not a secret file)",
 		sample: { tool_name: "Write", tool_input: { file_path: ".env.example" } },
-		shouldDeny: true, // current regex: /(^|\/)\.env(\.|$)/  — .env.example MATCHES \.env\.
+		shouldDeny: false, // namesSecretEnvFile: .env.example/.sample/.template/.dist are templates
+	},
+	{
+		label: "env via .envrc (direnv exports secrets)",
+		sample: { tool_name: "Write", tool_input: { file_path: ".envrc" } },
+		shouldDeny: true,
 		pattern: /\.env/i,
-		note: "current rules treat .env.example as blocked (strict)",
 	},
 	{
 		label: "powershell git push",
