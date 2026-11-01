@@ -17,6 +17,9 @@ When `.heli/workspace.json` exists:
 - resource/worktree authority is the conflicting-write boundary;
 - a task is optional durable work/provenance, not the root authorization key;
 - use scoped grants for temporary approval;
+- for plan-shaped unattended work, an approved run (`heli run approve <plan>`, human-only) allows pushes to the plan's own branch while the plan file is unchanged, and on Claude Code keeps the agent working until `heli run done` or `heli run blocked "<what it needs>"`;
+- every deny names its recovery class: clear a `SELF_RECOVERABLE` block yourself and continue, ask once for a `HUMAN_REQUIRED` one and keep working on what does not need it, never work around a `HARD_DENY`;
+- the project's governance files (`.heli/safety/**`, `.heli/policies/**`, `.heli/workspace.json`, `.heli/heli.lock`) are not agent-writable (`HELI_POLICY_PROTECTED`, under YOLO too);
 - T6 hard-deny behavior remains non-grantable by normal temporary approval;
 - preserve dirty user work and keep changes within the resolved target/resource scope;
 - use a durable work record when work spans sessions, needs handoff/coordination, or carries significant verification/diagnosis obligations.

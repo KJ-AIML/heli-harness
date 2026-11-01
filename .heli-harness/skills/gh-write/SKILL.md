@@ -15,5 +15,6 @@ Scope:
 
 Rules:
 - Do not post, close, merge, label, or request reviewers unless the user asked or the repo profile permits it.
+- Merging a pull request (`gh pr merge`, `glab mr merge`) is a remote git write: Heli asks for the user's `git.push` approval, and an approved run never covers it.
 - Do not expose secrets, private paths, or irrelevant local logs.
 - Do not claim checks passed unless evidence was collected.

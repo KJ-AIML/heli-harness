@@ -33,6 +33,8 @@ Use this skill for questions such as:
 - "Which Heli command or skill solves this?"
 - "Why does Heli behave differently in this repo/worktree?"
 - "Is this workspace/host ready to continue development?"
+- "How do I let the agent work through a plan while I'm away?"
+- "Why was a push refused during an approved run, or why didn't the agent keep going?"
 
 Do not use it merely because Heli exists. If the task is already clearly a code review, release, incident, debug session, dependency change, or other specialist workflow, use that specialist skill directly.
 
@@ -50,6 +52,8 @@ heli resume --json
 heli explain authority
 heli explain capabilities
 heli host status
+heli run status
+heli grant list
 heli target show
 heli task list
 heli task show <id>
@@ -74,6 +78,8 @@ Select the smallest set that answers the user's goal.
 | "Dependency/handoff is blocking me" | `heli resume --json`, task/handoff detail |
 | "Wrong repo/target?" | `heli status`, `heli target show`, authority if writing |
 | "Heli seems unhealthy" | `heli status`, then `heli doctor` if needed |
+| "Can the agent work unattended? Is a run on?" | `heli run status` |
+| "Why was a push or merge refused?" | the deny's own reason and `Heli recovery:` line, then `heli run status`, `heli grant list` |
 
 If a query is unavailable in an older runtime, explain the version/topology limitation and use the safest supported compatibility surface. Do not invent missing state.
 
@@ -152,6 +158,23 @@ A handoff is useful when another task/actor/worktree needs a named artifact snap
 
 Do not use a handoff as writer-authority transfer. Git remains artifact snapshot authority; Heli stores coordination metadata.
 
+### Work through a plan while the user is away (approved runs)
+
+When the user wants an agent to work a plan through without stopping to ask (overnight, while away), the supported path is an approved run, not YOLO:
+
+1. the agent writes the plan with a fenced `heli-run` block: `branch:` the plan's own branch, `push: yes` if it must push, `hours:` 1 to 24 (default 8);
+2. the user reads the plan and runs `heli run approve <plan>` in their own terminal; it shows what the run allows and what stays blocked, then asks (human-only, like grants and YOLO);
+3. while the run is on, pushes to that branch of that remote are allowed, unforced, for as long as the plan file is unchanged; on Claude Code a Stop hook keeps the bound session working until it runs `heli run done`, or `heli run blocked "<what it needs>"` when every remaining step needs the user;
+4. `heli run status` shows the run; `heli run stop` ends it at once.
+
+A run never covers `main`, `master` or the remote's default branch, other branches, force pushes, tags, deletions, merging a pull request (`gh pr merge` needs the user's own `git.push` grant; `--scope once` is enough), publish/deploy approvals, `.env` writes or T6 commands. YOLO lifts much more, and expires after 8 hours by default. Prefer a run for plan-shaped work, and a scoped grant for one action.
+
+Diagnosing a run:
+
+- `keep going: off` at approval: no agent session was active near the plan around or since the time it was written. The user can name one with `--session <heli-session-id>` (the agent's SessionStart context shows its id). Pushes are allowed either way.
+- A push refused during a run: compare the branch and remote with `heli run status`, then look for a force flag or a tag. Also check whether the plan file changed after approval: any edit voids it, so keep progress notes elsewhere. A push written with both quotes and an output redirection (`"x" 2>&1`) is read conservatively and not covered; push without the redirection.
+- Keep-going exists on Claude Code only. Other hosts get the run's push approval without it.
+
 ### Old workspace migration
 
 For an older embedded workspace, prefer:
@@ -197,7 +220,9 @@ Add `heli resume --json` when continuation context matters.
 
 A missing compatibility lease for an already-bound write session may be auto-established when the worktree is free. Do not ask the user to enable YOLO merely to recover that state.
 
-A live writer conflict is different: do not take over silently. Ask the user to continue with the current writer, close/release it, use another worktree, or explicitly approve takeover.
+A live writer conflict is different: do not take over silently. Ask the user to continue with the current writer, close/release it, use another worktree, or explicitly approve takeover. A conflict with a lease that lapses within a minute is `SELF_RECOVERABLE` with `retryAfterSeconds`: wait, retry once, and ask only if the same blocker is back.
+
+Writes to the project's governance files (`.heli/safety/**`, `.heli/policies/**`, `.heli/workspace.json`, `.heli/heli.lock`) are refused with `HELI_POLICY_PROTECTED`, under YOLO too: an agent cannot change the rules it runs under. The user edits them, or `heli update` merges newly shipped rules.
 
 ### Host says stale / integration mismatch
 
@@ -241,6 +266,7 @@ Heli Assistant must not silently:
 - acquire, release, transfer, or take over writer authority;
 - issue grants;
 - enable YOLO;
+- approve a run (`heli run approve`) or change the governance profile (`heli governance set`);
 - push Git;
 - upload/sync workspace data;
 - publish or deploy;
@@ -260,6 +286,7 @@ If the user explicitly requests one of those actions, route to the appropriate s
 - Evidence may move across workspaces/devices; live authorization does not.
 - Same blocker + unchanged authority state is not progress; do not spend tool/model budget retrying it.
 - Normal safe development should not require YOLO merely to obtain missing free writer authority.
+- An approved run covers pushes to the plan's branch only, while the plan file is unchanged; it is not a general push grant and never covers a merge.
 - Do not fabricate a state transition or supported control-plane action to satisfy the user's desired outcome.
 
 ## Output

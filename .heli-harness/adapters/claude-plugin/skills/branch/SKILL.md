@@ -16,6 +16,7 @@ Scope:
 Rules:
 - Do not assume `develop`, `main`, or trunk-based policy unless documented.
 - Do not force push, rebase shared work, or bypass protection without explicit user approval.
+- Under an approved run (`heli run status`), push only the run's branch, unforced; another branch, tags or merging the pull request need the user's own approval.
 - Do not add assistant/vendor co-author metadata unless the repo profile explicitly requires it.
 - Preserve dirty user work.
 

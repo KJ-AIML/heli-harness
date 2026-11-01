@@ -42,6 +42,9 @@ A normal linked project uses `.heli/` project binding plus execution-local runti
 | Inspect or record diagnosis evidence | `heli diagnosis ...` |
 | Issue human-scoped temporary approval | `heli grant ...` |
 | Human temporary YOLO mode | `heli yolo ...` |
+| Approve a plan for unattended work (human only) | `heli run approve <plan>` |
+| Inspect, report on or end an approved run | `heli run status|done|blocked|resume|stop` |
+| Show or set the governance profile (`set` is human only) | `heli governance show|set` |
 | Optional cloud workspace sync | `heli auth|ws|push|pull|sync ...` |
 
 Run the command's own help surface when exact flags are needed. Do not invent undocumented subcommands.
@@ -57,6 +60,7 @@ Route questions like these to `heli-assistant`:
 - "Do I need a durable task?"
 - "Why does host status say stale?"
 - "Which Heli command solves this?"
+- "How do I let the agent work through a plan while I'm away?"
 
 The assistant should inspect only the state needed for the goal, explain the situation, and recommend the smallest supported path.
 
@@ -78,5 +82,5 @@ The packaged `/heli-*` skills are convenience entry points, not separate authori
 - Do not infer linked authority from leftover embedded state files.
 - Do not treat installed plugin files as proof that runtime callbacks executed.
 - Tasks are optional durable work/provenance records in linked v0.11; task names are not the root write-authority boundary.
-- Human-only approvals such as grants or YOLO must not be silently issued by an agent.
+- Human-only approvals (grants, YOLO, approved runs, the governance profile) are not an agent's to give: the hooks refuse an agent-run `heli grant issue`, `heli yolo on`, `heli run approve` or `heli governance set`.
 - Compatibility commands remain available for intentionally embedded workspaces, but do not present them as the normal v0.11 path.
