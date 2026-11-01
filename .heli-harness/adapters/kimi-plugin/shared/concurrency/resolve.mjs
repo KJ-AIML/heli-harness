@@ -1,7 +1,8 @@
 /**
  * Shared execution-context resolver used by all runtime adapters.
  */
-import { isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { pathExists, readJson, readText } from "./fs-atomic.mjs";
 import {
 	findWorkspaceRoot,
@@ -30,7 +31,8 @@ import {
 	findActiveWriteLeaseForWorktree,
 } from "./lease.mjs";
 import { effectiveSessionAuthority } from "./authority.mjs";
-import { resolveYolo } from "./yolo-scope.mjs";
+import { resolveYolo, yoloSessionLine } from "./yolo-scope.mjs";
+import { runSessionLine } from "./runs.mjs";
 import { readDiagnosis } from "./diagnosis.mjs";
 import { isLinkedWorkspace, readProjectBinding } from "./project-binding.mjs";
 import { classifyToolPaths } from "./protected-paths.mjs";
@@ -603,13 +605,38 @@ export function evaluateOwnershipGate(ctx, {
 	return { deny: false, ok: true };
 }
 
+// The protocol's core for a linked session, inline: a linked project has no `.heli-harness/HARNESS.md` of its own.
+const LINKED_SESSION_RULES =
+	"A deny ends with `Heli recovery:`: clear a SELF_RECOVERABLE block yourself and continue; for HUMAN_REQUIRED ask the user once and keep working on what does not need it; never work around a HARD_DENY. End your turn only when the work is done or every remaining step needs the user. When the same check fails twice after real fixes with no new information, write a short diagnosis and change approach.";
+
+let packagedHarness;
+/** The HARNESS.md of the Heli package this module runs from (the folder that holds it and `adapters/`), or null. */
+function packagedHarnessPath() {
+	if (packagedHarness !== undefined) return packagedHarness;
+	packagedHarness = null;
+	let dir = dirname(fileURLToPath(import.meta.url));
+	for (let depth = 0; depth < 6; depth += 1) {
+		if (pathExists(join(dir, "HARNESS.md")) && pathExists(join(dir, "adapters"))) {
+			packagedHarness = join(dir, "HARNESS.md");
+			break;
+		}
+		const parent = dirname(dir);
+		if (parent === dir) break;
+		dir = parent;
+	}
+	return packagedHarness;
+}
+
 /**
  * Build compact SessionStart context for concurrent or legacy mode.
  */
 export function buildConcurrentSessionContext(ctx, { env = process.env } = {}) {
+	const linked = Boolean(ctx.workspaceRoot) && ctx.concurrentMode && isLinkedWorkspace(ctx.workspaceRoot);
 	const lines = [
 		"Heli-Harness plugin context:",
-		"Read .heli-harness/HARNESS.md before substantive work.",
+		linked
+			? `Heli rules: ${LINKED_SESSION_RULES} Full protocol: ${packagedHarnessPath() || "HARNESS.md in the installed Heli package"}.`
+			: "Read .heli-harness/HARNESS.md before substantive work.",
 		"Instruction files are not a sandbox; plugin hooks are guardrails only.",
 	];
 
@@ -635,6 +662,10 @@ export function buildConcurrentSessionContext(ctx, { env = process.env } = {}) {
 		lines.push(`- Resource: ${ctx.worktreeRoot || "n/a"}`);
 		lines.push(`- Resource authority: ${active ? (active.sessionId === ctx.sessionId ? `held by this session (generation ${active.generation || 1}, revision ${active.revision || 1})` : `held by session ${active.sessionId}`) : authority?.invalid ? "malformed (writes fail closed)" : "available; first guarded mutation acquires it conflict-safely"}`);
 		lines.push("- Project binding lives under .heli/; grants, sessions, live authority, and capability observations remain execution-local.");
+		const yolo = yoloSessionLine({ workspaceRoot: ctx.workspaceRoot, cwd: ctx.worktreeRoot || ctx.workspaceRoot, taskId: ctx.taskId, sessionId: ctx.sessionId, env, legacyMode: false });
+		if (yolo) lines.push("", yolo);
+		const run = runSessionLine(ctx.workspaceRoot, { sessionId: ctx.sessionId, env });
+		if (run) lines.push("", run);
 		if (!ctx.taskId && ctx.worktreeRoot) {
 			const continuation = continuationForWorktree(ctx.workspaceRoot, ctx.worktreeRoot, { env });
 			if (continuation) {

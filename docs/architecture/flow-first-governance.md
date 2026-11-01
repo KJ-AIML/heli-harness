@@ -47,6 +47,8 @@ A denial may also provide:
 - `nextAction`;
 - a blocker fingerprint derived from code + resource + holder/session identity where available.
 
+Every PreToolUse deny carries `recoverability`, `retryable: false` and `nextAction`, and its reason ends with them and with what the agent does meanwhile (`evaluatePreToolUse` in hook-core; ownership denies add the blocker fingerprint). `AUTO_RECOVERABLE` is never a deny: Heli repairs that authority and allows the call.
+
 ## Compatibility writer happy path
 
 In embedded/concurrent mode, when:
@@ -82,9 +84,14 @@ The runtime guard should make repeated identical denials machine-readable and ho
 ```text
 same blocker + unchanged authority state
   -> do not retry the denied operation
-  -> perform the single recovery action if SELF_RECOVERABLE
-  -> otherwise stop and ask the human
+  -> SELF_RECOVERABLE: perform the recovery action and continue, without stopping to ask
+  -> HUMAN_REQUIRED: ask the human once, and keep working on what does not need the decision
+  -> HARD_DENY: do not work around it; continue another way, or say why the task needs it
 ```
+
+A deny is a blocked call, not a reason to end the turn.
+
+A live write conflict with a lease that lapses within a minute (flow mode's mutation lease lapses 30 s after the holder's last write) is `SELF_RECOVERABLE` with `retryAfterSeconds`: the agent waits that long and retries once, and asks the human only if the retry is refused with the same blocker fingerprint, because then the other session is still writing there. A longer hold (strict mode's resource lease, an embedded task lease) stays `HUMAN_REQUIRED`. Enforcement is unchanged: the call is denied while the lease is live.
 
 The guard itself must stay deterministic and fail-closed. It must not depend on model memory to avoid loops.
 

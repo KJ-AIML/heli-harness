@@ -15,6 +15,7 @@
 - Host-specific secret enforcement depends on adapter support and the exact intercepted surface.
 - Current Pi/AXGA guards detect obvious sensitive paths and obvious secret-like write content when compatible `tool_call` hooks expose the necessary structured input.
 - Shared classifiers normalize common command/write forms before rule matching where supported.
+- The shared `env.write` gate guards `.env`, `.env.<stage>` (`.env.local`, `.env.production`) and `.envrc`; templates committed on purpose (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`) are ordinary files.
 - Missing structured input or unsupported shell effects must be reported as partial/advisory coverage, not silently upgraded to enforcement.
 - This is conservative best-effort detection, not comprehensive secret scanning or a sandbox.
 

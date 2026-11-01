@@ -256,6 +256,7 @@ const COMMAND_RULE_TIERS = new Set(["T0", "T1", "T2", "T3", "T4", "T5", "T6"]);
 const DANGEROUS_FILE_PATTERNS = [
 	{ pattern: /\.env(?:\.bak)?$/, reason: ".env files contain secrets" },
 	{ pattern: /(^|\/)\.env\.(local|production|development|test)(?:\.bak)?$/, reason: "env files contain secrets" },
+	{ pattern: /(^|\/)\.envrc$/, reason: "direnv .envrc files commonly export secrets" },
 	{ pattern: /\.pem(?:\.bak)?$/, reason: "PEM files are private keys" },
 	{ pattern: /\.key(?:\.bak)?$/, reason: "Key files are credentials" },
 	{ pattern: /(^|\/)credentials(\.json)?(?:\.bak)?$/, reason: "Credential files contain secrets" },

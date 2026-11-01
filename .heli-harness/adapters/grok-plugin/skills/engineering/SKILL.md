@@ -17,7 +17,7 @@ Rules:
 - S0/S1: use the smallest relevant check first.
 - S2/S3: require plan, impact analysis, verification evidence, and rollback notes where relevant.
 - Do not widen scope to make a solution elegant if a smaller correct path exists.
-- Stop after two failed fix attempts and write diagnosis.
+- After two failed fix attempts on the same check with no new information, stop repeating that fix: write a short diagnosis (what failed, likely causes, next smallest action) and continue with it. End the turn only when the next step needs the user.
 - For active S2/S3 diagnosis, material implementation requires current evidence and an established root cause; S2 material decisions also expose an independent-review requirement.
 - Record material decisions as decision/evidence/predicted effect/falsifier/outcome. Complete only with current passing verification evidence.
 

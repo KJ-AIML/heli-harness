@@ -23,6 +23,7 @@ import { runSetup } from "../lib/cli/setup.mjs";
 import { runLink } from "../lib/cli/link.mjs";
 import { runRepo } from "../lib/cli/repo.mjs";
 import { runGrant } from "../lib/cli/grant.mjs";
+import { runRun } from "../lib/cli/run.mjs";
 import { runHost } from "../lib/cli/host.mjs";
 import { runHandoff } from "../lib/cli/handoff.mjs";
 import { runResume } from "../lib/cli/resume.mjs";
@@ -90,6 +91,7 @@ try {
 		case "host": runHost(packageRoot, args); break;
 		case "handoff": protocolJsonRequested(command, args) ? runHandoffMachine(args) : runHandoff(args); break;
 		case "grant": runGrant(args); break;
+		case "run": runRun(args); break;
 		case "install": runInstall(packageRoot, args); break;
 		case "update": runUpdate(packageRoot, args); break;
 		case "migrate": runMigrate(packageRoot, args); break;

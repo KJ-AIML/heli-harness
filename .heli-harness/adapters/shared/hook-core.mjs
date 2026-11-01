@@ -5,6 +5,7 @@
  * v0.5.24: concurrent session foundation via ./concurrency/*
  */
 
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -20,7 +21,7 @@ import {
 import { observeRuntimeCapability } from "./concurrency/attestation.mjs";
 import { resolveYolo, allowGitPushScoped, allowEnvWriteScoped } from "./concurrency/yolo-scope.mjs";
 import { sessionHoldsWriteLease, refreshLease } from "./concurrency/lease.mjs";
-import { findWorkspaceRoot } from "./concurrency/paths.mjs";
+import { findWorkspaceRoot, resolveWorktreeRoot } from "./concurrency/paths.mjs";
 import { consumeApplicableGrant, findUsableGrants } from "./concurrency/grant.mjs";
 import { hashText } from "./concurrency/ids.mjs";
 import { resourceIdForWorktree } from "./concurrency/resource-authority.mjs";
@@ -46,6 +47,7 @@ import {
 	heliEnvironmentKeys,
 	normalizePolicyPath,
 	protectedEnvironmentReason,
+	protectedPolicyReason,
 	protectedWriteReason,
 	settingsContentOf,
 } from "./concurrency/protected-paths.mjs";
@@ -104,7 +106,7 @@ export function buildSkillUsageBootstrap() {
 		"Heli skill usage:",
 		"Heli skills are mandatory workflow resources when they match the task — not optional docs.",
 		"Before substantive action, check for a relevant Heli skill (host skill inventory when the plugin is loaded, or .heli-harness/skills/<name>/SKILL.md).",
-		"Load only matching skills; read the current skill body; do not invent skills; do not load every skill.",
+		"Load only matching skills; read each one's current body once per session (again only if it changed or the context was compacted); do not invent skills; do not load every skill.",
 		"Process/workflow skills outrank implementation detail. Explicitly requested skills must be loaded.",
 		"User instructions and Heli safety/ownership rules remain authoritative. Skill use does not change task, session, worktree, or lease identity.",
 		"Subagents on a tightly scoped task should not restart the full controller skill stack.",
@@ -336,6 +338,23 @@ export function shellCommentSyntax(toolName) {
 	return null;
 }
 
+// A template committed on purpose, whatever stage it is for: `.env.example`, `.env.local.sample`, `.env.template`, `.env.dist`.
+const ENV_TEMPLATE = /^\.env(?:\.[^/]*)?\.(?:example|sample|template|dist)$/;
+
+/**
+ * Whether a path names a `.env`-style file that may hold secrets, the files the env.write gate guards: `.env`,
+ * `.env.<anything>` (`.env.local`, `.env.production`) and direnv's `.envrc`, but not a template (ENV_TEMPLATE); a
+ * `.env.<x>/` folder guards what is in it, as before. Case-insensitive, `\` or `/`.
+ */
+export function namesSecretEnvFile(path) {
+	const parts = String(path ?? "").replaceAll("\\", "/").toLowerCase().split("/");
+	const last = parts.length - 1;
+	return parts.some((part, index) => {
+		if (index < last) return part.startsWith(".env.");
+		return part === ".env" || part === ".envrc" || (part.startsWith(".env.") && !ENV_TEMPLATE.test(part));
+	});
+}
+
 /**
  * Tools whose `description` is prose about the call, never a stand-in for a missing `command` (on the shell tools of some
  * hosts a lone `description` is read as the command): an MCP tool's, since issue trackers and calendars have one, and Monitor's,
@@ -426,7 +445,20 @@ function grantCallKey(ctx, action, env) {
 	return hashText(`${hostSessionId}|${toolCallId}|${action}`);
 }
 
-function grantRequest(ctx, action, env) {
+/**
+ * ` --resource <folder>` for the `heli grant issue` a deny asks for, when the call is checked against a worktree other than
+ * the workspace root's (a repository nested in the workspace): a grant issued from the root would be for the root, and the
+ * agent would be refused again. Empty otherwise, where the plain command already names the right resource.
+ */
+function grantResourceFlag(ctx) {
+	const worktree = ctx.worktreeRoot;
+	if (!worktree || !ctx.workspaceRoot) return "";
+	if (resourceIdForWorktree(worktree) === resourceIdForWorktree(resolveWorktreeRoot(ctx.workspaceRoot))) return "";
+	return ` --resource ${/^[\w@%+=:,./\\-]+$/.test(worktree) ? worktree : JSON.stringify(worktree)}`;
+}
+
+/** `target`: what the call does beyond its action, for a grant with a constraint (see resolvePushTargets). */
+function grantRequest(ctx, action, env, target = null) {
 	return {
 		action,
 		sessionId: ctx.sessionId || null,
@@ -434,20 +466,62 @@ function grantRequest(ctx, action, env) {
 			type: "worktree",
 			id: resourceIdForWorktree(ctx.worktreeRoot || ctx.workspaceRoot),
 		},
+		target,
 		env,
 	};
+}
+
+/** git's trimmed output in a folder, or null when it fails. */
+function gitOutput(cwd, args) {
+	const result = spawnSync("git", ["-C", cwd, ...args], { encoding: "utf8", timeout: 5000 });
+	return result.status === 0 ? String(result.stdout || "").trim() || null : null;
+}
+
+/**
+ * Where a command's remote git writes land, for a grant limited to some branches (an approved run's): `[{ remote,
+ * branch, force }]`, asking git in the worktree for what the command leaves to it (a bare `git push` goes to `@{push}`,
+ * `HEAD` is the current branch). null when any write cannot be placed on a named branch: `gh pr merge` (its base branch),
+ * `--tags`, `--all`, a deletion, a ref outside refs/heads, a remote git's configuration does not name. A dry run lands nowhere.
+ */
+function resolvePushTargets(commandPolicy, ctx) {
+	if ((commandPolicy?.remoteGitWrites || []).some((form) => form !== "git push")) return null;
+	const worktree = ctx.worktreeRoot || ctx.workspaceRoot;
+	if (!worktree) return null;
+	const targets = [];
+	for (const push of commandPolicy?.pushDestinations || []) {
+		if (push.dryRun) continue;
+		if (push.wide) return null;
+		if (!push.refspecs.length) {
+			const upstream = gitOutput(worktree, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{push}"]);
+			const slash = upstream ? upstream.indexOf("/") : -1;
+			if (slash <= 0 || (push.remote && push.remote !== upstream.slice(0, slash))) return null;
+			targets.push({ remote: upstream.slice(0, slash), branch: upstream.slice(slash + 1), force: push.force });
+			continue;
+		}
+		for (const spec of push.refspecs) {
+			const plain = spec.replace(/^\+/, "");
+			if (!push.remote || plain.startsWith(":")) return null;
+			let branch = plain.includes(":") ? plain.slice(plain.indexOf(":") + 1) : plain;
+			if (branch === "HEAD" || branch === "@") branch = gitOutput(worktree, ["symbolic-ref", "--short", "-q", "HEAD"]);
+			if (!branch) return null;
+			if (branch.startsWith("refs/heads/")) branch = branch.slice("refs/heads/".length);
+			else if (branch.startsWith("refs/")) return null;
+			targets.push({ remote: push.remote, branch, force: push.force || spec.startsWith("+") });
+		}
+	}
+	return targets;
 }
 
 /**
  * Read-only: the grant each action would consume, in order, counting the uses an earlier
  * action of the same call takes (one `once` grant pays for one action). null means no usable
- * grant is left for that action. Never consumes a use.
+ * grant is left for that action. Never consumes a use. `targets[i]` goes with `actions[i]`.
  */
-function findScopedGrants(ctx, actions, env = process.env) {
+function findScopedGrants(ctx, actions, env = process.env, targets = []) {
 	if (!ctx?.workspaceRoot) return actions.map(() => null);
 	try {
-		return findUsableGrants(ctx.workspaceRoot, actions.map((action) => ({
-			...grantRequest(ctx, action, env),
+		return findUsableGrants(ctx.workspaceRoot, actions.map((action, index) => ({
+			...grantRequest(ctx, action, env, targets[index] ?? null),
 			callKey: grantCallKey(ctx, action, env),
 		})), { env });
 	} catch {
@@ -457,11 +531,11 @@ function findScopedGrants(ctx, actions, env = process.env) {
 }
 
 /** Consume one use; call only once the final decision is allow. */
-function consumeScopedGrant(ctx, action, env = process.env) {
+function consumeScopedGrant(ctx, action, env = process.env, target = null) {
 	if (!ctx?.workspaceRoot || !action) return null;
 	try {
 		return consumeApplicableGrant(ctx.workspaceRoot, {
-			...grantRequest(ctx, action, env),
+			...grantRequest(ctx, action, env, target),
 			callKey: grantCallKey(ctx, action, env),
 		});
 	} catch {
@@ -491,13 +565,34 @@ const OWNERSHIP_RECOVERY = Object.freeze({
 	LEASE_RACE: { recoverability: "SELF_RECOVERABLE", nextAction: "Refresh status/authority once; retry only if the authority state changed." },
 });
 
+// A live write conflict with a short lease (flow mode's mutation lease lapses 30 s after the holder's last write) is
+// usually over before a human could answer: the agent waits it out and retries once, and asks only if the same blocker
+// is back. A longer hold (strict mode's resource lease, a task lease) still needs the user.
+const SHORT_HOLD_CODES = new Set(["MUTATION_CONFLICT", "RESOURCE_WRITER_HELD"]);
+const SHORT_HOLD_SECONDS = 60;
+
+/** Seconds until a conflicting lease lapses when that is soon, else null. */
+function shortHoldSeconds(lease) {
+	const expires = Date.parse(lease?.expiresAt || "");
+	if (!Number.isFinite(expires)) return null;
+	const seconds = Math.ceil((expires - Date.now()) / 1000);
+	return seconds >= 0 && seconds <= SHORT_HOLD_SECONDS ? seconds : null;
+}
+
 function ownershipRecovery(decision, ctx) {
 	const code = decision?.code || "GOVERNANCE_DENIED";
-	const spec = OWNERSHIP_RECOVERY[code] || {
-		recoverability: "SELF_RECOVERABLE",
-		nextAction: "Inspect heli status and heli explain authority before deciding whether to retry.",
-	};
 	const authority = decision?.authority || decision?.lease || null;
+	const lapse = SHORT_HOLD_CODES.has(code) ? shortHoldSeconds(authority) : null;
+	const retryAfterSeconds = lapse === null ? null : lapse + 1;
+	const spec = retryAfterSeconds !== null
+		? {
+			recoverability: "SELF_RECOVERABLE",
+			nextAction: `The other session's lease lapses in about ${retryAfterSeconds}s unless it writes again: wait that long, then retry once. If the retry is refused with this same Blocker, that session is still working here: ask the user whether to wait for it, move one of you to another git worktree, or approve a takeover.`,
+		}
+		: OWNERSHIP_RECOVERY[code] || {
+			recoverability: "SELF_RECOVERABLE",
+			nextAction: "Inspect heli status and heli explain authority before deciding whether to retry.",
+		};
 	const resourceId = authority?.resource?.id || (ctx?.worktreeRoot ? resourceIdForWorktree(ctx.worktreeRoot) : null);
 	const holderSessionId = authority?.sessionId || null;
 	const fingerprint = `heli-block-${hashText([
@@ -512,25 +607,76 @@ function ownershipRecovery(decision, ctx) {
 		retryable: false,
 		nextAction: spec.nextAction,
 		blockerFingerprint: fingerprint,
+		...(retryAfterSeconds !== null ? { retryAfterSeconds } : {}),
 	};
 }
 
+// What an agent does with each kind of deny. Only a decision that is the user's makes it ask, and even then it keeps
+// working on what does not need the decision: a deny is a blocked call, not a reason to end the turn.
+const RECOVERY_CONDUCT = Object.freeze({
+	SELF_RECOVERABLE: "You can clear this yourself: take the next action, then continue the task. There is no need to stop or ask the user.",
+	HUMAN_REQUIRED: "Do not try alternate write commands to get around this block. Ask the user once for this decision, and until they answer keep working on the parts of the task that do not need it.",
+	HARD_DENY: "Do not retry this or work around it; continue the task another way. If it cannot be done without this, tell the user why.",
+});
+
 function withRecoveryGuidance(reason, recovery) {
-	const lines = [
+	return [
 		reason,
 		`Heli recovery: ${recovery.recoverability}.`,
-		"Retry unchanged action: NO.",
+		recovery.retryAfterSeconds ? `Retry unchanged action: once, after about ${recovery.retryAfterSeconds}s.` : "Retry unchanged action: NO.",
 		`Next action: ${recovery.nextAction}`,
 		`Blocker: ${recovery.blockerFingerprint}`,
-	];
-	if (recovery.recoverability === "HUMAN_REQUIRED") {
-		lines.push("STOP: do not try alternate write commands to bypass this block; ask the user for the required decision.");
-	} else if (recovery.recoverability === "HARD_DENY") {
-		lines.push("STOP: this state must be repaired before more write attempts.");
-	} else {
-		lines.push("Do not retry the denied operation until the recovery action changes Heli authority state.");
+		RECOVERY_CONDUCT[recovery.recoverability] ?? RECOVERY_CONDUCT.SELF_RECOVERABLE,
+	].join("\n");
+}
+
+const GRANT_RECOVERY = { recoverability: "HUMAN_REQUIRED", nextAction: "Ask the user to run the `heli grant issue` command above in their own terminal, then retry once." };
+const DIAGNOSIS_RECOVERY = { recoverability: "SELF_RECOVERABLE", nextAction: "Record what the reason asks with `heli diagnosis` (route, checkpoint or root-cause evidence), then retry." };
+// Who can lift every other deny, and what to do next (ownership denies carry OWNERSHIP_RECOVERY).
+const DENY_RECOVERY = Object.freeze({
+	TIER_BLOCKED: { recoverability: "HARD_DENY", nextAction: "Do not run this command or an equivalent; reach the goal another way." },
+	HELI_STATE_PROTECTED: { recoverability: "HARD_DENY", nextAction: "Leave Heli's own state alone; Heli CLI commands change it, and approvals come from the user's terminal." },
+	HELI_HOOKS_PROTECTED: { recoverability: "HARD_DENY", nextAction: "Leave the hook and Heli settings as they are." },
+	HELI_POLICY_PROTECTED: { recoverability: "HUMAN_REQUIRED", nextAction: "Ask the user to make this change to the project's Heli governance files themselves." },
+	REMOTE_PUSH_DENIED: GRANT_RECOVERY,
+	ENV_WRITE_DENIED: GRANT_RECOVERY,
+	TIER_APPROVAL_REQUIRED: GRANT_RECOVERY,
+	GRANT_NO_LONGER_AVAILABLE: { recoverability: "HUMAN_REQUIRED", nextAction: "Ask the user to issue a new grant, then retry once." },
+	COMMAND_TOO_COMPLEX: { recoverability: "SELF_RECOVERABLE", nextAction: "Split the command into smaller ones (several `git add` calls, or a folder instead of many files), or write large file content with the Write or Edit tool." },
+	COMMAND_UNPARSEABLE: { recoverability: "SELF_RECOVERABLE", nextAction: "Send the command as plain text." },
+	MCP_INPUT_TOO_COMPLEX: { recoverability: "SELF_RECOVERABLE", nextAction: "Split the call into smaller ones." },
+	COMMAND_RULES_UNAVAILABLE: { recoverability: "HUMAN_REQUIRED", nextAction: "Ask the user to restore the rules file (`heli update`); file edits still work meanwhile." },
+	DIAGNOSIS_REROUTE_REQUIRED: DIAGNOSIS_RECOVERY,
+	SUBSYSTEM_CHECKPOINT_REQUIRED: DIAGNOSIS_RECOVERY,
+	ROOT_CAUSE_EVIDENCE_REQUIRED: DIAGNOSIS_RECOVERY,
+	RETRY_JUSTIFICATION_REQUIRED: { recoverability: "SELF_RECOVERABLE", nextAction: "Change something material or gather new evidence before running the costly action again, and say so in its heli_action." },
+	HUMAN_APPROVAL_REQUIRED: { recoverability: "HUMAN_REQUIRED", nextAction: "Ask the user to approve repeating this production/S3 action." },
+	DIAGNOSIS_STATE_INVALID: { recoverability: "HUMAN_REQUIRED", nextAction: "Ask the user to repair the task's diagnosis state (`heli diagnosis show`)." },
+});
+
+/** The recovery for a deny that has none yet: by its code, and for a task gate by who may edit the task record. */
+function denyRecovery(result) {
+	if (result.code === "TASK_GATE") {
+		// A linked task record is protected Heli state; an embedded one is the agent's own narrative file.
+		return result.ctx?.workspaceRoot && isLinkedWorkspace(result.ctx.workspaceRoot)
+			? { recoverability: "HUMAN_REQUIRED", nextAction: "Ask the user to review the task's failed attempts and reset them, or end the work record." }
+			: { recoverability: "SELF_RECOVERABLE", nextAction: "Write the diagnosis the reason asks for, update the task's failed-attempt record, then continue." };
 	}
-	return lines.join("\n");
+	return DENY_RECOVERY[result.code] || {
+		recoverability: "SELF_RECOVERABLE",
+		nextAction: "Read the reason above, inspect `heli status`, and change the approach before retrying.",
+	};
+}
+
+function withDenyRecovery(result) {
+	const recovery = denyRecovery(result);
+	return {
+		...result,
+		recoverability: recovery.recoverability,
+		retryable: false,
+		nextAction: recovery.nextAction,
+		reason: [result.reason, `Heli recovery: ${recovery.recoverability}.`, `Next action: ${recovery.nextAction}`, RECOVERY_CONDUCT[recovery.recoverability]].join("\n"),
+	};
 }
 
 function ownershipDeniedResult(decision, ctx, coverage) {
@@ -594,7 +740,16 @@ export function allowEnvWrite(cwd = process.cwd(), env = process.env) {
 	});
 }
 
-export function evaluatePreToolUse({
+/**
+ * The PreToolUse decision (see decidePreToolUse). Every deny carries who can lift it (`recoverability`: SELF_RECOVERABLE,
+ * HUMAN_REQUIRED or HARD_DENY), the next action, and what the agent does meanwhile, in its fields and in its reason.
+ */
+export function evaluatePreToolUse(options) {
+	const result = decidePreToolUse(options);
+	return result?.deny && !result.recoverability ? withDenyRecovery(result) : result;
+}
+
+function decidePreToolUse({
 	cwd,
 	toolName = "",
 	toolInput = {},
@@ -732,6 +887,16 @@ export function evaluatePreToolUse({
 	if (protectedEntry) {
 		return { deny: true, hardDeny: true, code: "HELI_STATE_PROTECTED", reason: protectedWriteReason(protectedEntry, { mcp: Boolean(mcp) }), ctx };
 	}
+	// A linked project's rules, policies and binding: an agent may not change the rules it runs under, YOLO or not. Reading
+	// them is fine, so an MCP call counts only for the paths it writes (as for `.env` below); a file tool here is a write.
+	const mcpWritten = mcp
+		? new Set(isWrite || mcpToolWrites(name) || mcp.hasContentKey ? structuredPaths : mcp.paths.filter((path) => path.destination).map((path) => path.text))
+		: null;
+	const policyEntry = [...structuredEntries.filter((entry) => !mcpWritten || mcpWritten.has(entry.raw)), ...shellEntries]
+		.find((entry) => entry.kind === "policy");
+	if (policyEntry) {
+		return { deny: true, hardDeny: true, code: "HELI_POLICY_PROTECTED", reason: protectedPolicyReason(policyEntry), ctx };
+	}
 	const settingsEntry = [...structuredEntries, ...shellEntries].find((entry) => entry.kind === "claude-settings");
 	if (settingsEntry) {
 		// A shell command is read whole, and for the assignments jq and PowerShell make; a file tool by the text it puts in the
@@ -856,16 +1021,21 @@ export function evaluatePreToolUse({
 	// Approval stage: collect EVERY required approval and look grants up
 	// read-only. Grants are consumed only after the final decision is allow.
 	const requirements = [];
+	const resourceFlag = grantResourceFlag(ctx);
 	if (commandPolicy?.gitPush && !allowGitPushScoped(scope)) {
+		const remote = commandPolicy.remoteGitWrite || "git push";
+		const blocked = remote === "git push" ? "git push" : `${remote} (a remote git write, like git push)`;
+		const pushes = resolvePushTargets(commandPolicy, ctx);
 		requirements.push({
 			action: "git.push",
 			code: "REMOTE_PUSH_DENIED",
+			// For a grant limited to some branches (an approved run's); an unlimited grant ignores it.
+			target: { pushes },
 			reason:
-				"Heli-Harness blocks git push without scoped authority. Ask the user to run `heli grant issue --action git.push --scope once` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_GIT_PUSH or YOLO.",
+				`Heli-Harness blocks ${blocked} without scoped authority. Ask the user to run \`heli grant issue --action git.push --scope once${resourceFlag}\` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_GIT_PUSH or YOLO.`,
 		});
 	}
-	const envFile = /(^|\/)\.env(\.|$)/;
-	const namesEnvFile = (entry) => entry.normalized && envFile.test(entry.normalized.toLowerCase());
+	const namesEnvFile = (entry) => entry.normalized && namesSecretEnvFile(entry.normalized);
 	let envWrite;
 	if (mcp) {
 		// A read of a `.env` file is not a write, and an MCP tool's input is server-defined: only a call that looks like a write
@@ -873,18 +1043,18 @@ export function evaluatePreToolUse({
 		// for every path it names, and otherwise only the paths under a destination-like key (`destination`, `output`, `to` ...).
 		const writes = isWrite || mcpToolWrites(name) || mcp.hasContentKey;
 		const written = new Set(writes ? structuredPaths : mcp.paths.filter((path) => path.destination).map((path) => path.text));
-		envWrite = [...written].some((path) => envFile.test(path.replaceAll("\\", "/").toLowerCase())) ||
+		envWrite = [...written].some(namesSecretEnvFile) ||
 			structuredEntries.some((entry) => written.has(entry.raw) && namesEnvFile(entry)) ||
 			shellEntries.some(namesEnvFile);
 	} else {
-		envWrite = paths.some((path) => envFile.test(path)) || [...structuredEntries, ...shellEntries].some(namesEnvFile);
+		envWrite = paths.some(namesSecretEnvFile) || [...structuredEntries, ...shellEntries].some(namesEnvFile);
 	}
 	if (envWrite && !allowEnvWriteScoped(scope)) {
 		requirements.push({
 			action: "env.write",
 			code: "ENV_WRITE_DENIED",
 			reason:
-				"Heli-Harness blocks .env-style writes without scoped authority. Ask the user to run `heli grant issue --action env.write --scope once` in their own terminal.",
+				`Heli-Harness blocks .env-style writes without scoped authority. Ask the user to run \`heli grant issue --action env.write --scope once${resourceFlag}\` in their own terminal.`,
 		});
 	}
 	for (const match of commandPolicy?.approvals || []) {
@@ -892,11 +1062,11 @@ export function evaluatePreToolUse({
 			action: `command.approval.${match.id}`,
 			code: "TIER_APPROVAL_REQUIRED",
 			ruleId: match.id,
-			reason: approvalReason(match),
+			reason: approvalReason(match, { resourceFlag }),
 		});
 	}
 	// Planned as one set, so a grant that can pay for one approval is not counted for two.
-	const planned = findScopedGrants(ctx, requirements.map((requirement) => requirement.action), env);
+	const planned = findScopedGrants(ctx, requirements.map((requirement) => requirement.action), env, requirements.map((requirement) => requirement.target ?? null));
 	const missing = requirements.filter((_, index) => !planned[index]);
 	if (missing.length) {
 		return {
@@ -911,13 +1081,13 @@ export function evaluatePreToolUse({
 
 	if (isWrite && !taskStateOnly) {
 		const gateReason = readTaskGateForContext(ctx) || readPlanGateForContext(ctx);
-		if (gateReason) return { deny: true, reason: gateReason, ctx };
+		if (gateReason) return { deny: true, code: "TASK_GATE", reason: gateReason, ctx };
 	}
 
 	// Final decision is allow: consume one use of each approval now.
 	const appliedGrants = [];
 	for (const requirement of requirements) {
-		const grant = consumeScopedGrant(ctx, requirement.action, env);
+		const grant = consumeScopedGrant(ctx, requirement.action, env, requirement.target ?? null);
 		if (!grant) {
 			return {
 				deny: true,

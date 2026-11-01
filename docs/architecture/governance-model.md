@@ -119,23 +119,25 @@ Project policy may narrow the trusted ceiling. A repository cannot grant itself 
 
 Hard-deny classes remain hard denies unless an explicitly different trusted policy contract says otherwise. Normal temporary grants do not bypass T6 hard-deny rules, and the kernel's built-in T6 floor cannot be removed by project rules.
 
-Grants and YOLO are issued by a human at an interactive terminal. The governed agent cannot issue its own: the hooks hard-deny agent-run `heli grant issue` / `heli yolo on`, and the Heli state that encodes authority is not agent-writable.
+Grants and YOLO are issued by a human at an interactive terminal. The governed agent cannot issue its own: the hooks hard-deny agent-run `heli grant issue` / `heli yolo on` / `heli governance set`, and the Heli state that encodes authority is not agent-writable.
+
+The governed agent cannot change the rules it runs under either. In a linked project the hooks refuse agent writes to `.heli/safety/**` (command rules), `.heli/policies/**`, `.heli/workspace.json` and `.heli/heli.lock`, and moving or removing `.heli` itself (`HELI_POLICY_PROTECTED`, under YOLO too); reading them is fine, and `.heli/profiles` and `.heli/skills` stay agent-writable. A human edits these files, or the Heli CLI rewrites them (`heli link`, `heli update`).
 
 ## Scoped grants
 
-A grant carries governance-relevant scope such as:
+A grant carries governance-relevant scope:
 
 - grant ID;
-- issuer/approval provenance;
-- actor/subject;
-- action selector;
-- resource selector;
-- execution scope;
-- optional host-session binding;
-- created/expiry time;
-- use count/end condition;
-- revocation state;
-- delegation ceiling where applicable.
+- issuer (`local-user`: the human at the terminal that ran `heli grant issue`);
+- action selector (`git.push`, `env.write`, `command.approval.<rule-id>`; a trailing `*` matches a family);
+- resource selector (a worktree, or `workspace` for every resource of the workspace);
+- optional execution scope (`--execution` pins one checkout; by default any checkout of the workspace on this machine);
+- optional host-session binding (`--scope session`);
+- created/expiry time (`--minutes`; `--scope time` defaults to 60 minutes);
+- end condition: one use (`--scope once`) or reusable until expiry or revocation;
+- revocation state.
+
+The trusted-policy ceiling (`grantableActions`) limits which actions can be granted at all, and is checked again whenever a grant is used. Delegation (a grant that issues grants) and N-use counts are not implemented.
 
 Typical UX:
 

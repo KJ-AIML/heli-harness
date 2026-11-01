@@ -86,10 +86,10 @@ export function resolveYolo({
 						if (!Number.isNaN(exp) && Date.now() > exp) {
 							/* expired */
 						} else {
-							return { active: true, source: "state/yolo.json", safetyOnly: true };
+							return { active: true, source: "state/yolo.json", expiresAt: data.expiresAt, safetyOnly: true };
 						}
 					} else {
-						return { active: true, source: "state/yolo.json", safetyOnly: true };
+						return { active: true, source: "state/yolo.json", expiresAt: null, safetyOnly: true };
 					}
 				}
 			} catch {
@@ -104,6 +104,19 @@ export function resolveYolo({
 	// (explicitly ignored)
 
 	return { active: false, safetyOnly: true };
+}
+
+/**
+ * The SessionStart line that says YOLO is on, or null when it is off: what it lifts, what it never lifts, and until when,
+ * so neither the agent nor the user mistakes an unguarded session for a guarded one.
+ */
+export function yoloSessionLine(opts) {
+	const yolo = resolveYolo(opts);
+	if (!yolo.active) return null;
+	const until = yolo.source === "state/yolo.json"
+		? yolo.expiresAt ? `until ${yolo.expiresAt}` : "with NO expiry"
+		: `from ${yolo.source}`;
+	return `WARNING: Heli YOLO is ON (${until}): the push gate, .env writes, T5 approvals and stuck-task gates are not enforced. T6 hard denies, Heli's self-protection, the project's governance files and live write conflicts still are. Turn it off with \`heli yolo off\`.`;
 }
 
 export function allowGitPushScoped(opts) {

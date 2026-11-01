@@ -178,9 +178,9 @@ Treat a governance denial as a state transition problem, not an invitation to tr
 When the guard exposes recovery metadata, obey it:
 
 - `AUTO_RECOVERABLE`: Heli repaired the safe authority gap and the original operation may continue.
-- `SELF_RECOVERABLE`: run the single documented recovery action, then retry once only if authority state changed.
-- `HUMAN_REQUIRED`: stop tool retries and ask the user for the decision/approval.
-- `HARD_DENY`: stop; repair the invalid state or change the requested operation.
+- `SELF_RECOVERABLE`: run the single documented recovery action, then retry once only if authority state changed, and continue; no need to ask the user.
+- `HUMAN_REQUIRED`: stop tool retries and ask the user once for the decision/approval; keep working on the parts of the task that do not need it.
+- `HARD_DENY`: do not retry or work around it; change the requested operation, or ask the user to repair invalid state.
 
 If `retryable=false`, do not retry the blocked action or alternate write commands against the same blocker.
 

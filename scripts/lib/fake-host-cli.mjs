@@ -7,7 +7,7 @@
  * canned response for "<host> <args joined by space>" from the JSON file at
  * $HELI_FAKE_HOST_RESPONSES (or a harmless default) and exits with its status.
  */
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeSync } from "node:fs";
 
 const [host = "unknown", ...args] = process.argv.slice(2);
 const logPath = process.env.HELI_FAKE_HOST_LOG;
@@ -30,6 +30,7 @@ const fallback = args[0] === "--version"
 		? { stdout: "[]\n", status: 0 }
 		: { stdout: "", status: 0 };
 const response = { ...fallback, ...(responses[key] || {}) };
-if (response.stdout) process.stdout.write(response.stdout);
-if (response.stderr) process.stderr.write(response.stderr);
+// Written synchronously: a pipe write is asynchronous on macOS, and process.exit would cut a large response short.
+if (response.stdout) writeSync(1, response.stdout);
+if (response.stderr) writeSync(2, response.stderr);
 process.exit(Number.isInteger(response.status) ? response.status : 0);

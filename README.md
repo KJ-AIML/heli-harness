@@ -168,9 +168,33 @@ heli grant list
 heli grant revoke <grant-id>
 ```
 
-Grants are bounded by action/resource/execution and may also be bounded by host session, time, and usage count. Each matched T5 rule needs its own grant, and a grant is used up only when the call is finally allowed. T6 hard-deny rules — including Heli's built-in floor — remain non-grantable.
+Grants are bounded by action and resource, and optionally by host session (`--scope session`), time (`--minutes`), a single use (`--scope once`) or one checkout (`--execution`). Each matched T5 rule needs its own grant, and a grant is used up only when the call is finally allowed. T6 hard-deny rules — including Heli's built-in floor — remain non-grantable.
+
+A grant is for the worktree of the folder you run `heli grant issue` in (or name with `--resource <folder>`). In a workspace that holds other git repositories, a deny from a nested repository prints the `--resource` it needs, so the suggested command works from any terminal; `--resource workspace` covers every resource of the workspace.
 
 Project-controlled files may narrow trusted policy, but cannot silently elevate the built-in/user ceiling.
+
+## Approved runs
+
+Approve a plan once, and let the agent work it while you are away. The agent writes the plan with what it needs:
+
+````markdown
+```heli-run
+branch: feat/report-export
+push: yes
+hours: 8
+```
+````
+
+You review it and approve it in your own terminal:
+
+```bash
+heli run approve plan.md   # shows what it allows and what stays blocked, then asks
+heli run status            # what the run is doing, or what it is blocked on
+heli run stop              # end it at any time
+```
+
+Until the run ends or expires, the agent may push to `feat/report-export` only: `main`, other branches, force pushes, tags, publish/deploy approvals, `.env` writes and T6 commands stay blocked, and editing the plan voids the approval. On Claude Code a Stop hook keeps the agent working until it reports `heli run done`, or `heli run blocked "<what it needs from you>"` when every remaining step needs you.
 
 ## Explain and decision receipts
 

@@ -26,7 +26,7 @@ When the change touches cleanup, delete, revoke, janitor, reset, or fail-closed 
 Rules:
 - Do not assume a symbol is local because only one file was mentioned.
 - For S2/S3 impact, include rollback or mitigation notes.
-- If impact is broader than the task, stop and surface the scope change.
+- If impact is broader than the task, do not widen the change on your own: surface the scope change to the user, and keep working within the original scope meanwhile.
 - Fail-closed: prefer "missing attestation → no delete" over "prefix match → delete".
 - If the responsible subsystem changes, create the lightweight diagnosis checkpoint before selecting a broader fix.
 

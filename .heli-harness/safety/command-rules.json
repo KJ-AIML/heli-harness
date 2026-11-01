@@ -78,6 +78,42 @@
       "reason": "npm version is a versioning operation"
     },
     {
+      "id": "gh-release-create",
+      "match": "gh release create",
+      "tier": "T5",
+      "reason": "Publishing a GitHub release is a release action"
+    },
+    {
+      "id": "docker-push",
+      "match": "docker push",
+      "tier": "T5",
+      "reason": "docker push publishes an image to a registry"
+    },
+    {
+      "id": "kubectl-apply",
+      "match": "kubectl apply",
+      "tier": "T5",
+      "reason": "kubectl apply changes a live cluster (--dry-run=client|server does not)"
+    },
+    {
+      "id": "kubectl-delete",
+      "match": "kubectl delete",
+      "tier": "T5",
+      "reason": "kubectl delete removes live cluster resources (--dry-run=client|server does not)"
+    },
+    {
+      "id": "terraform-apply",
+      "match": "terraform apply",
+      "tier": "T5",
+      "reason": "terraform apply changes live infrastructure"
+    },
+    {
+      "id": "terraform-destroy",
+      "match": "terraform destroy",
+      "tier": "T5",
+      "reason": "terraform destroy removes live infrastructure"
+    },
+    {
       "id": "heli-cloud-push",
       "match": "heli push",
       "tier": "T5",

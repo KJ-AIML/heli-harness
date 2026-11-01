@@ -168,7 +168,12 @@ try {
 	const blocked = writeDecision(project, "host-other", app);
 	assert.equal(blocked.deny, true);
 	assert.equal(blocked.code, "MUTATION_CONFLICT");
-	assert.equal(blocked.recoverability, "HUMAN_REQUIRED");
+	// A 30 s mutation lease is waited out and retried once before anyone is asked.
+	assert.equal(blocked.recoverability, "SELF_RECOVERABLE");
+	assert.equal(blocked.retryable, false);
+	assert.ok(blocked.retryAfterSeconds >= 1 && blocked.retryAfterSeconds <= 31, String(blocked.retryAfterSeconds));
+	assert.match(blocked.reason, /Retry unchanged action: once, after about \d+s\./);
+	assert.match(blocked.reason, /If the retry is refused with this same Blocker, that session is still working here: ask the user/);
 	assert.match(blocked.reason, /Active write conflict/);
 	assert.match(blocked.reason, /Owner:/);
 	console.log("ok: live overlapping mutation blocks");

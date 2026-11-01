@@ -4,6 +4,16 @@ import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 
+// The hooks run with a Heli home of their own, never the developer's ~/.heli: run from a checkout inside a linked
+// workspace, they opened sessions and wrote mutation leases there, a phantom writer that blocked the developer's agents.
+const hookHome = mkdtempSync(join(tmpdir(), "heli-plugin-smoke-home-"));
+process.on("exit", () => rmSync(hookHome, { recursive: true, force: true }));
+const HOOK_ENV = {
+	...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("HELI_"))),
+	HELI_CONFIG_DIR: join(hookHome, "config"),
+	HELI_DATA_DIR: join(hookHome, "data"),
+};
+
 export function read(path) {
 	return readFileSync(path, "utf8");
 }
@@ -21,6 +31,7 @@ export function assertHookDeny(root, relScript, sample, expectedReason) {
 		cwd: root,
 		input: JSON.stringify(sample),
 		encoding: "utf8",
+		env: HOOK_ENV,
 		stdio: ["pipe", "pipe", "pipe"],
 	});
 	assert.equal(result.status, 0, result.stderr);
@@ -59,6 +70,7 @@ export function assertSessionContext(root, relScript) {
 			const result = spawnSync(process.execPath, [join(root, relScript)], {
 				cwd,
 				encoding: "utf8",
+				env: HOOK_ENV,
 				stdio: ["ignore", "pipe", "pipe"],
 			});
 			assert.equal(result.status, 0, result.stderr);
@@ -114,6 +126,7 @@ export function assertHookDenyInCwd(root, relScript, cwd, sample, expectedReason
 		cwd,
 		input: JSON.stringify(sample),
 		encoding: "utf8",
+		env: HOOK_ENV,
 		stdio: ["pipe", "pipe", "pipe"],
 	});
 	assert.equal(result.status, 0, result.stderr);
@@ -128,6 +141,7 @@ export function assertHookAllowInCwd(root, relScript, cwd, sample) {
 		cwd,
 		input: JSON.stringify(sample),
 		encoding: "utf8",
+		env: HOOK_ENV,
 		stdio: ["pipe", "pipe", "pipe"],
 	});
 	assert.equal(result.status, 0, result.stderr);
@@ -139,6 +153,7 @@ export function sessionContextInCwd(root, relScript, cwd) {
 	const result = spawnSync(process.execPath, [join(root, relScript)], {
 		cwd,
 		encoding: "utf8",
+		env: HOOK_ENV,
 		stdio: ["ignore", "pipe", "pipe"],
 	});
 	assert.equal(result.status, 0, result.stderr);
@@ -152,6 +167,7 @@ export function assertGrokHookDeny(root, relScript, sample, expectedReason) {
 		cwd: root,
 		input: JSON.stringify(sample),
 		encoding: "utf8",
+		env: HOOK_ENV,
 		stdio: ["pipe", "pipe", "pipe"],
 	});
 	assert.equal(result.status, 2, `expected exit 2, got ${result.status}: ${result.stderr}`);
@@ -165,6 +181,7 @@ export function assertGrokHookDenyInCwd(root, relScript, cwd, sample, expectedRe
 		cwd,
 		input: JSON.stringify(sample),
 		encoding: "utf8",
+		env: HOOK_ENV,
 		stdio: ["pipe", "pipe", "pipe"],
 	});
 	assert.equal(result.status, 2, `expected exit 2, got ${result.status}: ${result.stderr}`);
@@ -178,6 +195,7 @@ export function assertGrokHookAllowInCwd(root, relScript, cwd, sample) {
 		cwd,
 		input: JSON.stringify(sample),
 		encoding: "utf8",
+		env: HOOK_ENV,
 		stdio: ["pipe", "pipe", "pipe"],
 	});
 	assert.equal(result.status, 0, result.stderr);

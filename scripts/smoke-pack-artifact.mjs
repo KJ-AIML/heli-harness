@@ -76,6 +76,7 @@ try {
 		"lib/cli/seed-workspace.mjs",
 		"lib/concurrency/index.mjs",
 		".heli-harness/HARNESS.md",
+		".heli-harness/HARNESS-embedded.md",
 		".heli-harness/manifest.json",
 		".heli-harness/heli.mjs",
 		".heli-harness/cli/install.mjs",

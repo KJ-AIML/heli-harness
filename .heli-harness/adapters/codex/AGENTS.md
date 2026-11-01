@@ -47,7 +47,7 @@ Use the harness command tiers:
 
 - `T0`/`T1`: read-only inspection and non-mutating validation.
 - `T2`: local target-repo edits after context is loaded.
-- `T3`/`T4`: dependency, runtime, network, API, or cost-bearing work; ask or report as policy requires.
+- `T3`/`T4`: dependency, runtime, network, API, or cost-bearing work; go ahead within the task and report side effects and cost in your summary. Only a project policy that names the action makes it an approval step (a T5 rule).
 - `T5`/`T6`: release, remote write, destructive, secret-bearing, or outside-root actions; require explicit approval or block.
 
 ## Windows / shell (Codex on Windows)

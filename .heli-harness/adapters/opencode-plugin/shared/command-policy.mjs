@@ -20,6 +20,12 @@
  *   bash or PowerShell, or a `bash -c` / `pwsh -Command` / `eval` payload), the comments that
  *   shell ignores are left out first (shell-comments.mjs), so `# never rm -rf here` or
  *   `npm test # then git push` is not a hard deny. Text of an unknown shell is read whole.
+ * - Text bash runs (the tool's name says bash) is matched against the rules only as bash reads it:
+ *   its Windows reading, where `\"` ends a quote, is kept for the write-target check, the push gate
+ *   and the rules marked `everyReading` (push and Heli's self-protection) alone. And a
+ *   here-document that the command only reads as data is text, not commands
+ *   (`git commit -F - <<'EOF'` with a message that mentions `rm -rf`): see dropDataHeredocs for
+ *   when a body is left out. A body fed to a shell, a loop or a pipe into one is still read.
  * - Program names are compared without their directory and a trailing
  *   .exe/.cmd/.bat/.com/.ps1, in any case (`git.exe`, `npm.cmd`), by the built-in
  *   rules and by the rules file alike.
@@ -37,7 +43,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathsFor } from "./concurrency/paths.mjs";
-import { MAX_SYNTAX_DEPTH, stripComments } from "./shell-comments.mjs";
+import { MAX_SYNTAX_DEPTH, posixHeredocs, stripComments } from "./shell-comments.mjs";
 
 const MAX_UNWRAP_DEPTH = 4;
 const POSIX_SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish"]);
@@ -392,6 +398,75 @@ function quotedCommandWords(tokens, programs) {
 	return words;
 }
 
+// Programs that read a here-document as data, or leave it alone, and run none of the text they are given: a command line
+// made only of them (and of git and gh/glab in the forms below) cannot hand a here-document's body to a shell.
+const HEREDOC_SAFE_PROGRAMS = new Set([
+	"cat", "tee", "head", "tail", "wc", "grep", "egrep", "fgrep", "jq", "diff", "cmp", "comm", "tr", "cut", "uniq",
+	"cd", "pushd", "popd", "mkdir", "touch", "cp", "mv", "rm", "ln", "chmod", "echo", "printf", "true", "false", "test", "[",
+	"ls", "pwd", "sleep", "date", "basename", "dirname", "realpath",
+]);
+// git subcommands (all built into git) that read stdin as a message, a patch or object data, never as a command:
+// `git commit -F -`, `git tag -F -`, `git am`, `git apply`.
+const GIT_HEREDOC_SUBCOMMANDS = new Set([
+	"commit", "tag", "notes", "hash-object", "apply", "am", "interpret-trailers", "mailinfo", "mktree", "check-ignore", "check-attr", "cat-file",
+]);
+// gh / glab subcommands built into the CLI. Any other word may name an extension, a program of its own.
+const FORGE_SUBCOMMANDS = {
+	gh: new Set(["pr", "issue", "release", "gist", "api", "label", "repo", "run", "workflow", "search", "status", "browse"]),
+	glab: new Set(["mr", "issue", "release", "snippet", "api", "label", "repo", "ci"]),
+};
+// Plumbing that can carry a here-document's text past the command that reads it: process substitution, a descriptor past
+// stderr, a /dev/fd or /proc/<pid>/fd path.
+const HEREDOC_PLUMBING = /[<>]\(|[<>]&\s*[3-9]|\/dev\/fd\/|\/proc\/[^/\s]+\/fd\//;
+
+/** Whether one command of a here-document's command line runs none of the text it reads (see dropDataHeredocs). */
+function leavesHeredocsAlone(words) {
+	const program = programName(words[0]);
+	if (HEREDOC_SAFE_PROGRAMS.has(program)) return true;
+	if (program === "git") {
+		// `-c alias.x='!sh'` or `config` could make a git word run a shell.
+		if (words.some((word) => word === "-c" || word.startsWith("--config-env"))) return false;
+		const subcommand = normalizeGitTokens(words.map((word) => word.toLowerCase()))[1];
+		if (subcommand === "config") return false;
+		return !words.some((word) => /<<(?!<)/.test(word)) || GIT_HEREDOC_SUBCOMMANDS.has(subcommand);
+	}
+	const forge = FORGE_SUBCOMMANDS[program];
+	if (forge) return forge.has(words.slice(1).find((word) => !word.startsWith("-"))?.toLowerCase());
+	return false;
+}
+
+/**
+ * Bash text with the bodies of its here-documents left out, when nothing in it can run them; else the text as it is, its
+ * bodies read as commands as before. A body is left out only when:
+ * - every command in the text runs none of the text it is given (HEREDOC_SAFE_PROGRAMS, git reading stdin as a message or
+ *   patch, gh/glab with a built-in subcommand), with no `NAME=value` in front of it (`GIT_EDITOR=sh git commit -e` runs the
+ *   message) and none of the plumbing in HEREDOC_PLUMBING;
+ * - every here-document's delimiter is a plain word, so where its body ends is not in doubt;
+ * - a body whose delimiter is not quoted has no `$(`, `${`, `$[` or backtick (the shell runs those even in a body).
+ * So `sh <<EOF`, `cat <<EOF | sh`, `while read c; do $c; done <<EOF`, `xargs ... <<EOF` and `cat <<EOF` beside `sh x.sh`
+ * keep their bodies, and so does a here-document inside `$(...)` (posixHeredocs does not list it): `eval "$(cat <<EOF)"`.
+ */
+function dropDataHeredocs(text, maxDepth) {
+	const heredocs = posixHeredocs(text, maxDepth);
+	if (!heredocs?.length) return text;
+	let kept = "";
+	let last = 0;
+	for (const heredoc of heredocs) {
+		if (!heredoc.plain) return text;
+		if (!heredoc.quoted && /\$[({[]|`/.test(text.slice(heredoc.bodyStart, heredoc.bodyEnd))) return text;
+		kept += text.slice(last, heredoc.bodyStart);
+		last = heredoc.bodyEnd;
+	}
+	kept += text.slice(last);
+	if (HEREDOC_PLUMBING.test(kept)) return text;
+	for (const segment of splitSegments(kept, "posix")) {
+		const words = tokenize(segment, "posix");
+		if (!words.length) continue;
+		if (ASSIGNMENT_WORD.test(words[0]) || !leavesHeredocsAlone(words)) return text;
+	}
+	return kept;
+}
+
 /**
  * Parse command text into de-duplicated segments, within COMMAND_ANALYSIS_LIMITS.
  * @param {string} command
@@ -408,7 +483,9 @@ function quotedCommandWords(tokens, programs) {
  *   work: { commandChars: number, scannedChars: number, tokens: number, segmentTokens: number, nesting: number },
  * }}
  *   `sequence` holds the same segment objects once per occurrence, in reading order (a segment that appears
- *   twice is in `segments` once and in `sequence` twice), for readers that depend on position.
+ *   twice is in `segments` once and in `sequence` twice), for readers that depend on position. It also holds
+ *   the readings kept only for the write-target check (the Windows reading of text bash runs), which rules
+ *   do not read and `segments` leaves out.
  *   `tokens` are lowercased with git global options removed; `rawTokens` keep case.
  *   When `limitExceeded` is set the analysis stopped early and `segments` is
  *   incomplete: callers must refuse the command instead of matching rules on it.
@@ -418,6 +495,7 @@ export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS, comm
 	const segments = [];
 	const sequence = [];
 	const seen = new Map();
+	const ruled = new Set();
 	const visited = new Set();
 	const work = { commandChars: commandText.length, scannedChars: 0, tokens: 0, segmentTokens: 0, nesting: 0 };
 	let limitExceeded = null;
@@ -460,8 +538,16 @@ export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS, comm
 			source = stripped;
 			if (!source.trim()) return;
 		}
+		// The tool's own bash command: a here-document it only reads as data is not commands (see dropDataHeredocs).
+		if (shell === "posix" && depth === 0 && source.includes("<<")) {
+			if (!scan(source.length * 2)) return; // the here-documents, then the commands around them
+			source = dropDataHeredocs(source, limits.maxSyntaxNesting ?? MAX_SYNTAX_DEPTH);
+			if (!source.trim()) return;
+		}
 		if (!scan(source.length * 2)) return; // one scan per dialect
 		for (const dialect of ["posix", "windows"]) {
+			// Bash reads its text one way: the Windows reading of it only feeds the write-target check (see `sequence`).
+			const rulesRead = shell !== "posix" || dialect === "posix";
 			for (const text of splitSegments(source, dialect)) {
 				const rawTokens = tokenize(text, dialect);
 				if (!rawTokens.length) continue;
@@ -483,11 +569,15 @@ export function analyzeCommand(command, { limits = COMMAND_ANALYSIS_LIMITS, comm
 				if (!segment) {
 					segment = { tokens, rawTokens, text, dialect };
 					seen.set(key, segment);
+				}
+				if (rulesRead && !ruled.has(segment)) {
+					ruled.add(segment);
 					segments.push(segment);
 				}
 				// A rule reads a segment once, but what a segment does to a path depends on where it stands
 				// (`cd a; rm x; cd b; rm x`), so every occurrence is kept, in order, for the write-target check.
 				sequence.push(segment);
+				if (!rulesRead) continue;
 				// Wrapper payloads and quoted command lines are visited like the command itself, so they
 				// count against the same word, character and nesting limits.
 				// A quoted command line is handed to a program whose shell is not known: its text is read whole,
@@ -555,7 +645,13 @@ function commandTokenMatches(commandToken, ruleToken, isProgramPosition) {
 
 /** True when the rule tokens appear as a consecutive run in the command tokens. */
 export function commandMatchesRuleTokens(commandTokens, ruleTokens) {
-	if (!ruleTokens.length || ruleTokens.length > commandTokens.length) return false;
+	return ruleTokenStarts(commandTokens, ruleTokens).length > 0;
+}
+
+/** Every index where a rule's words start in a command's words. */
+function ruleTokenStarts(commandTokens, ruleTokens) {
+	const starts = [];
+	if (!ruleTokens.length || ruleTokens.length > commandTokens.length) return starts;
 	for (let start = 0; start + ruleTokens.length <= commandTokens.length; start += 1) {
 		let hit = true;
 		for (let offset = 0; offset < ruleTokens.length; offset += 1) {
@@ -564,9 +660,101 @@ export function commandMatchesRuleTokens(commandTokens, ruleTokens) {
 				break;
 			}
 		}
-		if (hit) return true;
+		if (hit) starts.push(start);
 	}
-	return false;
+	return starts;
+}
+
+// A redirection word (`>`, `2>`, `>>out.txt`, `2>&1`, `<in`): what it writes or reads is not an argument of the command.
+const REDIRECTION = /^(?:\d+|&)?(?:>>?|>\||<>|<)(&\d*-?)?/;
+
+/** A command's words without its redirections (`git tag -l > tags.txt` is `git tag -l`). */
+function withoutRedirections(words) {
+	const out = [];
+	for (let i = 0; i < words.length; i += 1) {
+		const match = REDIRECTION.exec(words[i]);
+		if (!match) out.push(words[i]);
+		else if (match[0] === words[i] && !match[1]) i += 1; // `>` alone: its file is the next word
+	}
+	return out;
+}
+
+const GIT_TAG_LIST_OPTIONS = new Set(["list", "contains", "no-contains", "points-at", "merged", "no-merged", "verify"]);
+const GIT_TAG_WRITE_OPTIONS = new Set(["annotate", "sign", "local-user", "force", "delete", "message", "file", "edit", "cleanup", "create-reflog", "trailer"]);
+
+/** `git tag` that lists or verifies tags: bare, or with a list/verify option (`-l`, `-n5`, `--contains`, `-v`) and no option that writes one. */
+function gitTagReadOnly(rest) {
+	const words = withoutRedirections(rest);
+	if (!words.length) return true;
+	let reads = false;
+	for (const word of words) {
+		if (word.startsWith("--")) {
+			const name = word.slice(2).split("=")[0];
+			if (GIT_TAG_WRITE_OPTIONS.has(name)) return false;
+			if (GIT_TAG_LIST_OPTIONS.has(name)) reads = true;
+		} else if (/^-[a-z0-9]+$/.test(word)) {
+			const letters = word.slice(1);
+			if (/^n\d*$/.test(letters)) reads = true;
+			else if (/[asufdme]/.test(letters)) return false; // -a -s -u -f/-F -d -m -e, alone or clustered
+			else if (/[lv]/.test(letters)) reads = true;
+		}
+	}
+	return reads;
+}
+
+/** `npm publish --dry-run`: the last word that sets the dry run turns it on. */
+function publishDryRun(rest) {
+	let dryRun = false;
+	for (const word of withoutRedirections(rest)) {
+		if (word === "--dry-run" || word === "--dry-run=true") dryRun = true;
+		else if (word === "--no-dry-run" || word.startsWith("--dry-run=")) dryRun = false;
+	}
+	return dryRun;
+}
+
+/** `kubectl apply|delete --dry-run=client|server` (or the old bare `--dry-run`): the last word that sets it decides. */
+function kubectlDryRun(rest) {
+	let dryRun = false;
+	for (const word of withoutRedirections(rest)) {
+		if (word === "--dry-run" || word === "--dry-run=client" || word === "--dry-run=server") dryRun = true;
+		else if (word.startsWith("--dry-run=")) dryRun = false;
+	}
+	return dryRun;
+}
+
+/** `heli sync auto` / `heli sync e2e` with no on/off: prints the setting (lib/cli/cloud.mjs runSync). */
+function heliSyncReadOnly(rest) {
+	const words = withoutRedirections(rest).filter((word) => !word.startsWith("-"));
+	return words.length === 1 && (words[0] === "auto" || words[0] === "e2e");
+}
+
+// Read-only forms of the release rules Heli ships: they list, check or print and change nothing. Keyed by rule id AND the
+// rule's own words, so a project that rewrites a rule (`"match": "git tag -l"`) keeps its own reading.
+const READ_ONLY_FORMS = new Map([
+	["git-tag", { words: "git tag", readOnly: gitTagReadOnly }],
+	["npm-version", { words: "npm version", readOnly: (rest) => withoutRedirections(rest).every((word) => word === "--json") }],
+	["npm-publish", { words: "npm publish", readOnly: publishDryRun }],
+	["pnpm-publish", { words: "pnpm publish", readOnly: publishDryRun }],
+	["heli-cloud-sync", { words: "heli sync", readOnly: heliSyncReadOnly }],
+	["heli-mjs-cloud-sync", { words: "heli.mjs sync", readOnly: heliSyncReadOnly }],
+	["kubectl-apply", { words: "kubectl apply", readOnly: kubectlDryRun }],
+	["kubectl-delete", { words: "kubectl delete", readOnly: kubectlDryRun }],
+]);
+
+/**
+ * A rules-file rule reads a command unless every place its words appear is a read-only form: for a T5 rule, the rule's
+ * words followed by `--help` alone, or a shipped rule's read-only form (READ_ONLY_FORMS). A T6 rule has no exception.
+ */
+function projectRuleMatches(tokens, rule) {
+	const form = rule.tier === "T5" ? READ_ONLY_FORMS.get(rule.id) : null;
+	const shipped = form && commandRuleTokens(form.words).join(" ") === rule.ruleTokens.join(" ");
+	return ruleTokenStarts(tokens, rule.ruleTokens).some((start) => {
+		if (rule.tier !== "T5") return true;
+		const rest = tokens.slice(start + rule.ruleTokens.length);
+		const args = withoutRedirections(rest);
+		if (args.length === 1 && args[0] === "--help") return false;
+		return !(shipped && form.readOnly(rest));
+	});
 }
 
 function indexesOfProgram(tokens, names) {
@@ -742,6 +930,10 @@ function privilegedHeliCommand(args) {
 	if (command === "task" && sub === "create" && (rest.includes("--yolo") || yoloTaskMode(rest))) return "heli task create --yolo";
 	if (command === "session" && (sub === "start" || sub === "attach") && rest.includes("--yolo")) return `heli session ${sub} --yolo`;
 	if (command === "session" && sub === "transfer-write") return "heli session transfer-write";
+	// `observe` switches the live-conflict gate off for every session of the workspace.
+	if (command === "governance" && sub === "set") return "heli governance set";
+	// Approving a plan is the human's: the run it records lets the agent push.
+	if (command === "run" && sub === "approve") return "heli run approve";
 	if (command === "host" && (sub === "remove" || sub === "uninstall")) return `heli host ${sub}`;
 	if (command === "uninstall") return "heli uninstall";
 	if (carriesAcceptPolicyFlag(args)) return `heli ${command.startsWith("-") ? "" : `${command} `}${ACCEPT_POLICY_FLAG}`;
@@ -794,14 +986,18 @@ export const BUILTIN_COMMAND_RULES = Object.freeze([
 	Object.freeze({ id: "windows-del", tier: "T6", programs: ["del", "erase"], summary: "del/erase /s", reason: "Recursive delete is destructive", test: cmdRecursiveDel }),
 	Object.freeze({ id: "powershell-remove-item-recurse-force", tier: "T6", programs: ["remove-item", "ri", "rm", "rmdir", "rd", "del", "erase"], summary: "Remove-Item -Recurse -Force", reason: "Recursive forced delete is destructive", test: removeItemRecurseForce }),
 	Object.freeze({ id: "find-delete", tier: "T6", programs: ["find"], summary: "find ... -delete", reason: "find -delete is destructive", test: findDelete }),
-	Object.freeze({ id: "git-push-force", tier: "T5", programs: ["git"], summary: "git push --force", reason: "Force-pushing rewrites remote history", test: gitPushForce }),
+	// `everyReading`: the push rules (and the push gate, commandRunsGitPush) and Heli's own protection below also read the
+	// readings kept for the write-target check alone, such as the Windows reading of bash text (`git \`<newline>push`,
+	// `node C:\heli\bin\heli.mjs grant issue`): a push or an agent approving itself is refused in any spelling.
+	Object.freeze({ id: "git-push-force", tier: "T5", programs: ["git"], summary: "git push --force", reason: "Force-pushing rewrites remote history", test: gitPushForce, everyReading: true }),
 	// `programs` lists every way to start the Heli CLI (`heli`, `heli-harness`, `node .../heli.mjs`, the package runners)
 	// and the host CLIs, so `ssh host 'heli grant issue'` and `su -c 'claude plugin uninstall ...'` are read too.
-	Object.freeze({ id: "heli-privileged-command", tier: "T6", programs: ["heli", "heli.mjs", "heli-harness", "node", "npx", "npm", "pnpm", "pnpx", "yarn", "bun", "bunx", "deno"], kind: "agent-run Heli privilege command", summary: "heli grant issue", reason: HUMAN_ONLY_REASON, test: heliPrivilegeCommand }),
-	Object.freeze({ id: "heli-host-integration-removal", tier: "T6", programs: ["claude", "codex", "grok", "cursor", "opencode", "kimi", "pi", "axga"], kind: "removal of the Heli host integration", summary: "host plugin removal", reason: HUMAN_ONLY_REASON, test: hostIntegrationRemoval }),
+	Object.freeze({ id: "heli-privileged-command", tier: "T6", programs: ["heli", "heli.mjs", "heli-harness", "node", "npx", "npm", "pnpm", "pnpx", "yarn", "bun", "bunx", "deno"], kind: "agent-run Heli privilege command", summary: "heli grant issue", reason: HUMAN_ONLY_REASON, test: heliPrivilegeCommand, everyReading: true }),
+	Object.freeze({ id: "heli-host-integration-removal", tier: "T6", programs: ["claude", "codex", "grok", "cursor", "opencode", "kimi", "pi", "axga"], kind: "removal of the Heli host integration", summary: "host plugin removal", reason: HUMAN_ONLY_REASON, test: hostIntegrationRemoval, everyReading: true }),
 ]);
 
 const BUILTIN_IDS = new Set(BUILTIN_COMMAND_RULES.map((rule) => rule.id));
+const EVERY_READING_RULES = BUILTIN_COMMAND_RULES.filter((rule) => rule.everyReading);
 // The shells and wrappers unwrapPayloads reads (sh -c, cmd /c, powershell -Command, eval) count as targets too:
 // a quoted word that starts with one of them (`bash -c "rm -rf x"`) hands its payload to the rules.
 const UNWRAPPED_PROGRAMS = [...POSIX_SHELLS, "cmd", "powershell", "pwsh", "eval"];
@@ -856,33 +1052,124 @@ export function loadCommandRules(workspaceRoot) {
 /** Every built-in and project rule that matches any segment of the command. */
 export function matchCommandRules(analysis, projectRules = []) {
 	const matches = new Map();
-	for (const segment of analysis.segments) {
-		for (const rule of BUILTIN_COMMAND_RULES) {
-			if (matches.has(rule.id)) continue;
-			const hit = rule.test(segment.tokens);
-			if (hit) {
-				matches.set(rule.id, {
-					id: rule.id,
-					tier: rule.tier,
-					kind: rule.kind || null,
-					summary: typeof hit === "string" ? hit : rule.summary,
-					reason: rule.reason,
-					source: "builtin",
-				});
-			}
+	const builtin = (rule, segment) => {
+		if (matches.has(rule.id)) return;
+		const hit = rule.test(segment.tokens);
+		if (hit) {
+			matches.set(rule.id, {
+				id: rule.id,
+				tier: rule.tier,
+				kind: rule.kind || null,
+				summary: typeof hit === "string" ? hit : rule.summary,
+				reason: rule.reason,
+				source: "builtin",
+			});
 		}
+	};
+	for (const segment of analysis.segments) {
+		for (const rule of BUILTIN_COMMAND_RULES) builtin(rule, segment);
 		for (const rule of projectRules) {
-			if (!matches.has(rule.id) && commandMatchesRuleTokens(segment.tokens, rule.ruleTokens)) {
+			if (!matches.has(rule.id) && projectRuleMatches(segment.tokens, rule)) {
 				matches.set(rule.id, { id: rule.id, tier: rule.tier, summary: rule.summary, reason: rule.reason, source: rule.source });
 			}
 		}
 	}
+	for (const segment of analysis.sequence ?? []) {
+		for (const rule of EVERY_READING_RULES) builtin(rule, segment);
+	}
 	return [...matches.values()];
 }
 
-/** True when any segment runs `git ... push` (after git global options are removed). */
+/** True when any segment runs `git ... push` (after git global options are removed), in any reading of the text. */
 export function commandRunsGitPush(analysis) {
-	return analysis.segments.some((segment) => commandMatchesRuleTokens(segment.tokens, ["git", "push"]));
+	return (analysis.sequence ?? analysis.segments).some((segment) => commandMatchesRuleTokens(segment.tokens, ["git", "push"]));
+}
+
+// Remote git writes the push gate (the `git.push` approval) covers: a push, and the forge commands that write the remote's
+// branches without one (a pull request merged by gh or glab lands on its base branch, often the default one).
+const REMOTE_GIT_WRITES = [["git", "push"], ["git", "subtree", "push"], ["gh", "pr", "merge"], ["glab", "mr", "merge"]];
+
+/** The first remote git write a command runs (`"git push"`, `"gh pr merge"`, ...), in any reading of the text, or null. */
+export function commandRemoteGitWrite(analysis) {
+	return commandRemoteGitWrites(analysis)[0] ?? null;
+}
+
+/** Every kind of remote git write a command runs, in any reading of the text, first seen first. */
+export function commandRemoteGitWrites(analysis) {
+	const found = new Set();
+	for (const segment of analysis.sequence ?? analysis.segments) {
+		for (const form of REMOTE_GIT_WRITES) {
+			if (commandMatchesRuleTokens(segment.tokens, form)) found.add(form.join(" "));
+		}
+	}
+	return [...found];
+}
+
+// `git push` options that take the next word as their value (`--repo origin`, `-o ci.skip`).
+const PUSH_OPTIONS_WITH_VALUE = new Set(["--repo", "--push-option", "--receive-pack", "--exec", "--recurse-submodules", "--signed"]);
+// Options with which a push writes more than the branches it names: every branch, tags, a mirror, deletions.
+const PUSH_WIDE_OPTIONS = new Set(["--all", "--branches", "--mirror", "--tags", "--follow-tags", "--delete", "--prune"]);
+
+/** One `git push`'s words after `push`, as `{ remote, refspecs, force, wide, dryRun }` (see gitPushDestinations). */
+function parsePush(args) {
+	let remote = null;
+	let force = false;
+	let wide = null;
+	let dryRun = false;
+	const positional = [];
+	for (let k = 0; k < args.length; k += 1) {
+		const word = args[k];
+		if (word === "--") {
+			positional.push(...args.slice(k + 1));
+			break;
+		}
+		if (word.startsWith("--")) {
+			const name = word.split("=")[0].toLowerCase();
+			const value = word.includes("=") ? word.slice(word.indexOf("=") + 1) : null;
+			if (name === "--force" || name === "--force-with-lease" || name === "--force-if-includes") force = true;
+			else if (PUSH_WIDE_OPTIONS.has(name)) wide ??= name;
+			else if (name === "--dry-run") dryRun = true;
+			else if (name === "--repo") remote = value ?? args[++k] ?? null;
+			else if (PUSH_OPTIONS_WITH_VALUE.has(name) && value === null) k += 1;
+			continue;
+		}
+		if (word.startsWith("-") && word.length > 1) {
+			// A short-option cluster (`-uf`): -f forces, -d deletes, -n is a dry run, -o takes the next word.
+			const letters = word.slice(1);
+			if (letters.includes("f")) force = true;
+			if (letters.includes("d")) wide ??= "--delete";
+			if (letters.includes("n")) dryRun = true;
+			if (letters.endsWith("o")) k += 1;
+			continue;
+		}
+		positional.push(word);
+	}
+	const [named = null, ...refspecs] = positional;
+	if (refspecs.some((spec) => spec.startsWith("+"))) force = true;
+	return { remote: remote ?? named, refspecs: remote ? positional : refspecs, force, wide, dryRun };
+}
+
+/**
+ * What each `git push` in a command writes, read from the words as written (branch names keep their case) in every
+ * reading of the text: `{ remote, refspecs, force, wide, dryRun }` per distinct push. `remote` is null and `refspecs` empty
+ * when the command leaves them to git's configuration; `wide` names an option that writes more than the branches listed
+ * (`--tags`, `--all`, `--delete` ...). For a grant that allows pushes to some branches only: anything it cannot place on
+ * a named branch is not covered.
+ */
+export function gitPushDestinations(analysis) {
+	const seen = new Map();
+	for (const segment of analysis.sequence ?? analysis.segments) {
+		const words = segment.rawTokens;
+		for (let i = 0; i < words.length; i += 1) {
+			if (programName(words[i]) !== "git") continue;
+			let j = i + 1;
+			while (j < words.length && words[j].startsWith("-")) j += GIT_OPTIONS_WITH_VALUE.has(words[j].toLowerCase()) ? 2 : 1;
+			if (words[j]?.toLowerCase() !== "push") continue;
+			const push = parsePush(words.slice(j + 1));
+			seen.set(JSON.stringify(push), push);
+		}
+	}
+	return [...seen.values()];
 }
 
 export function hardDenyReason(match) {
@@ -1315,8 +1602,9 @@ export function commandWritesFiles(analysis, programs) {
 	return false;
 }
 
-export function approvalReason(match) {
-	return `Heli-Harness requires explicit approval for "${match.summary}" (rule ${match.id}, tier T5): ${match.reason}. Ask the user to run \`heli grant issue --action command.approval.${match.id} --scope once\` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_COMMAND=${match.id} or YOLO.`;
+/** @param {{ resourceFlag?: string }} [options] `resourceFlag`: ` --resource <folder>` when the grant must name its resource. */
+export function approvalReason(match, { resourceFlag = "" } = {}) {
+	return `Heli-Harness requires explicit approval for "${match.summary}" (rule ${match.id}, tier T5): ${match.reason}. Ask the user to run \`heli grant issue --action command.approval.${match.id} --scope once${resourceFlag}\` in their own terminal. Emergency/debug overrides remain HELI_ALLOW_COMMAND=${match.id} or YOLO.`;
 }
 
 /**
@@ -1360,7 +1648,10 @@ function limitExceededReason(limitExceeded) {
  * Evaluate a command against built-in + workspace rules.
  * @param {{ comments?: "posix"|"powershell"|null }} [options] `comments`: the shell that runs the command, when it is known;
  *   its comments are not commands (see analyzeCommand).
- * @returns {{ status: string, rulesPath: string|null, analysis: object, gitPush: boolean, hardDenies: object[], approvals: object[], limitExceeded: null|{ limit: string, max: number, message: string, reason: string } }}
+ * @returns {{ status: string, rulesPath: string|null, analysis: object, gitPush: boolean, remoteGitWrite: string|null, hardDenies: object[], approvals: object[], limitExceeded: null|{ limit: string, max: number, message: string, reason: string } }}
+ *   `gitPush`: the command writes a remote's git refs, `remoteGitWrite` says how (`"git push"`, `"gh pr merge"`, see
+ *   commandRemoteGitWrite; `remoteGitWrites` lists every kind); all need the `git.push` approval. `pushDestinations`
+ *   are its `git push`es as gitPushDestinations reads them, for a grant limited to some branches.
  *   `approvals` excludes T5 ids approved via HELI_ALLOW_COMMAND; T6 is never approvable.
  *   `limitExceeded` is set when the command is over the analysis budget: no rule was
  *   evaluated, and the caller must deny it with `limitExceeded.reason`.
@@ -1374,18 +1665,25 @@ export function evaluateCommandRules(workspaceRoot, command, env = process.env, 
 			rulesPath: loaded.rulesPath,
 			analysis,
 			gitPush: false,
+			remoteGitWrite: null,
+			remoteGitWrites: [],
+			pushDestinations: [],
 			hardDenies: [],
 			approvals: [],
 			limitExceeded: { ...analysis.limitExceeded, reason: limitExceededReason(analysis.limitExceeded) },
 		};
 	}
 	const matches = matchCommandRules(analysis, loaded.projectRules);
+	const remoteGitWrites = commandRemoteGitWrites(analysis);
 	const approved = new Set(String(env.HELI_ALLOW_COMMAND || "").split(",").map((value) => value.trim()).filter(Boolean));
 	return {
 		status: loaded.status,
 		rulesPath: loaded.rulesPath,
 		analysis,
-		gitPush: commandRunsGitPush(analysis),
+		gitPush: remoteGitWrites.length > 0,
+		remoteGitWrite: remoteGitWrites[0] ?? null,
+		remoteGitWrites,
+		pushDestinations: remoteGitWrites.length ? gitPushDestinations(analysis) : [],
 		hardDenies: matches.filter((match) => match.tier === "T6"),
 		approvals: matches.filter((match) => match.tier === "T5" && !approved.has(match.id)),
 		limitExceeded: null,

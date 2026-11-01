@@ -20,11 +20,11 @@ Scope:
 | Class | Examples | Task state |
 |-------|----------|------------|
 | **Command friction** | PowerShell `&&`, bad quoting, wrong `-chdir`, module resolution outside package root, dotenv banner breaking JSON | Increment `Command friction count`. Fix the command. **Do not** burn Failed attempts / two-strike stop. |
-| **Implementation failure** | Tests fail after a real code change; logic bug; wrong API | Increment `Failed attempts count`. After **two** on the same issue → stop and diagnose. |
+| **Implementation failure** | Tests fail after a real code change; logic bug; wrong API | Increment `Failed attempts count`. After **two** on the same issue → stop fixing it and diagnose; continue from the diagnosis. |
 | **Environment / capability** | Missing creds, unsupported control-plane action, pin drift | Typed blocker / gate packet. Not a "failed fix" until an implementation attempt exists. |
 
 Rules:
-- After two failed **implementation** attempts on the same issue, stop coding and write diagnosis.
+- After two failed **implementation** attempts on the same issue, stop changing code for it and write the diagnosis; continue with its next smallest action, and with independent items meanwhile.
 - Do not retry expensive loops hoping for green.
 - A same-class retry stays in fix-loop; a materially new class requires reroute and a new closest boundary. Expensive retries use `heli diagnosis gate`.
 - Do not mix unrelated fixes unless the repo profile permits batching.
@@ -39,5 +39,5 @@ Loop:
 4. Apply smallest fix (or rewrite command if friction).
 5. Verify.
 6. Record evidence.
-7. Continue or stop with diagnosis.
+7. Continue with the next item, or (after two strikes on this one) with its diagnosis. End the turn only when every remaining item needs the user.
 ```

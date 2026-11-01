@@ -135,7 +135,9 @@ assert.match(piBlocked.text, /Previous host: codex/i);
 const blocked = writeDecision("pi", piBlocked.payload, "pi-blocked");
 assert.equal(blocked.deny, true);
 assert.equal(blocked.code, "MUTATION_CONFLICT");
-assert.equal(blocked.recoverability, "HUMAN_REQUIRED");
+// Codex's 30 s mutation lease: Pi waits it out and retries once, and asks only if Codex is still writing.
+assert.equal(blocked.recoverability, "SELF_RECOVERABLE");
+assert.ok(blocked.retryAfterSeconds >= 1 && blocked.retryAfterSeconds <= 31, String(blocked.retryAfterSeconds));
 assert.equal(blocked.retryable, false);
 
 // Cleanly closing Codex releases exactly Codex's resource authority.

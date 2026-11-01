@@ -786,12 +786,13 @@ try {
 		"cp secrets.txt .env",
 		"sed -i s/a/b/ .env",
 		"echo x > \".env\"",
+		"echo x > .envrc", // direnv's file commonly exports secrets
 	]) {
 		assert.equal(shell(command).code, "ENV_WRITE_DENIED", command);
 	}
 	assert.equal(evaluate(legacy, "Write", { file_path: ".env ", content: "x" }).code, "ENV_WRITE_DENIED", "a trailing space does not hide it");
 	assert.equal(evaluate(legacy, "Write", { file_path: "apps/../.env", content: "x" }).code, "ENV_WRITE_DENIED");
-	for (const command of ["echo x > .envrc", "echo x > env.txt", "echo x > .environment", "cat .env"]) {
+	for (const command of ["echo x > .env.example", "echo x > env.txt", "echo x > .environment", "cat .env"]) {
 		assert.equal(shell(command).deny, false, command);
 	}
 	const envWorkspace = workspace("env-grant");
