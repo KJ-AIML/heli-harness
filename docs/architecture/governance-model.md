@@ -119,7 +119,7 @@ Project policy may narrow the trusted ceiling. A repository cannot grant itself 
 
 Hard-deny classes remain hard denies unless an explicitly different trusted policy contract says otherwise. Normal temporary grants do not bypass T6 hard-deny rules, and the kernel's built-in T6 floor cannot be removed by project rules.
 
-Grants and YOLO are issued by a human at an interactive terminal. The governed agent cannot issue its own: the hooks hard-deny agent-run `heli grant issue` / `heli yolo on` / `heli governance set`, and the Heli state that encodes authority is not agent-writable.
+Grants and YOLO are issued by a human at an interactive terminal. The governed agent cannot issue its own: the hooks hard-deny agent-run `heli grant issue` / `heli yolo on` / `heli run approve` / `heli governance set`, and the Heli state that encodes authority is not agent-writable.
 
 The governed agent cannot change the rules it runs under either. In a linked project the hooks refuse agent writes to `.heli/safety/**` (command rules), `.heli/policies/**`, `.heli/workspace.json` and `.heli/heli.lock`, and moving or removing `.heli` itself (`HELI_POLICY_PROTECTED`, under YOLO too); reading them is fine, and `.heli/profiles` and `.heli/skills` stay agent-writable. A human edits these files, or the Heli CLI rewrites them (`heli link`, `heli update`).
 
@@ -135,6 +135,7 @@ A grant carries governance-relevant scope:
 - optional host-session binding (`--scope session`);
 - created/expiry time (`--minutes`; `--scope time` defaults to 60 minutes);
 - end condition: one use (`--scope once`) or reusable until expiry or revocation;
+- optional constraint on what the call does beyond its action (today `git-push`, from an approved run: which remote and branches, unforced, and the sha256 of the plan it was approved with);
 - revocation state.
 
 The trusted-policy ceiling (`grantableActions`) limits which actions can be granted at all, and is checked again whenever a grant is used. Delegation (a grant that issues grants) and N-use counts are not implemented.
@@ -147,6 +148,14 @@ Typical UX:
 - allow for N minutes.
 
 Time by itself is not sufficient scope.
+
+### Approved runs (unreleased)
+
+An approved run approves a plan instead of one action. The plan names what it needs in a `heli-run` block (`branch`, `push`, `remote`, `hours`, `keep-going`). `heli run approve <plan>` is human-only like `heli grant issue`: an interactive terminal, and the hooks refuse an agent-run one. It shows what the run allows and what stays blocked, records the run in Heli's data directory, and with `push: yes` issues a time-scoped `git.push` grant with a `git-push` constraint.
+
+That grant covers a remote git write only when every push it makes lands, unforced, on the plan's branch of the plan's remote, and only while the plan file is byte-for-byte the text that was approved. `main`, `master`, the usual default branches and the remote's own default are refused at approval. Tags, `--all`, deletions, other refs, subtree pushes and `gh pr merge` are never covered. Every other gate is unchanged.
+
+The run binds to the agent session most recently active near the plan around or since the time it was written (`--session` names one). On Claude Code a Stop hook keeps that session working until it reports `heli run done`, or `heli run blocked "<what it needs>"`, at most 40 times per run, and fails open. `done` and `stop` revoke the run's grant; expiry ends everything. Design: [Approved runs](../design/approved-runs.md).
 
 ## Canonical evaluator and transitions
 

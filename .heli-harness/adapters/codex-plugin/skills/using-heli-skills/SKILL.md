@@ -93,6 +93,7 @@ If host-native activation is not proven, say so; installed files alone do not es
 | Shared-surface edit | `impact` |
 | Repeated failure | `fix-loop` + `evidence-gates` |
 | Linked target/resource authority | `heli-governance`, `heli-target` |
+| Unattended plan work, approved runs | `heli-assistant` |
 | Embedded legacy multi-agent race | `concurrent-upgrade` |
 | Release | `release` |
 | Completion claim | `audit` or matching verifier |

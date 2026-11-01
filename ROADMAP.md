@@ -50,6 +50,7 @@ Heli does not become an agent runtime, planner, scheduler, sandbox implementatio
 - Dogfood linked projects across supported hosts and keep live-host proof distinct from installation state.
 - Measure friction and correctness of automatic binding/resource-authority behavior before widening defaults.
 - Keep support claims tied to reproducible smoke/live evidence.
+- Approved runs (on main, unreleased): a human approves a plan once, pushes are limited to its branch while its text is unchanged, and Claude Code keeps the agent working until it reports done or blocked. Next for them: keep-going on other hosts, host-native plan approval, and a report of what a run did.
 
 ## Next — v0.11 only when evidence warrants it
 

@@ -42,7 +42,7 @@ Understand goal
 It MAY:
 
 - use Heli CLI/state as authoritative facts;
-- inspect Heli version, layout, workspace health, resume context, host lifecycle, runtime capabilities, tasks, handoffs, target/resource authority, and Git context when relevant;
+- inspect Heli version, layout, workspace health, resume context, host lifecycle, runtime capabilities, tasks, handoffs, target/resource authority, approved runs and grants, and Git context when relevant;
 - explain version or topology mismatch;
 - recommend exact next commands;
 - route to existing specialist skills.
@@ -52,7 +52,7 @@ It MUST NOT:
 - spawn or select an agent;
 - automatically assign work;
 - acquire, transfer, or take over writer authority;
-- issue grants or enable YOLO;
+- issue grants, enable YOLO, approve a run, or set the governance profile;
 - push/sync/publish/deploy automatically;
 - infer linked authority from stale embedded files;
 - silently mutate project or Heli state merely to diagnose a situation.
@@ -134,7 +134,7 @@ Heli CLI/state        authoritative facts
 
 ### Foundation
 
-- `heli-help`: describe the current CLI and linked v0.11 topology, including `resume`, host lifecycle, task/handoff, target, grants, and explain surfaces.
+- `heli-help`: describe the current CLI and linked v0.11 topology, including `resume`, host lifecycle, task/handoff, target, grants, approved runs (`heli run`), the governance profile, and explain surfaces.
 - `heli-install`: make the public npm package the normal install path; keep Git/source install as fallback or compatibility paths.
 - `flow`: remove the requirement to update legacy `state/current-task.md` before ordinary linked edits; durable tasks are optional and purpose-driven.
 - `debug` / `evidence-gates`: prefer canonical global CLI forms such as `heli diagnosis ...`, with embedded invocation documented only as a compatibility fallback.

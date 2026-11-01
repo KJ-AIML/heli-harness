@@ -76,6 +76,8 @@ If publication reports processing/pending:
 
 If a release script times out or is interrupted, inspect Git status, version files, commits, tags, and external state before rerunning. Resume only the missing steps rather than duplicating irreversible actions.
 
+Heli's shipped T5 rules gate the release commands themselves: creating a tag (`git tag v1`), `npm|pnpm|yarn publish` and the `release`/`version` scripts, a version bump (`npm version patch`), `gh release create`, `docker push`, `kubectl apply|delete` and `terraform apply|destroy`. Each needs its own `command.approval.<rule-id>` grant from the user; an approved run does not cover them. Listing and dry-run forms (`git tag -l`, a bare `npm version`, `npm publish --dry-run`, `kubectl apply --dry-run=client`) and `--help` need none.
+
 ## Rules
 
 - Do not publish or deploy without explicit user request or documented automation authority.

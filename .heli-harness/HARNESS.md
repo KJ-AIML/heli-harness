@@ -11,7 +11,7 @@ Heli-Harness v0.11.2 is the governance protocol for coding agents in this worksp
 
 ## What the hooks enforce
 
-- **Hard denies (T6):** recursive forced deletes, `git reset --hard`, destructive `git clean`, agent-run approval commands (`heli grant issue`, `heli yolo on`, `heli governance set`, takeovers), and writes to Heli's own state or to a linked project's governance files (`.heli/safety`, `.heli/policies`, the binding). Nothing lifts them.
+- **Hard denies (T6):** recursive forced deletes, `git reset --hard`, destructive `git clean`, agent-run approval commands (`heli grant issue`, `heli yolo on`, `heli run approve`, `heli governance set`, takeovers), and writes to Heli's own state or to a linked project's governance files (`.heli/safety`, `.heli/policies`, the binding). Nothing lifts them.
 - **Approvals from the user's terminal:** remote git writes (`git push`, `gh pr merge`, `git subtree push`), `.env`-style secret writes, and T5 rules (publish, tag, release, deploy, live infrastructure). Read-only and `--dry-run` forms need none.
 - **Live write conflicts** with another session on the same paths.
 - T0–T4 are guidance, not runtime checks. Heli is a guardrail, not a sandbox.
@@ -35,7 +35,7 @@ Never retry an unchanged denied action.
 
 ## Approved runs
 
-For long or unattended work, write the plan with a ```` ```heli-run ```` block (`branch`, `push: yes`, `hours`) and ask the user once to run `heli run approve <plan>`. While SessionStart says a run is active: work the plan without asking about what it approves, push only to its branch, never edit its `heli-run` block (that voids the approval), and end with `heli run done`, or `heli run blocked "<what you need>"` when every remaining step needs the user.
+For long or unattended work, write the plan with a ```` ```heli-run ```` block (`branch`, `push: yes`, `hours`) and ask the user once to run `heli run approve <plan>`. While SessionStart says a run is active: work the plan without asking about what it approves, push only to its branch, never edit the plan file (any change voids the approval), and end with `heli run done`, or `heli run blocked "<what you need>"` when every remaining step needs the user.
 
 ## Risk tiers
 

@@ -56,7 +56,7 @@ A session or task can also carry YOLO (`heli session start|attach --yolo`, `heli
 ## What YOLO never skips
 
 - T6 hard-deny rules, including Heli's built-in floor (recursive forced deletes, `git reset --hard`, `git clean -f` with `-d`/`-x`)
-- Heli self-protection: agent-run `heli grant issue` / `heli yolo on` / `heli governance set` / takeovers / any Heli command that carries `--accept-policy-changes` (accepting governance changes a sync server sent), and agent writes to Heli's own state, or to Claude settings that turn hooks off or set `HELI_` variables in `env`
+- Heli self-protection: agent-run `heli grant issue` / `heli yolo on` / `heli run approve` / `heli governance set` / takeovers / any Heli command that carries `--accept-policy-changes` (accepting governance changes a sync server sent), and agent writes to Heli's own state, or to Claude settings that turn hooks off or set `HELI_` variables in `env`
 - A linked project's governance files (`.heli/safety`, `.heli/policies`, the binding): the agent cannot change the rules it runs under
 - Ownership / write-authority gates and live write conflicts
 - Diagnosis and expensive-retry gates, and the command analysis budget (`COMMAND_TOO_COMPLEX`)

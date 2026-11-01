@@ -158,7 +158,7 @@ A task can still be created for durable handoff, multi-session work, investigati
 
 ## Scoped approvals
 
-Broad bypass is no longer the preferred temporary-approval path. Approvals come from a **human**: `heli grant issue` and `heli yolo on` only run in an interactive terminal, and the Heli hooks hard-deny them when a coding agent tries to run them itself.
+Broad bypass is no longer the preferred temporary-approval path. Approvals come from a **human**: `heli grant issue`, `heli yolo on`, `heli run approve` and `heli governance set` only run in an interactive terminal, and the Heli hooks hard-deny them when a coding agent tries to run them itself.
 
 Example (run in your own terminal):
 
