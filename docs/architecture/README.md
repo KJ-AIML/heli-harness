@@ -66,6 +66,8 @@ Repository/project policy may narrow trusted policy. Project-controlled files ca
 
 Temporary approvals use scoped grants bounded by action/resource/execution and optionally session/time/use count. T6 hard-deny rules remain non-grantable.
 
+An approved run (unreleased; `heli run approve <plan>`, human-only) is the plan-shaped form: the human approves a plan once, and its `git.push` grant carries a constraint, so it covers only unforced pushes to the plan's branch of its remote, and only while the plan's text is unchanged. Tags, deletions, merges and every other gate stay as they are. On Claude Code a Stop hook keeps the bound session working until it reports `heli run done` or `heli run blocked`. See [Approved runs](../design/approved-runs.md).
+
 ## Current decision and evidence model
 
 Human CLI, machine JSON/API surfaces, hooks, and explain are projections of one governance model.
@@ -83,6 +85,7 @@ These are current-facing references for `v0.11.2`:
 - [Governance model](governance-model.md)
 - [Heli assistant and skill routing](heli-assistant.md)
 - [Flow-first governance](flow-first-governance.md) — normal work flows; conflicts/human decisions block with explicit recovery semantics
+- [Approved runs](../design/approved-runs.md) — unreleased: approve a plan once; pushes limited to its branch; keep-going on Claude Code
 - [Adapter support matrix](../ADAPTER_SUPPORT_MATRIX.md)
 - [Enforcement matrix](../ENFORCEMENT_MATRIX.md)
 - [Install guide](../../INSTALL.md)

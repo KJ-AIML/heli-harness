@@ -17,6 +17,13 @@
 ### Documentation
 
 - Docs now describe what the code does: `command-tiers.md` says the hooks enforce T5/T6 rules (plus the push and `.env` gates) and that T0–T4 are guidance only (a T3/T4 entry in `command-rules.json` is not enforced); the governance model lists the grant fields that exist (issuer, action, resource, optional execution/session/time scope, once or reusable, revocation) and says delegation and N-use counts are not implemented; the README and `grant.mjs` no longer say every grant is bound to one execution (any checkout on the machine unless `--execution` pins one).
+- The skills and current docs know about approved runs and the other new gates.
+  - `heli-assistant`: how to set up unattended plan work, and how to read `keep going: off`, a push refused during a run, protected governance files and short write conflicts.
+  - `heli-help` and `heli-governance`: list `heli run`, `heli governance` and the recovery classes.
+  - `branch`, `gh-write` and `release`: what a run covers (its branch only; never a merge, a tag or a release command), and the shipped T5 release rules and their read-only forms.
+  - The architecture index, governance model (grant constraints, approved runs), enforcement matrix (approved runs, keep-going, remote git writes, governance files, deny recovery, YOLO expiry), adapter matrix (the Claude Code Stop hook, the Codex marketplace refresh) and roadmap describe them.
+  - Every list of human-only commands includes `heli run approve`.
+  - `HARNESS.md` says any edit to an approved plan voids it, not only an edit to its `heli-run` block.
 
 ### Changed
 

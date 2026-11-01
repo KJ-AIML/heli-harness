@@ -51,7 +51,7 @@ Start the coding host from the linked project root. SessionStart binds that host
 
 You do not export `HELI_SESSION_ID` for that host path. `heli session start --mode write` is the CLI way to bind a terminal session.
 
-`heli yolo on` and `heli grant issue` stay human-terminal commands. On a linked project, YOLO state is the execution-local `state/yolo.json`, not a `.heli-harness/` file.
+`heli yolo on`, `heli grant issue`, `heli run approve` and `heli governance set` stay human-terminal commands. On a linked project, YOLO state is the execution-local `state/yolo.json`, not a `.heli-harness/` file.
 
 ## What `heli link` does
 
