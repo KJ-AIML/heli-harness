@@ -645,7 +645,13 @@ function commandTokenMatches(commandToken, ruleToken, isProgramPosition) {
 
 /** True when the rule tokens appear as a consecutive run in the command tokens. */
 export function commandMatchesRuleTokens(commandTokens, ruleTokens) {
-	if (!ruleTokens.length || ruleTokens.length > commandTokens.length) return false;
+	return ruleTokenStarts(commandTokens, ruleTokens).length > 0;
+}
+
+/** Every index where a rule's words start in a command's words. */
+function ruleTokenStarts(commandTokens, ruleTokens) {
+	const starts = [];
+	if (!ruleTokens.length || ruleTokens.length > commandTokens.length) return starts;
 	for (let start = 0; start + ruleTokens.length <= commandTokens.length; start += 1) {
 		let hit = true;
 		for (let offset = 0; offset < ruleTokens.length; offset += 1) {
@@ -654,9 +660,89 @@ export function commandMatchesRuleTokens(commandTokens, ruleTokens) {
 				break;
 			}
 		}
-		if (hit) return true;
+		if (hit) starts.push(start);
 	}
-	return false;
+	return starts;
+}
+
+// A redirection word (`>`, `2>`, `>>out.txt`, `2>&1`, `<in`): what it writes or reads is not an argument of the command.
+const REDIRECTION = /^(?:\d+|&)?(?:>>?|>\||<>|<)(&\d*-?)?/;
+
+/** A command's words without its redirections (`git tag -l > tags.txt` is `git tag -l`). */
+function withoutRedirections(words) {
+	const out = [];
+	for (let i = 0; i < words.length; i += 1) {
+		const match = REDIRECTION.exec(words[i]);
+		if (!match) out.push(words[i]);
+		else if (match[0] === words[i] && !match[1]) i += 1; // `>` alone: its file is the next word
+	}
+	return out;
+}
+
+const GIT_TAG_LIST_OPTIONS = new Set(["list", "contains", "no-contains", "points-at", "merged", "no-merged", "verify"]);
+const GIT_TAG_WRITE_OPTIONS = new Set(["annotate", "sign", "local-user", "force", "delete", "message", "file", "edit", "cleanup", "create-reflog", "trailer"]);
+
+/** `git tag` that lists or verifies tags: bare, or with a list/verify option (`-l`, `-n5`, `--contains`, `-v`) and no option that writes one. */
+function gitTagReadOnly(rest) {
+	const words = withoutRedirections(rest);
+	if (!words.length) return true;
+	let reads = false;
+	for (const word of words) {
+		if (word.startsWith("--")) {
+			const name = word.slice(2).split("=")[0];
+			if (GIT_TAG_WRITE_OPTIONS.has(name)) return false;
+			if (GIT_TAG_LIST_OPTIONS.has(name)) reads = true;
+		} else if (/^-[a-z0-9]+$/.test(word)) {
+			const letters = word.slice(1);
+			if (/^n\d*$/.test(letters)) reads = true;
+			else if (/[asufdme]/.test(letters)) return false; // -a -s -u -f/-F -d -m -e, alone or clustered
+			else if (/[lv]/.test(letters)) reads = true;
+		}
+	}
+	return reads;
+}
+
+/** `npm publish --dry-run`: the last word that sets the dry run turns it on. */
+function publishDryRun(rest) {
+	let dryRun = false;
+	for (const word of withoutRedirections(rest)) {
+		if (word === "--dry-run" || word === "--dry-run=true") dryRun = true;
+		else if (word === "--no-dry-run" || word.startsWith("--dry-run=")) dryRun = false;
+	}
+	return dryRun;
+}
+
+/** `heli sync auto` / `heli sync e2e` with no on/off: prints the setting (lib/cli/cloud.mjs runSync). */
+function heliSyncReadOnly(rest) {
+	const words = withoutRedirections(rest).filter((word) => !word.startsWith("-"));
+	return words.length === 1 && (words[0] === "auto" || words[0] === "e2e");
+}
+
+// Read-only forms of the release rules Heli ships: they list, check or print and change nothing. Keyed by rule id AND the
+// rule's own words, so a project that rewrites a rule (`"match": "git tag -l"`) keeps its own reading.
+const READ_ONLY_FORMS = new Map([
+	["git-tag", { words: "git tag", readOnly: gitTagReadOnly }],
+	["npm-version", { words: "npm version", readOnly: (rest) => withoutRedirections(rest).every((word) => word === "--json") }],
+	["npm-publish", { words: "npm publish", readOnly: publishDryRun }],
+	["pnpm-publish", { words: "pnpm publish", readOnly: publishDryRun }],
+	["heli-cloud-sync", { words: "heli sync", readOnly: heliSyncReadOnly }],
+	["heli-mjs-cloud-sync", { words: "heli.mjs sync", readOnly: heliSyncReadOnly }],
+]);
+
+/**
+ * A rules-file rule reads a command unless every place its words appear is a read-only form: for a T5 rule, the rule's
+ * words followed by `--help` alone, or a shipped rule's read-only form (READ_ONLY_FORMS). A T6 rule has no exception.
+ */
+function projectRuleMatches(tokens, rule) {
+	const form = rule.tier === "T5" ? READ_ONLY_FORMS.get(rule.id) : null;
+	const shipped = form && commandRuleTokens(form.words).join(" ") === rule.ruleTokens.join(" ");
+	return ruleTokenStarts(tokens, rule.ruleTokens).some((start) => {
+		if (rule.tier !== "T5") return true;
+		const rest = tokens.slice(start + rule.ruleTokens.length);
+		const args = withoutRedirections(rest);
+		if (args.length === 1 && args[0] === "--help") return false;
+		return !(shipped && form.readOnly(rest));
+	});
 }
 
 function indexesOfProgram(tokens, names) {
@@ -967,7 +1053,7 @@ export function matchCommandRules(analysis, projectRules = []) {
 	for (const segment of analysis.segments) {
 		for (const rule of BUILTIN_COMMAND_RULES) builtin(rule, segment);
 		for (const rule of projectRules) {
-			if (!matches.has(rule.id) && commandMatchesRuleTokens(segment.tokens, rule.ruleTokens)) {
+			if (!matches.has(rule.id) && projectRuleMatches(segment.tokens, rule)) {
 				matches.set(rule.id, { id: rule.id, tier: rule.tier, summary: rule.summary, reason: rule.reason, source: rule.source });
 			}
 		}
