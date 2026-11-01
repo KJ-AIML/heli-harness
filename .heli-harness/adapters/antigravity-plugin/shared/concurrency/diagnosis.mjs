@@ -630,6 +630,8 @@ export function recordRun(workspaceRoot, taskId, payload = {}, options = {}) {
 				current.lastVerification = { outcome: "passed", runId: current.lastRun.runId, recordedAt: now() };
 				current.phase = "VERIFY";
 				current.nextSmallestAction = "record completion evidence or the next bounded task transition";
+				// A pass ends a streak: the two-strike rule counts consecutive failures, not every failure ever recorded.
+				current.attempts = { ...current.attempts, sameFailureClass: 0, implementationFailures: 0 };
 			} else if (status === "failed") {
 				current.lastVerification = { outcome: "failed", runId: current.lastRun.runId, recordedAt: now() };
 			}
@@ -669,6 +671,9 @@ export function routeDiagnosis(workspaceRoot, taskId, payload = {}, options = {}
 			};
 			current.implementationBlocked = true;
 			current.nextSmallestAction = text(payload.nextSmallestAction) || `establish the closest proven boundary for ${route}`;
+			// Two strikes per route: the new route's attempts are counted from zero, or every later same-class failure
+			// would force another reroute however much changed.
+			current.attempts = { ...current.attempts, sameFailureClass: 0, implementationFailures: 0 };
 			return current;
 		},
 		{ ...options, payload: { route, reason: payload.reason || null } },
@@ -853,7 +858,9 @@ export function evaluateDiagnosisCompletion(diagnosis, { riskTier = null } = {})
 	if (current.checkpointRequired) return { allowed: false, code: "SUBSYSTEM_CHECKPOINT_REQUIRED", reason: "cannot complete before subsystem checkpoint" };
 	if (current.lastVerification?.outcome !== "passed") return { allowed: false, code: "VERIFICATION_EVIDENCE_REQUIRED", reason: "current passing verification evidence is required before completion" };
 	const tier = normalizeRiskTier(riskTier || current.riskTier);
-	if ((tier === "S2" || tier === "S3") && current.rootCauseStatus !== "ESTABLISHED") return { allowed: false, code: "ROOT_CAUSE_EVIDENCE_REQUIRED", reason: "S2/S3 completion requires established root cause evidence" };
+	// As in the write gate: a root cause is owed for what activated the diagnosis (a failure, a disputed premise), not by a
+	// diagnosis that only ever recorded passing runs.
+	if ((tier === "S2" || tier === "S3") && current.activationReason && current.rootCauseStatus !== "ESTABLISHED") return { allowed: false, code: "ROOT_CAUSE_EVIDENCE_REQUIRED", reason: "S2/S3 completion requires established root cause evidence" };
 	return { allowed: true, code: "COMPLETION_EVIDENCE_CURRENT" };
 }
 
