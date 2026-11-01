@@ -33,7 +33,7 @@ function parseHookEvent(input) {
 
 function failClosedReason(error) {
 	const detail = `${error?.code ? `${error.code}: ` : ""}${error?.message || String(error)}`;
-	return `Heli-Harness could not evaluate this action (${detail}); denying (fail-closed). Run \`heli doctor\`.`;
+	return `Heli-Harness could not evaluate this action (${detail}); denying (fail-closed). Run \`heli doctor\`.\nHeli recovery: HUMAN_REQUIRED.\nNext action: Ask the user to run \`heli doctor\` in their own terminal; until it is fixed every guarded tool call (shell, file edits, MCP) is refused, so do not retry them.`;
 }
 
 function deny(reason) {

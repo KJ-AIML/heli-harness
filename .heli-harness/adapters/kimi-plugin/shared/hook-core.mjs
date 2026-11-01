@@ -545,22 +545,72 @@ function ownershipRecovery(decision, ctx) {
 	};
 }
 
+// What an agent does with each kind of deny. Only a decision that is the user's makes it ask, and even then it keeps
+// working on what does not need the decision: a deny is a blocked call, not a reason to end the turn.
+const RECOVERY_CONDUCT = Object.freeze({
+	SELF_RECOVERABLE: "You can clear this yourself: take the next action, then continue the task. There is no need to stop or ask the user.",
+	HUMAN_REQUIRED: "Do not try alternate write commands to get around this block. Ask the user once for this decision, and until they answer keep working on the parts of the task that do not need it.",
+	HARD_DENY: "Do not retry this or work around it; continue the task another way. If it cannot be done without this, tell the user why.",
+});
+
 function withRecoveryGuidance(reason, recovery) {
-	const lines = [
+	return [
 		reason,
 		`Heli recovery: ${recovery.recoverability}.`,
 		"Retry unchanged action: NO.",
 		`Next action: ${recovery.nextAction}`,
 		`Blocker: ${recovery.blockerFingerprint}`,
-	];
-	if (recovery.recoverability === "HUMAN_REQUIRED") {
-		lines.push("STOP: do not try alternate write commands to bypass this block; ask the user for the required decision.");
-	} else if (recovery.recoverability === "HARD_DENY") {
-		lines.push("STOP: this state must be repaired before more write attempts.");
-	} else {
-		lines.push("Do not retry the denied operation until the recovery action changes Heli authority state.");
+		RECOVERY_CONDUCT[recovery.recoverability] ?? RECOVERY_CONDUCT.SELF_RECOVERABLE,
+	].join("\n");
+}
+
+const GRANT_RECOVERY = { recoverability: "HUMAN_REQUIRED", nextAction: "Ask the user to run the `heli grant issue` command above in their own terminal, then retry once." };
+const DIAGNOSIS_RECOVERY = { recoverability: "SELF_RECOVERABLE", nextAction: "Record what the reason asks with `heli diagnosis` (route, checkpoint or root-cause evidence), then retry." };
+// Who can lift every other deny, and what to do next (ownership denies carry OWNERSHIP_RECOVERY).
+const DENY_RECOVERY = Object.freeze({
+	TIER_BLOCKED: { recoverability: "HARD_DENY", nextAction: "Do not run this command or an equivalent; reach the goal another way." },
+	HELI_STATE_PROTECTED: { recoverability: "HARD_DENY", nextAction: "Leave Heli's own state alone; Heli CLI commands change it, and approvals come from the user's terminal." },
+	HELI_HOOKS_PROTECTED: { recoverability: "HARD_DENY", nextAction: "Leave the hook and Heli settings as they are." },
+	HELI_POLICY_PROTECTED: { recoverability: "HUMAN_REQUIRED", nextAction: "Ask the user to make this change to the project's Heli governance files themselves." },
+	REMOTE_PUSH_DENIED: GRANT_RECOVERY,
+	ENV_WRITE_DENIED: GRANT_RECOVERY,
+	TIER_APPROVAL_REQUIRED: GRANT_RECOVERY,
+	GRANT_NO_LONGER_AVAILABLE: { recoverability: "HUMAN_REQUIRED", nextAction: "Ask the user to issue a new grant, then retry once." },
+	COMMAND_TOO_COMPLEX: { recoverability: "SELF_RECOVERABLE", nextAction: "Split the command into smaller ones (several `git add` calls, or a folder instead of many files), or write large file content with the Write or Edit tool." },
+	COMMAND_UNPARSEABLE: { recoverability: "SELF_RECOVERABLE", nextAction: "Send the command as plain text." },
+	MCP_INPUT_TOO_COMPLEX: { recoverability: "SELF_RECOVERABLE", nextAction: "Split the call into smaller ones." },
+	COMMAND_RULES_UNAVAILABLE: { recoverability: "HUMAN_REQUIRED", nextAction: "Ask the user to restore the rules file (`heli update`); file edits still work meanwhile." },
+	DIAGNOSIS_REROUTE_REQUIRED: DIAGNOSIS_RECOVERY,
+	SUBSYSTEM_CHECKPOINT_REQUIRED: DIAGNOSIS_RECOVERY,
+	ROOT_CAUSE_EVIDENCE_REQUIRED: DIAGNOSIS_RECOVERY,
+	RETRY_JUSTIFICATION_REQUIRED: { recoverability: "SELF_RECOVERABLE", nextAction: "Change something material or gather new evidence before running the costly action again, and say so in its heli_action." },
+	HUMAN_APPROVAL_REQUIRED: { recoverability: "HUMAN_REQUIRED", nextAction: "Ask the user to approve repeating this production/S3 action." },
+	DIAGNOSIS_STATE_INVALID: { recoverability: "HUMAN_REQUIRED", nextAction: "Ask the user to repair the task's diagnosis state (`heli diagnosis show`)." },
+});
+
+/** The recovery for a deny that has none yet: by its code, and for a task gate by who may edit the task record. */
+function denyRecovery(result) {
+	if (result.code === "TASK_GATE") {
+		// A linked task record is protected Heli state; an embedded one is the agent's own narrative file.
+		return result.ctx?.workspaceRoot && isLinkedWorkspace(result.ctx.workspaceRoot)
+			? { recoverability: "HUMAN_REQUIRED", nextAction: "Ask the user to review the task's failed attempts and reset them, or end the work record." }
+			: { recoverability: "SELF_RECOVERABLE", nextAction: "Write the diagnosis the reason asks for, update the task's failed-attempt record, then continue." };
 	}
-	return lines.join("\n");
+	return DENY_RECOVERY[result.code] || {
+		recoverability: "SELF_RECOVERABLE",
+		nextAction: "Read the reason above, inspect `heli status`, and change the approach before retrying.",
+	};
+}
+
+function withDenyRecovery(result) {
+	const recovery = denyRecovery(result);
+	return {
+		...result,
+		recoverability: recovery.recoverability,
+		retryable: false,
+		nextAction: recovery.nextAction,
+		reason: [result.reason, `Heli recovery: ${recovery.recoverability}.`, `Next action: ${recovery.nextAction}`, RECOVERY_CONDUCT[recovery.recoverability]].join("\n"),
+	};
 }
 
 function ownershipDeniedResult(decision, ctx, coverage) {
@@ -624,7 +674,16 @@ export function allowEnvWrite(cwd = process.cwd(), env = process.env) {
 	});
 }
 
-export function evaluatePreToolUse({
+/**
+ * The PreToolUse decision (see decidePreToolUse). Every deny carries who can lift it (`recoverability`: SELF_RECOVERABLE,
+ * HUMAN_REQUIRED or HARD_DENY), the next action, and what the agent does meanwhile, in its fields and in its reason.
+ */
+export function evaluatePreToolUse(options) {
+	const result = decidePreToolUse(options);
+	return result?.deny && !result.recoverability ? withDenyRecovery(result) : result;
+}
+
+function decidePreToolUse({
 	cwd,
 	toolName = "",
 	toolInput = {},
@@ -953,7 +1012,7 @@ export function evaluatePreToolUse({
 
 	if (isWrite && !taskStateOnly) {
 		const gateReason = readTaskGateForContext(ctx) || readPlanGateForContext(ctx);
-		if (gateReason) return { deny: true, reason: gateReason, ctx };
+		if (gateReason) return { deny: true, code: "TASK_GATE", reason: gateReason, ctx };
 	}
 
 	// Final decision is allow: consume one use of each approval now.

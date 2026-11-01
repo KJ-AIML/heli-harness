@@ -176,7 +176,8 @@ function ctxFor(dir, sessionId) {
 		assert.equal(first.deny, true);
 		assert.equal(first.recoverability, "HUMAN_REQUIRED");
 		assert.equal(first.retryable, false);
-		assert.match(first.reason || "", /STOP: do not try alternate write commands/i);
+		assert.match(first.reason || "", /Do not try alternate write commands to get around this block\. Ask the user once/);
+		assert.match(first.reason || "", /keep working on the parts of the task that do not need it/);
 		assert.match(first.blockerFingerprint || "", /^heli-block-/);
 		assert.equal(second.blockerFingerprint, first.blockerFingerprint);
 		assert.equal(second.retryable, false);

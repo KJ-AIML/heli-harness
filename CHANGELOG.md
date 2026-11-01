@@ -12,6 +12,10 @@
 
 - Docs now describe what the code does: `command-tiers.md` says the hooks enforce T5/T6 rules (plus the push and `.env` gates) and that T0–T4 are guidance only (a T3/T4 entry in `command-rules.json` is not enforced); the governance model lists the grant fields that exist (issuer, action, resource, optional execution/session/time scope, once or reusable, revocation) and says delegation and N-use counts are not implemented; the README and `grant.mjs` no longer say every grant is bound to one execution (any checkout on the machine unless `--execution` pins one).
 
+### Changed
+
+- Every deny says who can lift it, what to do next, and what to do meanwhile. Only ownership denies carried a recovery class, and they ended with "STOP"; every other deny was a bare reason, so agents could not tell a block they can clear themselves from one only the user can lift, and stopped to ask about all of them. Now every PreToolUse deny has `recoverability` (`SELF_RECOVERABLE`, `HUMAN_REQUIRED`, `HARD_DENY`), `nextAction` and `retryable: false`, and its reason ends with them and with the conduct for that class: clear it and continue without asking; ask once and keep working on what does not need the decision; or continue another way. The hook's fail-closed deny says `HUMAN_REQUIRED` too. Stuck-task/plan gate denies now have the code `TASK_GATE`. Pinned by `scripts/smoke-deny-recovery.mjs`.
+
 ### Fixed
 
 - YOLO ends on its own, and sessions say when it is on. `heli yolo on` now expires after 8 hours unless `--hours N` or `--no-expiry` says otherwise (it used to stay on until `heli yolo off`), and while YOLO is on every linked SessionStart carries a warning with its source and expiry, what it lifts (push gate, `.env` writes, T5 approvals, stuck-task gates) and what it never lifts. `yolo-mode.md` now describes the linked-project file location, the session/task sources and the full lists of what YOLO lifts and keeps. Pinned by `scripts/smoke-yolo-expiry.mjs`.
