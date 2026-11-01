@@ -46,6 +46,7 @@ import {
 	heliEnvironmentKeys,
 	normalizePolicyPath,
 	protectedEnvironmentReason,
+	protectedPolicyReason,
 	protectedWriteReason,
 	settingsContentOf,
 } from "./concurrency/protected-paths.mjs";
@@ -760,6 +761,16 @@ export function evaluatePreToolUse({
 	const protectedEntry = [...structuredEntries, ...shellEntries].find((entry) => entry.kind === "authority");
 	if (protectedEntry) {
 		return { deny: true, hardDeny: true, code: "HELI_STATE_PROTECTED", reason: protectedWriteReason(protectedEntry, { mcp: Boolean(mcp) }), ctx };
+	}
+	// A linked project's rules, policies and binding: an agent may not change the rules it runs under, YOLO or not. Reading
+	// them is fine, so an MCP call counts only for the paths it writes (as for `.env` below); a file tool here is a write.
+	const mcpWritten = mcp
+		? new Set(isWrite || mcpToolWrites(name) || mcp.hasContentKey ? structuredPaths : mcp.paths.filter((path) => path.destination).map((path) => path.text))
+		: null;
+	const policyEntry = [...structuredEntries.filter((entry) => !mcpWritten || mcpWritten.has(entry.raw)), ...shellEntries]
+		.find((entry) => entry.kind === "policy");
+	if (policyEntry) {
+		return { deny: true, hardDeny: true, code: "HELI_POLICY_PROTECTED", reason: protectedPolicyReason(policyEntry), ctx };
 	}
 	const settingsEntry = [...structuredEntries, ...shellEntries].find((entry) => entry.kind === "claude-settings");
 	if (settingsEntry) {

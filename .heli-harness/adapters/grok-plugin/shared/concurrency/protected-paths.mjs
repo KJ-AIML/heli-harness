@@ -20,6 +20,10 @@
  *                Heli-installed host hook files. Never agent-writable.
  *   narrative  — current-task.md, plan.md, decisions.md, reports/**, runs/**
  *                (global state/ or a task dir). Writable by the task owner.
+ *   policy     — a linked project's governance files: .heli/safety/**, .heli/policies/**,
+ *                .heli/workspace.json, .heli/heli.lock, and .heli itself (moved or removed).
+ *                Readable; never agent-writable, under YOLO too. Like every shell target, a
+ *                `cp` source counts, so copying them with `cp` is refused as well.
  *   claude-settings — .claude/settings*.json (content-checked by the caller).
  *   other      — everything else (normal ownership rules apply).
  *
@@ -279,8 +283,21 @@ export function protectedLocations(workspaceRoot, { env = process.env, cwd = pro
 	if (cache) scope.cache = cache;
 	const norm = (path) => (path ? normalizePolicyPath(path, { cwd, env, cache: scope.cache })?.path || null : null);
 	const home = hostHome(env);
-	const operationalRoot = workspaceRoot ? pathsFor(workspaceRoot).operationalRoot : null;
+	const paths = workspaceRoot ? pathsFor(workspaceRoot) : null;
+	const operationalRoot = paths ? paths.operationalRoot : null;
+	// A linked project's governance files: the rules and policies the hooks read on every call, and the binding. An embedded
+	// workspace's `.heli-harness/safety` is left alone: in the Heli source checkout it holds the package defaults.
+	const policy = paths?.linked
+		? [
+			{ path: norm(paths.safetyDir), tree: true, label: "this project's Heli command rules (.heli/safety)" },
+			{ path: norm(paths.policiesDir), tree: true, label: "this project's Heli policies (.heli/policies)" },
+			{ path: norm(paths.workspaceManifestPath), tree: false, label: "the Heli project binding (.heli/workspace.json)" },
+			{ path: norm(paths.workspaceLockPath), tree: false, label: "the Heli project lock (.heli/heli.lock)" },
+			{ path: norm(paths.projectDir), tree: false, label: "the Heli project directory (.heli)" },
+		].filter((location) => location.path)
+		: [];
 	return {
+		policy,
 		operationalRoot: operationalRoot ? norm(operationalRoot) : null,
 		// The same root without following links: a directory inside it that is itself a link still names Heli state.
 		lexicalOperationalRoot: operationalRoot ? canonical(resolve(cwd, operationalRoot)) : null,
@@ -324,7 +341,7 @@ function classifyOperational(rel) {
 
 /**
  * Classify one normalized policy path (see normalizePolicyPath).
- * @returns {{ kind: "authority"|"narrative"|"claude-settings"|"other", taskId?: string|null, label?: string }}
+ * @returns {{ kind: "authority"|"narrative"|"policy"|"claude-settings"|"other", taskId?: string|null, label?: string }}
  */
 export function classifyPolicyPath(normalized, locations) {
 	if (!normalized) return { kind: "other" };
@@ -355,6 +372,8 @@ export function classifyPolicyPath(normalized, locations) {
 	if (locations.hostHookFiles.includes(path) || locations.hostHookDirs.some((dir) => within(path, dir))) {
 		return { kind: "authority", label: "a Heli-installed host hook" };
 	}
+	const policy = (locations.policy || []).find((location) => (location.tree ? within(path, location.path) : path === location.path));
+	if (policy) return { kind: "policy", label: policy.label };
 	const isClaudeSettings = (candidate) => {
 		const name = basename(candidate);
 		return (name === "settings.json" || name === "settings.local.json") && candidate.endsWith(`/.claude/${name}`);
@@ -539,6 +558,11 @@ export function protectedWriteReason(entry, { mcp = false } = {}) {
 	// calls that write it.
 	const forbidden = mcp ? "Agents may not read or write it through MCP tools (an MCP call that reads it cannot be told from one that writes it)." : "Agents may not write it.";
 	return `Heli-Harness protects its own authority state: ${entry.raw} is ${entry.label}. ${forbidden} Use the Heli CLI for normal state changes (heli task/session/target commands), or ask the user to run approval/YOLO commands in their own terminal.`;
+}
+
+/** Reason for a write to a linked project's governance files (kind "policy"). */
+export function protectedPolicyReason(entry) {
+	return `Heli-Harness protects this project's governance files: ${entry.raw} is ${entry.label}. An agent may not change the rules it runs under (YOLO and grants do not lift this). Reading them is fine; ask the user to make this change themselves.`;
 }
 
 /** Reason for a settings write that sets HELI_ environment variables (see heliEnvironmentKeys). */

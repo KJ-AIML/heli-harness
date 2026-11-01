@@ -918,6 +918,8 @@ function privilegedHeliCommand(args) {
 	if (command === "task" && sub === "create" && (rest.includes("--yolo") || yoloTaskMode(rest))) return "heli task create --yolo";
 	if (command === "session" && (sub === "start" || sub === "attach") && rest.includes("--yolo")) return `heli session ${sub} --yolo`;
 	if (command === "session" && sub === "transfer-write") return "heli session transfer-write";
+	// `observe` switches the live-conflict gate off for every session of the workspace.
+	if (command === "governance" && sub === "set") return "heli governance set";
 	if (command === "host" && (sub === "remove" || sub === "uninstall")) return `heli host ${sub}`;
 	if (command === "uninstall") return "heli uninstall";
 	if (carriesAcceptPolicyFlag(args)) return `heli ${command.startsWith("-") ? "" : `${command} `}${ACCEPT_POLICY_FLAG}`;

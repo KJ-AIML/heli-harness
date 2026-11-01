@@ -119,7 +119,9 @@ Project policy may narrow the trusted ceiling. A repository cannot grant itself 
 
 Hard-deny classes remain hard denies unless an explicitly different trusted policy contract says otherwise. Normal temporary grants do not bypass T6 hard-deny rules, and the kernel's built-in T6 floor cannot be removed by project rules.
 
-Grants and YOLO are issued by a human at an interactive terminal. The governed agent cannot issue its own: the hooks hard-deny agent-run `heli grant issue` / `heli yolo on`, and the Heli state that encodes authority is not agent-writable.
+Grants and YOLO are issued by a human at an interactive terminal. The governed agent cannot issue its own: the hooks hard-deny agent-run `heli grant issue` / `heli yolo on` / `heli governance set`, and the Heli state that encodes authority is not agent-writable.
+
+The governed agent cannot change the rules it runs under either. In a linked project the hooks refuse agent writes to `.heli/safety/**` (command rules), `.heli/policies/**`, `.heli/workspace.json` and `.heli/heli.lock`, and moving or removing `.heli` itself (`HELI_POLICY_PROTECTED`, under YOLO too); reading them is fine, and `.heli/profiles` and `.heli/skills` stay agent-writable. A human edits these files, or the Heli CLI rewrites them (`heli link`, `heli update`).
 
 ## Scoped grants
 

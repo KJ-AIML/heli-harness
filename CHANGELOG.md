@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Security
+
+- An agent can no longer change the rules it runs under. In a linked project, agent writes to `.heli/safety/**` (the command rules the hooks read on every call), `.heli/policies/**`, `.heli/workspace.json` and `.heli/heli.lock`, and moving or removing `.heli` itself, are refused with `HELI_POLICY_PROTECTED` for file tools, shell commands and MCP writes, under YOLO too. Before, an agent could delete a project T5/T6 rule, or the binding, mid-session. Reading them is fine; `.heli/profiles` and `.heli/skills` stay agent-writable; an embedded workspace (the Heli source checkout dogfoods one) is unchanged.
+- `heli governance set` is human-only like `heli grant issue`: the CLI needs an interactive terminal and the hooks refuse an agent-run one, since `observe` switches the live write-conflict gate off for every session. Both pinned by `scripts/smoke-policy-protection.mjs`.
+
 ### Fixed
 
 - The grant a deny message asks for is the grant the hook looks for. In a workspace holding other git repositories (`heli-ws/repos/app`), a push from the nested repository is checked against its own worktree, but `heli grant issue` bound grants to the workspace root, so the user ran the suggested command and the agent was refused again. Deny messages now add `--resource <folder>` when the call is checked against a nested worktree; `--resource` accepts a folder as well as `workspace` or a resource id (and finds the workspace from it, so the command works from any terminal); and with no `--resource` a grant is for the worktree of the folder the command names or runs in. `heli grant --help` lists the real scopes (`once|session|workspace|time`). Pinned by `scripts/smoke-grant-resource.mjs`.
