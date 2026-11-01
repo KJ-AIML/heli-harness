@@ -20,12 +20,12 @@ heli host install codex
 heli host status
 ```
 
-Equivalent manual Git marketplace commands:
+Equivalent manual Git marketplace commands (`heli host update codex` runs the same three; `upgrade` refreshes a marketplace Codex already has, which `add` leaves as it was, before the plugin is installed from it):
 
 ```bash
 codex plugin marketplace add KJ-AIML/heli-harness
-codex plugin add heli-harness@heli-harness
 codex plugin marketplace upgrade heli-harness
+codex plugin add heli-harness@heli-harness
 ```
 
 The repository-root `.agents/plugins/marketplace.json` indexes the packaged Codex plugin.

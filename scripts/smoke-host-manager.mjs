@@ -8,6 +8,7 @@ import {
 	inspectHost,
 	inspectHosts,
 	installHost,
+	updateHost,
 	claudePluginState,
 	renderOperation,
 } from "../lib/cli/host.mjs";
@@ -147,5 +148,24 @@ assert.equal(kimiInstall.reason, "Kimi Code CLI not found on PATH");
 
 const openCodeWithoutCli = inspectHost(root, "opencode", { env: unavailableEnv });
 assert.equal(openCodeWithoutCli.lifecycleState, "absent");
+
+// `heli host update codex` installs from a fresh snapshot of the marketplace. Codex answers `marketplace add` for a
+// marketplace it already has with "already added" and fetches nothing, so the update reinstalled the plugin from the
+// snapshot taken when the marketplace was first added, and still said updated/verified.
+hermetic.setResponse("codex plugin marketplace add KJ-AIML/heli-harness", {
+	stdout: "Marketplace `heli-harness` is already added from https://github.com/KJ-AIML/heli-harness.git.\n",
+});
+hermetic.setResponse("codex plugin list", { stdout: "heli-harness@heli-harness  installed, enabled\n" });
+const loggedBefore = hermetic.readLog().length;
+const codexUpdate = updateHost(root, "codex", { env });
+assert.equal(codexUpdate.ok, true, JSON.stringify(codexUpdate.steps));
+const codexWrites = hermetic.readLog().slice(loggedBefore)
+	.map((entry) => [entry.host, ...entry.args].join(" "))
+	.filter((call) => /^codex plugin (marketplace|add)\b/.test(call) && !/ list$/.test(call));
+assert.deepEqual(codexWrites, [
+	"codex plugin marketplace add KJ-AIML/heli-harness",
+	"codex plugin marketplace upgrade heli-harness",
+	"codex plugin add heli-harness@heli-harness",
+], "refresh the snapshot, then reinstall from it");
 
 console.log("host manager smoke ok");
