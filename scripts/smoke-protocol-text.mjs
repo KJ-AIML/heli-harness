@@ -29,7 +29,9 @@ const read = (rel) => readFileSync(join(root, rel), "utf8");
 
 // 1. HARNESS.md: small, linked-first, and explicit about denies, ending the turn and two strikes.
 const harness = read(".heli-harness/HARNESS.md");
-assert.ok(Buffer.byteLength(harness) < 7000, `HARNESS.md is ${Buffer.byteLength(harness)} bytes; keep the protocol readable in one go`);
+// Counted with LF line endings: a Windows checkout has CRLF (.gitattributes), one more byte on every line.
+const harnessBytes = Buffer.byteLength(harness.replace(/\r\n/g, "\n"));
+assert.ok(harnessBytes < 7000, `HARNESS.md is ${harnessBytes} bytes; keep the protocol readable in one go`);
 for (const required of [
 	/`SELF_RECOVERABLE`: take the next action and continue\. Do not stop to ask\./,
 	/`HUMAN_REQUIRED`: do not work around it\. Ask the user once, and keep working/,
@@ -96,4 +98,4 @@ for (const adapter of ["claude/CLAUDE.md", "codex/AGENTS.md", "grok/GROK.md", "k
 	assert.doesNotMatch(read(`.heli-harness/adapters/${adapter}`), /ask or report as policy requires/, `${adapter}: T3/T4 are guidance`);
 }
 
-console.log(`protocol text smoke ok (HARNESS.md ${Buffer.byteLength(harness)} bytes)`);
+console.log(`protocol text smoke ok (HARNESS.md ${harnessBytes} bytes)`);
