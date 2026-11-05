@@ -21,7 +21,7 @@ Rules:
 - If two implementation attempts fail against the same failure class, stop changing code for it and return to diagnosis (reproduce, isolate, explain). That is the next step of the work, not a reason to end the turn.
 - Record commands and evidence in the durable work/diagnosis record when the work spans sessions or carries non-trivial investigation history.
 - When a new failure signature or responsible subsystem appears, record the new boundary and reroute; do not continue the old diagnosis silently.
-- Do not manufacture a durable task only to satisfy this skill in a small linked v0.11 edit.
+- Do not manufacture a durable task only to satisfy this skill in a small linked-project edit.
 
 Canonical diagnosis surfaces:
 

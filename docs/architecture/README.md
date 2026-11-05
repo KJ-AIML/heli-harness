@@ -91,7 +91,7 @@ These are current-facing references for `v0.11.2`:
 - [Install guide](../../INSTALL.md)
 - [Roadmap](../../ROADMAP.md)
 - [Cloud sync](cloud-sync.md) — current service with historical phase notes retained
-- [Heli v1 Architecture Convergence RFC](../superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md) — accepted architecture contract implemented through the v0.11 baseline
+- [Heli v1 Architecture Convergence RFC](../superpowers/specs/2026-09-18-heli-v1-architecture-convergence.md) — accepted architecture contract, implemented since v0.11
 
 ## Historical / non-canonical records
 

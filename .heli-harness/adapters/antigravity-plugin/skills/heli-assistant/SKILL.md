@@ -103,7 +103,7 @@ Host integration: current
 
 Do not assume updating one surface updates the others.
 
-### Linked v0.11 project
+### Linked project
 
 When `.heli/workspace.json` / `heli status` identifies a linked project:
 
@@ -141,7 +141,7 @@ Never claim that a new host inherits the previous host's session or writer autho
 
 ### Decide whether a durable task is needed
 
-In linked v0.11, ordinary reversible work does not need a named task merely for permission.
+In a linked project, ordinary reversible work does not need a named task merely for permission.
 
 Recommend a durable task when the work:
 
@@ -279,7 +279,7 @@ If the user explicitly requests one of those actions, route to the appropriate s
 ## Truth rules
 
 - Prefer authoritative Heli query surfaces to stale file inference.
-- A task name is not write authority in linked v0.11.
+- A task name is not write authority in a linked project.
 - A handoff is not authority transfer.
 - Installed host/plugin files are not runtime callback proof.
 - A publish command being accepted is not the same as external registry visibility.

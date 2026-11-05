@@ -5,7 +5,7 @@ description: Use when installing, upgrading, linking, or migrating Heli. Prefer 
 
 # Heli Install
 
-## Normal v0.11 path
+## Normal path
 
 Use the published npm package:
 

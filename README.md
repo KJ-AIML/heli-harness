@@ -102,7 +102,7 @@ heli link /path/to/existing-workspace
 
 The cutover is fail-closed when active embedded write authority exists. Portable work/evidence may migrate; authorization does not.
 
-For a deliberately self-contained/offline bundle, `heli install <path>` remains available. It is no longer the primary v0.11 distribution model.
+For a deliberately self-contained/offline bundle, `heli install <path>` remains available. It has not been the primary distribution model since v0.11.
 
 Full installation and migration details: [INSTALL.md](INSTALL.md).
 
