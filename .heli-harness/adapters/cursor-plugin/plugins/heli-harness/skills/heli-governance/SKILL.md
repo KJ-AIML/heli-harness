@@ -1,13 +1,13 @@
 ---
 name: heli-governance
-description: Use when working in a Heli v0.11 linked project or embedded compatibility workspace to resolve layout, target/resource authority, policy, grants, host coverage, and evidence-backed completion.
+description: Use when working in a Heli linked project or embedded compatibility workspace to resolve layout, target/resource authority, policy, grants, host coverage, and evidence-backed completion.
 ---
 
 # Heli Governance
 
 Run `heli status` first and determine the active layout.
 
-## Linked v0.11 project
+## Linked project
 
 When `.heli/workspace.json` exists:
 

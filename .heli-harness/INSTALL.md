@@ -1,6 +1,6 @@
-# Embedded / Hermetic Install — v0.11.2
+# Embedded / Hermetic Install — v0.12.0
 
-The primary v0.11 model is **global/shared distribution + `heli setup` + `heli link`**. See the root [INSTALL.md](../INSTALL.md).
+Since v0.11, the primary model is **global/shared distribution + `heli setup` + `heli link`**. See the root [INSTALL.md](../INSTALL.md).
 
 This document covers the self-contained `.heli-harness/` compatibility path.
 
@@ -23,7 +23,7 @@ The embedded install copies distribution assets and seeds idle local state. It m
 
 ## Existing embedded workspace → linked project
 
-Update the embedded runtime to v0.11.2, ensure no active embedded writer authority remains, then run:
+Update the embedded runtime to v0.12.0, ensure no active embedded writer authority remains, then run:
 
 ```bash
 heli link /path/to/workspace

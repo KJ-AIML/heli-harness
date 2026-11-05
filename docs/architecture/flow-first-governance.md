@@ -119,5 +119,5 @@ The denial should say that the agent must stop and ask the user rather than repe
 - recovery commands remain usable during blocked state;
 - repeated blocker emits no-retry guidance;
 - YOLO remains unnecessary for normal safe work;
-- linked v0.11 tests remain green;
+- linked-project tests remain green;
 - malformed/corrupt authority state remains fail-closed.

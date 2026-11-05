@@ -9,7 +9,7 @@ Use this skill as the current command map. For "what should I do in this workspa
 
 ## Start with the current topology
 
-Normal v0.11 usage is:
+Normal usage is:
 
 ```bash
 npm install -g heli-harness@latest
@@ -81,6 +81,6 @@ The packaged `/heli-*` skills are convenience entry points, not separate authori
 
 - Do not infer linked authority from leftover embedded state files.
 - Do not treat installed plugin files as proof that runtime callbacks executed.
-- Tasks are optional durable work/provenance records in linked v0.11; task names are not the root write-authority boundary.
+- Tasks are optional durable work/provenance records in a linked project; task names are not the root write-authority boundary.
 - Human-only approvals (grants, YOLO, approved runs, the governance profile) are not an agent's to give: the hooks refuse an agent-run `heli grant issue`, `heli yolo on`, `heli run approve` or `heli governance set`.
-- Compatibility commands remain available for intentionally embedded workspaces, but do not present them as the normal v0.11 path.
+- Compatibility commands remain available for intentionally embedded workspaces, but do not present them as the normal path.
