@@ -1,6 +1,6 @@
 # Heli-Harness
 
-Heli-Harness v0.11.2 is the governance protocol for coding agents in this workspace. Heli's hooks enforce a small set of hard rules; the rest of this file is how to work well under them. In a **linked** project the binding lives in `.heli/` and live authority (sessions, grants, resource authority, YOLO) is execution-local. An **embedded** workspace keeps everything in `.heli-harness/`; there, also read `HARNESS-embedded.md`.
+Heli-Harness v0.12.0 is the governance protocol for coding agents in this workspace. Heli's hooks enforce a small set of hard rules; the rest of this file is how to work well under them. In a **linked** project the binding lives in `.heli/` and live authority (sessions, grants, resource authority, YOLO) is execution-local. An **embedded** workspace keeps everything in `.heli-harness/`; there, also read `HARNESS-embedded.md`.
 
 ## Start
 
